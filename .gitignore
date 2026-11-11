@@ -2,6 +2,10 @@
 # Data files never go into Git (see CLAUDE.md). This also covers data/raw and data/processed.
 data/
 
+# Fitted-model pickles: version-fragile and rebuilt by running notebooks/05_frequency_glm.ipynb.
+# The small, readable models/*.json files ARE committed (the app reads them).
+models/*.pickle
+
 # Virtual environment (rebuild it from requirements.txt instead of committing it)
 .venv/
 venv/

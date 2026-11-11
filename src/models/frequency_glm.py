@@ -180,6 +180,12 @@ class FreqGLM:
             return df["exposure"].to_numpy() * np.exp(self.eta(df, True))
         return df["exposure"].to_numpy() * np.exp(self.eta(df, False) + self.avg_year_log)
 
+    def relative_rate(self, df):
+        """Product of each row's feature relativities (exp of the linear predictor without the
+        intercept and the year terms). Year-free and level-free: the right score for RANKING
+        cells, e.g. in a lift chart that pools several years or several models' predictions."""
+        return np.exp(self.eta(df, include_year=False) - self.params["const"])
+
     def relativities(self):
         """exp(b) for every non-year column (the multiplicative effect vs the base level)."""
         p = self.params[[c for c in self.params.index if not c.startswith("year[") and c != "const"]]
@@ -281,11 +287,16 @@ def gini(claims, pred, exposure):
     return float(1 - 2 * np.trapezoid(y, x))
 
 
-def lift_table(claims, pred, exposure, n=10):
+def lift_table(claims, pred, exposure, n=10, rank_by=None):
     """Exposure-weighted n-tiles of predicted frequency: each bucket holds 1/n of the exposure.
-    Returns actual and predicted frequency per bucket (per 1,000 policy-years)."""
+    Returns actual and predicted frequency per bucket (per 1,000 policy-years).
+
+    rank_by: the score used to sort cells (default pred / exposure). When pooling several
+    years, sort by the year-free (average-year) rate, so the ranking reflects the features
+    only and not which years were storm years; `pred` can then be the re-based prediction."""
     claims, pred, exposure = (np.asarray(a, float) for a in (claims, pred, exposure))
-    order = np.argsort(pred / exposure, kind="mergesort")
+    score = pred / exposure if rank_by is None else np.asarray(rank_by, float)
+    order = np.argsort(score, kind="mergesort")
     cum = np.cumsum(exposure[order]) / exposure.sum()
     bucket = np.minimum((cum * n - 1e-12).astype(int), n - 1) + 1
     t = pd.DataFrame({"bucket": bucket, "exposure": exposure[order], "claims": claims[order],
@@ -331,6 +342,7 @@ def loyo_scores(df, fit_fn, years=None, keep_cols=()):
         o = test[["year", "exposure", "claims", *keep_cols]].copy()
         o["pred"], o["pred_null"] = pred, pnull
         o["pred_rebased"] = rebase(pred, test["claims"].sum())
+        o["relative_rate"] = m.relative_rate(test)
         oof.append(o)
     return pd.DataFrame(rows), pd.concat(oof, ignore_index=True)
 
@@ -338,58 +350,89 @@ def loyo_scores(df, fit_fn, years=None, keep_cols=()):
 # ---------------------------------------------------------------------------
 # Comparing nested models (the step-by-step build)
 # ---------------------------------------------------------------------------
-def compare_steps(df, steps, year_factor=True, loyo_years=None, cluster_by=("county_group", "year")):
-    """Fit each step in-sample on `df` and compare it with its parent step.
+def _loyo_cached(df, features, interactions, years, cache):
+    key = (tuple(features), tuple(tuple(p) for p in interactions))
+    if key not in cache:
+        sc, _ = loyo_scores(df, lambda tr: fit_glm(tr, features, interactions), years)
+        cache[key] = sc.set_index("test_year")
+    return cache[key]
 
-    steps: list of dicts {"name", "features", "interactions" (optional), "parent" (name or None)}.
-    For each step: number of parameters, deviance, AIC, and versus the parent:
+
+def compare_models(df, cur_features, cur_inter, new_features, new_inter, loyo_years=None,
+                  cluster_by=("county_group", "year"), cache=None):
+    """Compare a candidate model (new_*) with the current one (cur_*), both fitted on `df`.
+
+    In-sample measures (the classic toolkit):
+      * deviance and AIC (AIC = deviance-type misfit + 2 x number of parameters; lower is better);
       * LRT: likelihood-ratio test, chi-square on the deviance drop (assumes plain Poisson);
-      * quasi-F: the deviance drop per added parameter divided by phi (the Pearson dispersion
-        of the largest model), i.e. the LRT corrected for cell-level over-dispersion;
+      * quasi-F: the deviance drop per added parameter divided by phi (the candidate's Pearson
+        dispersion), i.e. the LRT corrected for cell-level over-dispersion;
       * cluster Wald: are the added coefficients jointly zero, using cluster-robust errors
-        (lets a whole county-year move together, as in a storm);
-      * dev-LOYO: mean re-based Poisson deviance over the leave-one-year-out folds on
-        loyo_years (lower is better), and in how many folds the step beats its parent."""
-    fits, out = {}, []
-    for s in steps:
-        fits[s["name"]] = fit_glm(df, s["features"], s.get("interactions", ()), year_factor)
-    big = max(fits.values(), key=lambda m: len(m.params))      # phi from the largest model
-    phi = big.result.pearson_chi2 / big.result.df_resid
-    loyo = {}
+        (lets a whole county-year move together, as it does in a storm).
+    Out-of-sample (if loyo_years given): leave-one-year-out on those years; each fold's
+    re-based deviance improvement over the no-features model, in %, averaged with every year
+    counting once; the change versus the current model; and how many folds got better."""
+    cache = {} if cache is None else cache
+    m0, m1 = fit_glm(df, cur_features, cur_inter), fit_glm(df, new_features, new_inter)
+    r0, r1 = m0.result, m1.result
+    ddev, ddf = r0.deviance - r1.deviance, len(m1.params) - len(m0.params)
+    phi = r1.pearson_chi2 / r1.df_resid
+    row = {"n_params": len(m1.params), "deviance": r1.deviance, "AIC": r1.aic,
+           "d_params": ddf, "d_deviance": ddev, "d_AIC": r1.aic - r0.aic, "phi": phi,
+           "LRT_p": stats.chi2.sf(ddev, ddf) if ddf > 0 else np.nan,
+           "quasi_F": ddev / ddf / phi if ddf > 0 else np.nan,
+           "quasi_F_p": stats.f.sf(ddev / ddf / phi, ddf, r1.df_resid) if ddf > 0 else np.nan,
+           "cluster_Wald_p": np.nan}
+    new_cols = [c for c in m1.params.index if c not in m0.params.index]
+    if set(m0.params.index) <= set(m1.params.index) and new_cols:      # nested: Wald test possible
+        rc = fit_glm(df, new_features, new_inter, cov="cluster", cluster_by=cluster_by).result
+        R = np.zeros((len(new_cols), len(m1.params)))
+        for i, c in enumerate(new_cols):
+            R[i, list(m1.params.index).index(c)] = 1.0
+        row["cluster_Wald_p"] = float(rc.wald_test(R, scalar=True).pvalue)
     if loyo_years is not None:
-        for s in steps:
-            sc, _ = loyo_scores(df, lambda tr, s=s: fit_glm(tr, s["features"], s.get("interactions", ()),
-                                                             year_factor), loyo_years)
-            loyo[s["name"]] = sc.set_index("test_year")["deviance_rebased"]
-    for s in steps:
-        m, r = fits[s["name"]], fits[s["name"]].result
-        row = {"step": s["name"], "added": s.get("added", ""), "parent": s.get("parent") or "",
-               "n_params": len(m.params), "deviance": r.deviance, "AIC": r.aic}
-        if loyo:
-            row["devLOYO_mean_rebased_dev"] = loyo[s["name"]].mean()
-        p = s.get("parent")
-        if p:
-            pr = fits[p].result
-            ddev, ddf = pr.deviance - r.deviance, len(m.params) - len(fits[p].params)
-            row.update({"d_params": ddf, "d_deviance": ddev, "d_AIC": r.aic - pr.aic,
-                        "LRT_p": stats.chi2.sf(ddev, ddf),
-                        "quasi_F": ddev / ddf / phi,
-                        "quasi_F_p": stats.f.sf(ddev / ddf / phi, ddf, big.result.df_resid)})
-            new_cols = [c for c in m.params.index if c not in fits[p].params.index]
-            rc = fit_glm(df, s["features"], s.get("interactions", ()), year_factor, cov="cluster",
-                         cluster_by=cluster_by).result
-            R = np.zeros((len(new_cols), len(m.params)))
-            for i, c in enumerate(new_cols):
-                R[i, list(m.params.index).index(c)] = 1.0
-            w = rc.wald_test(R, scalar=True)
-            row.update({"cluster_Wald_p": float(w.pvalue)})
-            if loyo:
-                diff = loyo[s["name"]] - loyo[p]
-                row.update({"d_devLOYO": diff.mean(), "devLOYO_folds_better": f"{int((diff < 0).sum())}/{len(diff)}"})
-        out.append(row)
-    t = pd.DataFrame(out).set_index("step")
-    t.attrs["phi"] = phi
-    return t, fits
+        s1 = _loyo_cached(df, new_features, new_inter, loyo_years, cache)
+        row["devLOYO_improvement_pct"] = s1["improvement_rebased_pct"].mean()
+        row["devLOYO_improvement_noncat_pct"] = s1.loc[~s1["cat_year"], "improvement_rebased_pct"].mean()
+        if cur_features or cur_inter:
+            s0 = _loyo_cached(df, cur_features, cur_inter, loyo_years, cache)
+            row["d_devLOYO_pct"] = row["devLOYO_improvement_pct"] - s0["improvement_rebased_pct"].mean()
+            row["devLOYO_folds_better"] = f"{int((s1['deviance_rebased'] < s0['deviance_rebased']).sum())}/{len(s1)}"
+        else:   # versus the year-only model, whose re-based predictions equal the null's
+            row["d_devLOYO_pct"] = row["devLOYO_improvement_pct"]
+            row["devLOYO_folds_better"] = f"{int((s1['improvement_rebased_pct'] > 0).sum())}/{len(s1)}"
+    return row
+
+
+def forward_selection(df, start_features, candidates, loyo_years, cluster_by=("county_group", "year"),
+                      alpha=0.05):
+    """Step-by-step model building ("forward selection").
+
+    Start from `start_features`; then for each candidate in order, test it against the CURRENT
+    model and keep it only if BOTH:
+      1. it is statistically real after allowing for storm clumping: cluster-robust Wald p < alpha
+         (skipped when the candidate replaces a feature, because the models aren't nested); and
+      2. it improves out-of-sample fit: the mean leave-one-year-out deviance improvement goes up.
+    candidates: list of dicts {"name", "add": [...], "remove": [...], "interactions": [[a, b]]}.
+    Returns (table with one row per step and the decision, final features, final interactions)."""
+    cache, rows = {}, []
+    feats, inter = list(start_features), []
+    row = compare_models(df, [], [], feats, inter, loyo_years, cluster_by, cache)
+    rows.append({"step": "start: " + " + ".join(feats), "decision": "start", **row})
+    for c in candidates:
+        nf = [f for f in feats if f not in c.get("remove", [])] + [f for f in c.get("add", []) if f not in feats]
+        ni = inter + [list(p) for p in c.get("interactions", [])]
+        row = compare_models(df, feats, inter, nf, ni, loyo_years, cluster_by, cache)
+        p = row["cluster_Wald_p"]
+        wald_ok = bool(c.get("remove")) if np.isnan(p) else p < alpha   # replacements: LOYO decides
+        loyo_ok = row["d_devLOYO_pct"] > 0
+        keep = bool(wald_ok and loyo_ok)
+        why = [] if keep else (["not significant after clumping"] if not wald_ok else []) + \
+            (["worse on unseen years"] if not loyo_ok else [])
+        rows.append({"step": c["name"], "decision": "KEEP" if keep else "drop: " + "; ".join(why), **row})
+        if keep:
+            feats, inter = nf, ni
+    return pd.DataFrame(rows).set_index("step"), feats, inter
 
 
 # ---------------------------------------------------------------------------
@@ -529,19 +572,26 @@ def _self_test():
     lt = lift_table(y, m.predict(df), df["exposure"])
     assert len(lt) == 10 and np.isclose(lt["exposure"].sum(), df["exposure"].sum())
     assert lt["actual_freq_per_1000"].iloc[-1] > lt["actual_freq_per_1000"].iloc[0]
+    lt2 = lift_table(y, m.predict(df), df["exposure"], rank_by=m.relative_rate(df))
+    # Same ranking up to ties (the two scores can differ in the last floating-point digit,
+    # which moves tied cells across a decile boundary), so compare the ranking quality.
+    assert np.isclose(lt2["claims"].sum(), lt["claims"].sum())
+    assert np.isclose(gini(y, m.relative_rate(df) * df["exposure"], df["exposure"]),
+                      gini(y, m.predict(df), df["exposure"]), atol=0.01)
 
     # LOYO runs, each fold predicts an unseen year at the average-year level.
     sc, oof = loyo_scores(df, lambda tr: fit_glm(tr, ["zone", "band"]))
     assert len(sc) == 3 and len(oof) == len(df)
 
-    # Step comparison: adding a real feature gives a big, significant deviance drop;
-    # a pure-noise column ("grp") should not be called significant by the cluster Wald test.
+    # Model comparison / forward selection: a real feature ("band") is kept with a huge,
+    # significant deviance drop; a pure-noise column is dropped.
     df["noise"] = (df["grp"] % 2).astype(str)
-    steps = [{"name": "zone", "features": ["zone"]},
-             {"name": "+band", "features": ["zone", "band"], "parent": "zone"},
-             {"name": "+noise", "features": ["zone", "band", "noise"], "parent": "+band"}]
-    t, _ = compare_steps(df, steps, cluster_by=("grp", "year"))
-    assert t.loc["+band", "LRT_p"] < 1e-6 and t.loc["+band", "d_deviance"] > 50
+    row = compare_models(df, ["zone"], [], ["zone", "band"], [], loyo_years=None, cluster_by=("grp", "year"))
+    assert row["LRT_p"] < 1e-6 and row["d_deviance"] > 50 and row["cluster_Wald_p"] < 0.05
+    tbl, feats, _ = forward_selection(df, ["zone"], [{"name": "+band", "add": ["band"]},
+                                                     {"name": "+noise", "add": ["noise"]}],
+                                      loyo_years=(2010, 2011, 2012), cluster_by=("grp", "year"))
+    assert tbl.loc["+band", "decision"] == "KEEP" and feats == ["zone", "band"], tbl
 
     # Over-dispersion: Poisson data should give phi near 1.
     od = overdispersion_tests(m, df)
