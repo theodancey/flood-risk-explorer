@@ -204,10 +204,11 @@ def download_api(dataset, version, dest, filter=None, select=None,
     """
     Download a dataset through the OpenFEMA API and save it as one Parquet file.
 
-    The API returns at most `page_size` rows per request, so we ask for page 1
-    ($skip=0), then page 2 ($skip=10000), and so on ("pagination"). Each page
-    is saved to its own small file first, so an interrupted download resumes
-    where it stopped instead of starting over.
+    The API returns at most `page_size` rows per request, so we fetch the data
+    in pages ("pagination"), sorted by id: each request asks for the next rows
+    after the last id we received. Each page is saved to its own small file
+    first, so an interrupted download resumes where it stopped instead of
+    starting over.
     """
     dest = Path(dest)
     if dest.exists():
@@ -236,21 +237,47 @@ def download_api(dataset, version, dest, filter=None, select=None,
     n_pages = -(-total_rows // page_size)          # ceiling division
     print(f"{dataset} v{version}: {total_rows:,} rows -> {n_pages} pages of {page_size:,}")
 
+    # Resume: count the pages saved on earlier runs and find the last id we got.
     page_dir = RAW_DIR / "_pages" / dest.stem
     page_dir.mkdir(parents=True, exist_ok=True)
+    for leftover in page_dir.glob("*.tmp"):
+        leftover.unlink()                          # half-written page from a crash
+    saved = sorted(page_dir.glob("page_*.parquet"))
+    rows_done = sum(pq.ParquetFile(p).metadata.num_rows for p in saved)
+    last_id = (pq.read_table(saved[-1], columns=["id"]).column("id").to_pylist()[-1]
+               if saved else None)
+    if saved:
+        print(f"  resuming: {len(saved)} pages ({rows_done:,} rows) already saved")
+
+    # "Keyset" pagination: instead of "skip the first 400,000 rows" (which
+    # gets slower the deeper we go, because the server still has to count past
+    # them), we ask for "the next rows whose id is greater than the last id we
+    # received". That stays fast no matter how far into the data we are.
+    page = len(saved)
     start = time.time()
-    for page in range(n_pages):
-        page_file = page_dir / f"page_{page + 1:05d}.parquet"
-        if page_file.exists():
-            continue                               # done on an earlier run
-        params = {**base_params, "$top": page_size, "$skip": page * page_size,
-                  "$metadata": "off"}
+    while rows_done < total_rows:
+        page_filter = filter
+        if last_id is not None:
+            id_filter = f"id gt {last_id}"
+            page_filter = f"({filter}) and {id_filter}" if filter else id_filter
+        params = {**base_params, "$top": page_size, "$metadata": "off"}
+        if page_filter:
+            params["$filter"] = page_filter
         records = get_with_retry(url, params=params).json()[dataset]
-        pq.write_table(records_to_table(records, schema), page_file)
+        if not records:
+            break                                  # nothing left to fetch
+
+        page += 1
+        page_file = page_dir / f"page_{page:05d}.parquet"
+        tmp_file = page_file.with_suffix(".tmp")   # write, then rename = no half files
+        pq.write_table(records_to_table(records, schema), tmp_file)
+        tmp_file.replace(page_file)
+        last_id = records[-1]["id"]
+        rows_done += len(records)
 
         elapsed = time.time() - start
-        print(f"  page {page + 1}/{n_pages}: {len(records):,} rows "
-              f"({(page + 1) / n_pages:.0%}, {elapsed / 60:.1f} min elapsed)")
+        print(f"  page {page}/{n_pages}: {len(records):,} rows "
+              f"({rows_done / total_rows:.0%}, {elapsed / 60:.1f} min elapsed)")
         time.sleep(pause)                          # be polite to FEMA's servers
 
     # Combine all pages into one file, check the row count, then clean up.
