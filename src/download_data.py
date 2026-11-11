@@ -5,6 +5,7 @@ Usage (from the project folder, in PowerShell):
     .venv\\Scripts\\python.exe src\\download_data.py fields        # field lists (small)
     .venv\\Scripts\\python.exe src\\download_data.py claims        # all NFIP claims
     .venv\\Scripts\\python.exe src\\download_data.py policies-va   # Virginia policies
+    .venv\\Scripts\\python.exe src\\download_data.py counties      # county names (Census, small)
     .venv\\Scripts\\python.exe src\\download_data.py all           # everything above
 
 What this script does for you:
@@ -13,7 +14,8 @@ What this script does for you:
   * Resumes large API downloads page by page if it gets interrupted.
   * Prints progress so you can see it's working.
 
-Sources: only fema.gov (OpenFEMA). See https://www.fema.gov/about/openfema/api
+Sources: fema.gov (OpenFEMA, see https://www.fema.gov/about/openfema/api), plus one small
+public reference file from the US Census Bureau that maps county FIPS codes to county names.
 """
 
 import json
@@ -41,6 +43,9 @@ MAX_ATTEMPTS = 5          # how many times to try one request before giving up
 PAGE_SIZE = 10_000        # OpenFEMA's maximum rows per API request
 PAUSE_SECONDS = 0.5       # polite pause between API requests
 TIMEOUT_SECONDS = 120     # give up on a single request after this long
+
+# Census Bureau list of every US county and its FIPS code (about 0.1 MB, "|"-separated text).
+CENSUS_COUNTY_URL = "https://www2.census.gov/geo/docs/reference/codes2020/national_county2020.txt"
 
 # Official full-file download for claims (FEMA's catalog lists this URL).
 CLAIMS_PARQUET_URL = "https://www.fema.gov/about/reports-and-data/openfema/v3/NfipClaimsV3.parquet"
@@ -324,10 +329,15 @@ def download_policies_va():
                         filter="propertyState eq 'VA'", select=POLICY_COLUMNS)
 
 
+def download_county_names():
+    """County FIPS code -> county name lookup from the Census Bureau (used to label charts)."""
+    return download_file(CENSUS_COUNTY_URL, RAW_DIR / "census_counties_2020.txt")
+
+
 def main():
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     what = sys.argv[1] if len(sys.argv) > 1 else "all"
-    if what not in ("fields", "claims", "policies-va", "all"):
+    if what not in ("fields", "claims", "policies-va", "counties", "all"):
         print(__doc__)
         sys.exit(1)
 
@@ -338,6 +348,8 @@ def main():
         download_claims()
     if what in ("policies-va", "all"):
         download_policies_va()
+    if what in ("counties", "all"):
+        download_county_names()
 
     print("\nFiles in data/raw:")
     for path in sorted(RAW_DIR.glob("*")):
