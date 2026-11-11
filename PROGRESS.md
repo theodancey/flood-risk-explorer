@@ -1,6 +1,19 @@
 # Progress Log
 
-## Summary (latest: 2026-11-10, Task 2: data download and first look)
+## Summary (latest: 2026-11-10, Task 3: actuarial basics + project plan)
+All five parts are done, committed, and pushed (no data files in Git).
+
+- **`notebooks/02_actuarial_basics.ipynb`** (run, outputs saved) computes **earned exposure**, **frequency**, **severity**, and **pure premium** for Virginia by year and by county. It has 5 new charts in `reports/figures/02_*.png`. All the built-in checks pass: the toy-policy test, exposure reconciling to total days of cover (within 0.01%), every claim landing in the tables, and frequency × severity = pure premium.
+- **`src/actuarial.py`**: reusable code for these measures, so the modelling weeks compute them the same way. It also saves `data/processed/va_county_year.parquet`.
+- **`reports/02_actuarial_basics.md`**: 8 interview-ready findings. Headline: Virginia's loss cost is **about $149 per policy-year** (6.5 paid claims per 1,000 policy-years × $23,039 average paid claim, 2010–2025). The **worst 3 years produced 69% of losses**, and the median year's loss cost ($79) is about half the average.
+- **`docs/PROJECT_PLAN.md`** (one page, with the week 2–9 schedule), a rewritten **README.md** with "Key findings so far", and a **Task 3** section in `LEARNING_NOTES.md`.
+- `src/download_data.py counties` now downloads a tiny free Census file of county names (used for chart labels). `scipy` was added to `requirements.txt` (it was already installed, and the notebook now uses it directly).
+
+**Two judgment calls you should know about** (details under Decisions): (1) **2009 exposure is estimated**, because the policy file is missing policies that started in 2008, so headline numbers use 2010–2025; (2) exposure counts **one per policy term**, not per condo unit.
+
+**What you need to do:** nothing required. Read `reports/02_actuarial_basics.md` and the new learning notes before interviews. Question 5 is a heads-up about week 8.
+
+## Summary (previous: Task 2, data download and first look)
 The data is downloaded and explored. Everything except the data files is committed and pushed.
 
 | File (in `data/raw/`, not in Git) | Rows | Size |
@@ -17,6 +30,7 @@ The data is downloaded and explored. Everything except the data files is committ
 **What you need to do:** nothing required. To get the data on another computer, run `.venv\Scripts\python.exe src\download_data.py all` (about 35 minutes). Optionally, confirm you're happy with the v2 → v3 switch (Question 3).
 
 ## Questions for Theo
+5. *(Heads-up for week 8, no action now)* **Hosting the app.** The plan puts the Streamlit app on a free host (e.g. Streamlit Community Cloud), which needs an account sign-up linked to your GitHub. Per the rules, I won't sign up for anything. When we get there, either you create the account or we keep the app local-only.
 3. *(FYI, no action needed)* **v2 → v3.** The v2 datasets are gone from OpenFEMA, so I used v3, which is the same NFIP program data under new names, with a few renamed fields. If you saw "v2" in a tutorial or job posting, that's the reason for the difference.
 4. *(FYI)* **FEMA's one-file claims download refused our script (HTTP 403 "Forbidden").** fema.gov's web pages block automated requests, and only the API answers. I didn't try to get around the block (e.g. by pretending to be a browser), so the script downloaded the same data through the official API instead. If you ever want the single file, download `https://www.fema.gov/about/reports-and-data/openfema/v3/NfipClaimsV3.parquet` in your browser and save it as `data/raw/NfipClaimsV3.parquet`. The script will then skip it.
 
@@ -42,7 +56,26 @@ The data is downloaded and explored. Everything except the data files is committ
 - **County names typed in by hand** for the 30 counties in the two top-15 charts (Census names, each cross-checked against FEMA's community names in the data). This avoided an extra non-FEMA download.
 - **No new packages.** Everything used was already in `requirements.txt` (nbconvert/nbformat come with `jupyter`).
 
+### Task 3 decisions (2026-11-10)
+- **Earned exposure method.** Cover runs from `policyEffectiveDate` to `policyTerminationDate`, stopping at `cancellationDateOfFloodPolicy` if that's earlier. A cancellation on or before the start date means 0 exposure (1,219 terms). Each year earns (days of cover in the year) ÷ (days in the year), so a full year = 1.0. Check: total earned over all years = 1,624,225 policy-years vs total cover days ÷ 365.25 = 1,624,118.
+- **One policy term = one unit (not weighted by `policyCount`).** Each claim record is one policy's claim, so this keeps the top and bottom of the frequency ratio in the same unit. Weighting by `policyCount` (condo units) would add 13%. That version is shown in the notebook for comparison.
+- **2009 exposure is estimated; headline window 2010–2025.** The policy file only has terms that *start* on or after 2009-01-01, so 2009's raw earned exposure (44K) is only 46% of the truth. Estimate: assume 2008's policies looked like 2009's, which gives ≈ the total earned by 2009-starting terms (96K). 2009 is kept in charts (hatched bar) because it holds Virginia's biggest event in the data (the Nov 2009 nor'easter, $106M), but averages use 2010–2025. 2026 is excluded (incomplete).
+- **Total paid = building + contents + ICC (`amountPaidOn*`), with blanks as $0.** This matches notebook 01 and is what the insurer paid. ICC is part of the policy's coverage. Cross-checked against the `net*PaymentAmount` fields: totals differ by 0.12%.
+- **Claim = paid claim (> $0)** on both the frequency and severity side, so frequency × severity = pure premium exactly. 24% of 2010–2025 claims closed without payment. The all-claims frequency is shown alongside.
+- **County ranking uses a credibility floor:** only counties with ≥5,000 policy-years in 2010–2025 are ranked (32 of 141, holding 90% of exposure). Smaller counties swing wildly on one or two claims.
+- **County names from the Census Bureau** (`national_county2020.txt`, free, no sign-up) via a new `counties` option in `src/download_data.py`. Saved to `data/raw/` (not in Git). This replaces hand-typing names.
+- **Dollars stay nominal** for now. Inflation adjustment is planned for week 2 (see `docs/PROJECT_PLAN.md`).
+- **Chart palette:** kept notebook 01's blue/orange pair (a standard colorblind-safe pair). The palette-checking script I'd normally run needs Node.js, which isn't installed, and I didn't install system software to run it.
+
 ## Log
+### 2026-11-10: Task 3, actuarial basics + project plan
+1. Checked the policy data during planning: term lengths, cancellations, `policyCount`, and the 2009 start-date gap. Also checked which claim payment fields are complete.
+2. Wrote `src/actuarial.py` (with a self-test on made-up policies) and added the Census county-names download. Ran it: the self-test passed and the claim totals match the raw data. Committed.
+3. Built `notebooks/02_actuarial_basics.ipynb` and ran it with nbconvert: no errors, all asserts pass. Checked every chart visually. Fixed a duplicated "$1K" axis label, overlapping labels on the loss-concentration chart, and an over-strong chart title. Re-ran and committed.
+4. Wrote `reports/02_actuarial_basics.md`. Re-checked every number against the data before committing. That caught and fixed three wrong totals in my first draft. Committed.
+5. Wrote `docs/PROJECT_PLAN.md`. Committed. Rewrote `README.md` and added `scipy` to `requirements.txt`. Committed.
+6. Updated this file and `LEARNING_NOTES.md`. Committed and pushed.
+
 ### 2026-11-10: Task 2, data download and first look
 1. Checked disk (812.9 GB free). Committed your pending CLAUDE.md/PROGRESS.md edits.
 2. Wrote and tested `src/download_data.py` on a single ZIP code (24060, 1,037 rows, 3 pages): the second run skipped correctly. Committed.
