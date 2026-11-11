@@ -8,7 +8,7 @@ I'm building a flood insurance risk model using FEMA's public data on 2.7 millio
 - **Models (in progress):** Poisson / negative binomial GLMs for frequency, a Gamma GLM for severity, compared against XGBoost, with relativities and SHAP to explain what drives risk. Models are tested on held-out years.
 - **App (planned):** a Streamlit app where you pick a county or ZIP code and see its area-level flood risk, expected claim cost, and the reasons behind it.
 
-**Status:** weeks 1–2 of 9 done (data, exploration, actuarial basics, modelling dataset, one-way factor analysis, validation design). See [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
+**Status:** weeks 1–4 of 9 done (data, exploration, actuarial basics, modelling dataset, one-way factor analysis, validation design, frequency and severity GLMs, pure premium with credibility county factors). Next: XGBoost. See [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
 
 > **Disclaimer:** All results are **area-level** estimates built from aggregated public data. They are not predictions, quotes, or risk ratings for any individual property.
 
@@ -22,8 +22,9 @@ I'm building a flood insurance risk model using FEMA's public data on 2.7 millio
 - **What drives risk (one factor at a time):** building age is the most stable frequency driver (pre-1980 buildings claim about 3× as often as 1980–99 ones, in every one of 16 years). Occupancy, elevation, and second homes drive claim *size*. One-way views can mislead: elevated buildings look riskier overall but are safer within every flood zone (Simpson's paradox), which is why the models are GLMs. A **Tidewater** (tidal) coastal flag from Virginia law separates risk far better than the Census coastline list, revealing two flood regimes: coastal hurricanes vs inland river and flash floods ([`reports/03_one_way_findings.md`](reports/03_one_way_findings.md)).
 - **Frequency GLM** (Poisson, log(exposure) offset, year factor): **flood zone, year built and floors** survive. B/C/X zones claim 0.46× as often as A/V zones (storm-aware 95% CI 0.34–0.61), and pre-1980 buildings about 2.7× as often as 1980–99 ones. AIC and plain likelihood-ratio tests would keep almost every feature. With storm-aware tests and leave-one-year-out validation, geography and most other factors fail, because their effects change from storm to storm. Out of sample the model beats a no-features baseline in 14 of 16 years ([`reports/04_frequency_glm.md`](reports/04_frequency_glm.md)).
 - **Severity GLM** (Gamma, log link, 9,553 individual paid claims, 2025 dollars): claim *size* is driven by what's in harm's way. Multi-unit claims are 2.1× and non-residential 3.1× a single-family home's; low coverage limits mean smaller claims (under $100K: 0.69×); elevated buildings 0.76×; B/C/X zones 0.75×. **Flood zone and building age drive both frequency and severity. Occupancy, coverage and elevation drive only severity. Floors push the two in opposite directions.** Large losses aren't capped: NFIP limits already cap the tail, and capping at the 95th percentile shifted cost from commercial buildings onto homes. Geography failed on unseen years again. Held out, the model beats a no-features baseline in 14 of 16 years (16.7% deviance improvement on the 2021–2025 holdout) ([`reports/05_severity_glm.md`](reports/05_severity_glm.md)).
+- **Pure premium** (frequency × severity × ICC bridge × off-balance 0.993 × county factor): the base building costs **$138 per policy-year**. Buildings from 1960–79 cost **3.5×** that, because age raises both how often and how big. Commercial buildings cost 3.1×, B/C/X zones 0.34×. **Bühlmann–Straub credibility** found that county *frequency* differences are pure storm noise (Z = 0), while county *severity* differences are credible (k ≈ 33 claims). The resulting county factors (0.73 York County to 1.78 Newport News) cut county-level error by a third on unseen years. A one-step **Tweedie GLM** scored slightly better overall, but the **double-lift chart** showed frequency × severity was right where they disagreed, so the app will use frequency × severity. Virginia's NFIP **loss ratio was 19%** over 2010–2025 (107% in 2016). Relative to modelled risk, pre-1980 buildings look under-priced ([`reports/06_pure_premium.md`](reports/06_pure_premium.md)).
 
-Details: [`reports/01_data_overview.md`](reports/01_data_overview.md) · [`reports/02_actuarial_basics.md`](reports/02_actuarial_basics.md) · [`reports/03_one_way_findings.md`](reports/03_one_way_findings.md) · [`reports/04_frequency_glm.md`](reports/04_frequency_glm.md) · [`reports/05_severity_glm.md`](reports/05_severity_glm.md)
+Details: [`reports/01_data_overview.md`](reports/01_data_overview.md) · [`reports/02_actuarial_basics.md`](reports/02_actuarial_basics.md) · [`reports/03_one_way_findings.md`](reports/03_one_way_findings.md) · [`reports/04_frequency_glm.md`](reports/04_frequency_glm.md) · [`reports/05_severity_glm.md`](reports/05_severity_glm.md) · [`reports/06_pure_premium.md`](reports/06_pure_premium.md)
 
 ![Frequency, severity, and pure premium by year](reports/figures/02_measures_by_year.png)
 
@@ -36,13 +37,15 @@ src/one_way.py              one-way tables: relativities, confidence intervals, 
 src/validation.py           year-based train/test splits (leave-one-year-out, time holdout)
 src/models/frequency_glm.py claim-frequency GLM: fitting, forward selection, over-dispersion, LOYO scoring
 src/models/severity_glm.py  claim-severity Gamma GLM: claim table, capping/loads, lognormal check, LOYO scoring
+src/models/pure_premium.py  pure premium: freq x sev, off-balance, county credibility, Tweedie, lift/double lift/Gini, loss ratios
 notebooks/01_first_look     data exploration
 notebooks/02_actuarial_basics   Virginia actuarial measures by year and county
 notebooks/03_dataset_summary    the modelling table: cell sizes, zero-claim cells, one-way views
 notebooks/04_one_way_analysis   risk factors one at a time, stability, confounding, coastal definitions
 notebooks/05_frequency_glm      frequency GLM: model build, relativities, over-dispersion, held-out evaluation
 notebooks/06_severity_glm       severity GLM: distribution, large losses, model build, freq vs sev, held-out evaluation
-models/                     saved model coefficients (frequency_glm.json, severity_glm.json)
+notebooks/07_pure_premium       pure premium, county credibility, Tweedie comparison, loss ratios, rating worksheets
+models/                     saved models (frequency_glm.json, severity_glm.json, pure_premium.json)
 reports/                    written findings + figures
 docs/                       data dictionary, modelling dataset, project plan, validation plan
 app/                        Streamlit app (coming)
