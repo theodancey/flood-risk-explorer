@@ -47,10 +47,13 @@ LAST_FULL_YEAR = 2025
 # ---------------------------------------------------------------------------
 # Loading
 # ---------------------------------------------------------------------------
-def load_va_policies(path=POLICIES_FILE):
-    """Virginia policy terms, with the columns needed for exposure, plus a county code."""
+def load_va_policies(path=POLICIES_FILE, extra_cols=()):
+    """Virginia policy terms, with the columns needed for exposure, plus a county code.
+
+    extra_cols: any other policy columns to load too (e.g. building features)."""
     cols = ["id", "policyEffectiveDate", "policyTerminationDate",
             "cancellationDateOfFloodPolicy", "policyCount", "censusGeoid", "ratedFloodZone"]
+    cols += [c for c in extra_cols if c not in cols]
     pol = pd.read_parquet(path, columns=cols)
     # Policies have no county field. The first 5 digits of the census block group ID
     # are the county FIPS code (checked in notebook 01: true for 100% of claims).
@@ -58,10 +61,13 @@ def load_va_policies(path=POLICIES_FILE):
     return pol
 
 
-def load_va_claims(path=CLAIMS_FILE, first_year=2009):
-    """Virginia claims from first_year onward, with total paid computed."""
+def load_va_claims(path=CLAIMS_FILE, first_year=2009, extra_cols=()):
+    """Virginia claims from first_year onward, with total paid computed.
+
+    extra_cols: any other claim columns to load too (e.g. building features)."""
     cols = ["id", "dateOfLoss", "yearOfLoss", "state", "countyCode", "censusGeoid",
             "floodEvent", "policyCount", *PAID_COLS, *NET_COLS]
+    cols += [c for c in extra_cols if c not in cols]
     clm = pd.read_parquet(path, columns=cols, filters=[("state", "==", "VA")])
     clm = clm[clm["yearOfLoss"] >= first_year].copy()
     clm["county"] = clm["countyCode"]

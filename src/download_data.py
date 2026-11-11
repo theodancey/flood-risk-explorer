@@ -6,6 +6,8 @@ Usage (from the project folder, in PowerShell):
     .venv\\Scripts\\python.exe src\\download_data.py claims        # all NFIP claims
     .venv\\Scripts\\python.exe src\\download_data.py policies-va   # Virginia policies
     .venv\\Scripts\\python.exe src\\download_data.py counties      # county names (Census, small)
+    .venv\\Scripts\\python.exe src\\download_data.py cpi           # CPI-U inflation index (BLS, small)
+    .venv\\Scripts\\python.exe src\\download_data.py coastal       # coastline county list (Census, small)
     .venv\\Scripts\\python.exe src\\download_data.py all           # everything above
 
 What this script does for you:
@@ -14,8 +16,10 @@ What this script does for you:
   * Resumes large API downloads page by page if it gets interrupted.
   * Prints progress so you can see it's working.
 
-Sources: fema.gov (OpenFEMA, see https://www.fema.gov/about/openfema/api), plus one small
-public reference file from the US Census Bureau that maps county FIPS codes to county names.
+Sources: fema.gov (OpenFEMA, see https://www.fema.gov/about/openfema/api), plus small public
+reference files: Census Bureau county names and coastline counties, and the CPI-U inflation
+index from the Bureau of Labor Statistics (BLS) public API.
+None of these need an account or API key.
 """
 
 import json
@@ -46,6 +50,19 @@ TIMEOUT_SECONDS = 120     # give up on a single request after this long
 
 # Census Bureau list of every US county and its FIPS code (about 0.1 MB, "|"-separated text).
 CENSUS_COUNTY_URL = "https://www2.census.gov/geo/docs/reference/codes2020/national_county2020.txt"
+
+# Census Bureau list of "coastline counties" (counties touching the ocean, Gulf, Great Lakes,
+# or a major estuary such as the Chesapeake Bay), from its 2018 "Coastline America" release.
+CENSUS_COASTLINE_URL = "https://www2.census.gov/library/stories/2018/08/coastline-counties-list.xlsx"
+
+# CPI-U (Consumer Price Index for All Urban Consumers, all items, US city average, not
+# seasonally adjusted, 1982-84 = 100), monthly, straight from the Bureau of Labor Statistics'
+# free public API (version 1 needs no key; limit 10 years per request, 25 requests per day).
+# BLS series ID CUUR0000SA0 is the same series FRED calls CPIAUCNS. FRED's download URL timed
+# out for Python scripts (it answered curl), so we use BLS, the original source, instead.
+BLS_API_URL = "https://api.bls.gov/publicAPI/v1/timeseries/data/"
+BLS_CPI_SERIES = "CUUR0000SA0"
+CPI_YEARS = (2006, 2025)      # must cover 2010-2025; requested in 10-year chunks
 
 # Official full-file download for claims (FEMA's catalog lists this URL).
 CLAIMS_PARQUET_URL = "https://www.fema.gov/about/reports-and-data/openfema/v3/NfipClaimsV3.parquet"
@@ -334,10 +351,60 @@ def download_county_names():
     return download_file(CENSUS_COUNTY_URL, RAW_DIR / "census_counties_2020.txt")
 
 
+def download_cpi():
+    """Monthly CPI-U index from the BLS public API, saved as data/raw/cpi_u_bls.csv.
+
+    Used to convert dollars to 2025 dollars. Columns: year, month, value, footnote.
+    A month BLS couldn't publish has a blank value and a footnote saying why
+    (e.g. October 2025, during the federal government shutdown)."""
+    dest = RAW_DIR / "cpi_u_bls.csv"
+    if dest.exists():
+        print(f"{dest.name}: already downloaded, skipping.")
+        return dest
+    rows = []
+    first, last = CPI_YEARS
+    for start in range(first, last + 1, 10):            # BLS v1: at most 10 years per request
+        end = min(start + 9, last)
+        print(f"Requesting CPI-U {start}-{end} from the BLS public API")
+        body = {"seriesid": [BLS_CPI_SERIES], "startyear": str(start), "endyear": str(end)}
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            try:
+                resp = requests.post(BLS_API_URL, json=body, headers=HEADERS, timeout=TIMEOUT_SECONDS)
+                reply = resp.json()
+                if resp.status_code == 200 and reply.get("status") == "REQUEST_SUCCEEDED":
+                    break
+                problem = f"HTTP {resp.status_code}, {reply.get('status')}: {reply.get('message')}"
+            except (requests.RequestException, ValueError) as err:
+                problem = type(err).__name__
+            if attempt == MAX_ATTEMPTS:
+                raise RuntimeError(f"BLS API failed after {MAX_ATTEMPTS} attempts ({problem})")
+            print(f"    {problem}; retrying in {2 ** attempt}s")
+            time.sleep(2 ** attempt)
+        for d in reply["Results"]["series"][0]["data"]:
+            if not d["period"].startswith("M") or d["period"] == "M13":   # M13 = annual average
+                continue
+            notes = "; ".join(f["text"] for f in d.get("footnotes", []) if f.get("text"))
+            value = pd.to_numeric(d["value"], errors="coerce")             # "-" = not published
+            rows.append({"year": int(d["year"]), "month": int(d["period"][1:]),
+                         "value": value, "footnote": notes})
+        time.sleep(PAUSE_SECONDS)
+    table = pd.DataFrame(rows).sort_values(["year", "month"])
+    partial = dest.with_suffix(".csv.part")
+    table.to_csv(partial, index=False)
+    partial.replace(dest)                               # only appears once complete
+    print(f"  finished: {dest.name} ({len(table)} months)")
+    return dest
+
+
+def download_coastline_counties():
+    """Census list of coastline counties (used for the 'coastal county' feature)."""
+    return download_file(CENSUS_COASTLINE_URL, RAW_DIR / "census_coastline_counties.xlsx")
+
+
 def main():
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     what = sys.argv[1] if len(sys.argv) > 1 else "all"
-    if what not in ("fields", "claims", "policies-va", "counties", "all"):
+    if what not in ("fields", "claims", "policies-va", "counties", "cpi", "coastal", "all"):
         print(__doc__)
         sys.exit(1)
 
@@ -350,6 +417,10 @@ def main():
         download_policies_va()
     if what in ("counties", "all"):
         download_county_names()
+    if what in ("cpi", "all"):
+        download_cpi()
+    if what in ("coastal", "all"):
+        download_coastline_counties()
 
     print("\nFiles in data/raw:")
     for path in sorted(RAW_DIR.glob("*")):
