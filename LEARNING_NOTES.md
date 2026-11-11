@@ -405,3 +405,75 @@ I built the second half of the loss model: a **Gamma GLM with a log link** that 
    Flood zone and building age drive both: they decide whether water gets in, and somewhat how deep. Occupancy, coverage limit, elevation and second-home status drive only severity: they decide how much is damaged once water gets in. A multi-unit building's claims are about 2.1× a home's, and an elevated building's about 0.76×. Floors are the interesting case: single-storey buildings claim a bit less often but bigger, and the two effects cancel in the loss cost.
 4. **How do you know the severity model works?**
    On leave-one-year-out validation it beats a no-features baseline in 14 of 16 years, with a mean improvement of about 16% in Gamma deviance, and 16.7% on the untouched 2021–2025 holdout, where A/E is 1.02. The top decile's actual average claim is 4.7× the bottom decile's. Out-of-fold A/E is close to 1 for almost every feature level. The weaknesses: the bottom deciles are flat (and under-predicted), county-level differences remain (Newport News 1.67, Norfolk 0.79), and storm years still swing the overall level, from 0.49 to 1.77 of the average.
+
+## Milestone 9: Pure premium, county credibility, Tweedie and loss ratios (2026-11-11)
+
+### What I did
+I combined the frequency GLM and the severity GLM into one **pure premium**: the expected loss per policy-year for every rating cell. I applied the (unit) large-loss load, the ICC bridge, and an **off-balance factor** so the model's total equals actual losses. Then I built the **credibility-weighted county factor** you asked for in Question 7. I compared two classic methods (limited fluctuation and Bühlmann–Straub) and tested them on years the model hadn't seen. I also fitted a one-step **Tweedie GLM** as a challenger, compared it with frequency × severity using lift, double-lift and Gini, and computed actual NFIP **loss ratios** from the premium fields. Five **rating worksheets** show the multiplication step by step. Files: `src/models/pure_premium.py`, `notebooks/07_pure_premium.ipynb`, `reports/06_pure_premium.md`, `models/pure_premium.json`.
+
+### Why I did it that way
+
+**Multiplying relativities.**
+- *Intuition:* a **relativity** says how much riskier one level of a factor is than the **base level** (the reference group, relativity 1.00). Because both GLMs use a log link, effects **multiply**: start from the base building's expected loss and multiply by one relativity per factor.
+- *Example:* the base building costs about $138 per policy-year. A building like it but built 1960–79 has a frequency relativity of 2.75 and a severity relativity of 1.28, so its pure-premium relativity is 2.75 × 1.28 = 3.52, and its expected loss is about $138 × 3.52 ≈ $485.
+- *Formula:* pure premium = base frequency × base severity × Π (frequency relativity) × Π (severity relativity) × loads. Π means "multiply them all together". A factor that's only in one model has relativity 1 in the other.
+- *Why it matters:* the combined table shows *why* a segment is expensive. Floors are the neat example: one-floor buildings claim less often (0.89×) but bigger (1.12×), so their pure premium barely changes (≈1.00).
+
+**Large-loss loads.**
+- *Intuition:* if you cap claims at a threshold when fitting the model, the dollars above the cap must be put back somewhere. The **large-loss load** spreads them evenly over everyone as a flat multiplier.
+- *Example:* capping at the 99th percentile removes 3.3% of dollars, so load = 1 ÷ (1 − 0.033) ≈ 1.034.
+- *Here:* Milestone 8 chose **no cap**, so the load is 1.000. The code still multiplies by it (it's stored in the severity model), and the notebook shows the P99 version as a sensitivity: it barely changes the relativities.
+
+**The off-balance correction.**
+- *Intuition:* after you multiply everything together, the predicted total for the whole state should equal what actually happened. If it doesn't, multiply everything by one number that fixes it. That number is the **off-balance factor**.
+- *Why it's needed:* each model is balanced on its own, but (1) the average of a product isn't the product of the averages (cells with high frequency can have lower severity), (2) the ICC bridge is an average, and (3) about 1.2% of losses are in cells with no exposure, which a frequency model can't predict.
+- *Example:* predicted total before correction ≈ $294.7M, actual $292.7M, so off-balance = 292.7 ÷ 294.7 ≈ 0.993.
+- *Formula:* off-balance = Σ actual losses ÷ Σ predicted losses (before the correction). The same idea is used again to **re-centre** the county factors so they move money between counties without changing the state total.
+
+**Credibility and the Z formula.**
+- *Intuition:* how much should you trust a county's own experience versus the statewide model? A big county with thousands of claims mostly speaks for itself. A small county with five claims is mostly luck. **Credibility** Z (between 0 and 1) is the weight on the county's own experience.
+- *Formula:* blended factor = Z × (county's actual ÷ expected) + (1 − Z) × 1.
+- **Limited fluctuation ("classical"):** pick a tolerance. "I want the county's A/E to be within ±5% of the truth 90% of the time." The number of claims that guarantees this is n_full = (1.645 ÷ 0.05)² ≈ 1,082 (for severity, multiply by CV², the squared coefficient of variation of a claim, ≈ 2,713). Below that, Z = √(n ÷ n_full). *Example:* 270 claims → Z = √(270 ÷ 1,082) = 0.50.
+- **Bühlmann–Straub ("greatest accuracy"):** measures noise and signal from the data. **EPV** (expected process variance) is how much a county bounces around year to year. **VHM** (variance of hypothetical means) is how much counties truly differ. k = EPV ÷ VHM, and Z = n ÷ (n + k). *Example:* k = 33 claims, so a county with 300 claims has Z = 300 ÷ 333 = 0.90.
+- *What I found:* for **frequency**, Bühlmann–Straub found the counties' differences are no bigger than storm noise (VHM < 0, so Z = 0). For **severity**, k is only about 33 claims, so big counties get high credibility. Limited fluctuation can't see storm clumping (it treats 2,000 claims from one hurricane as 2,000 independent pieces of evidence), so it gives frequency more weight than the data supports.
+
+**Tweedie distributions.**
+- *Intuition:* a loss cost per cell is usually exactly $0 (no claims), and otherwise a skewed positive amount. A **Tweedie** distribution with power p between 1 and 2 has exactly that shape: it's a *compound Poisson–Gamma*, meaning a Poisson number of claims, each with a Gamma-distributed size. So one GLM can model losses ÷ exposure directly, instead of two models.
+- *Example:* a cell with 10 policy-years and a 0.5% claim rate has about a 95% chance of $0, and otherwise one or two claims of tens of thousands of dollars.
+- *Formula:* variance = φ × mean^p. p = 1 behaves like Poisson, p = 2 like Gamma. The theory link with claim size is p = (α + 2) ÷ (α + 1), where α is the Gamma shape. Our α ≈ 0.96 gives p ≈ 1.51. I also tried a grid of p from 1.2 to 1.8 on the development years; 1.7 scored best, so I used it.
+- *Trade-off:* one model is simpler, but it can't tell you whether a segment is costly because claims are frequent or because they're big. It also forces each factor to have one combined effect.
+
+**Lift and double-lift charts.**
+- *Intuition:* a **lift chart** sorts the cells by predicted cost, cuts them into 10 equal-exposure groups (deciles), and shows actual cost per group. A good model's actual bars rise steeply from left to right.
+- A **double-lift chart** compares two models head to head. Sort the cells by the **ratio** model A ÷ model B. Decile 1 holds the cells where A is much lower than B; decile 10, where A is much higher. In each decile, plot actual and both predictions. Whichever model tracks the actual line is right where they disagree, and that's the part that matters for pricing.
+- *Example (ours):* in decile 10, frequency × severity predicts 2.06× average, the Tweedie 1.19×, and actual is 2.06×. In decile 1 the Tweedie predicts 2.09× and actual is 0.72×. Frequency × severity was right at both ends.
+
+**The Gini coefficient.**
+- *Intuition:* how well does a model put the risky groups at the top? Sort cells from lowest to highest predicted cost and plot cumulative share of exposure (x) against cumulative share of actual losses (y). A random ranking gives the diagonal. A good ranking hugs the bottom (the cheap cells hold almost no losses) and shoots up at the end.
+- *Formula:* Gini = 1 − 2 × (area under that curve). 0 = no better than random; closer to 1 = losses concentrated in what the model calls riskiest.
+- *Example:* ours is about 0.46–0.49 on unseen years: the riskiest-looking 10% of exposure holds far more than 10% of losses.
+- *Caveat:* Gini only measures **ranking**, not the level. A model that is wrong by 2× everywhere has the same Gini. That's why it's paired with A/E and deviance.
+
+**Loss ratios.**
+- *Intuition:* a **loss ratio** = losses ÷ premiums: how many cents of each premium dollar went to paying claims. **Earned premium** is the part of premium that belongs to a year, spread day by day like earned exposure.
+- *Example:* Virginia NFIP 2010–2025 earned about $1.14 billion of premium and paid about $220 million of losses (nominal), a loss ratio of 19%. In 2016 (Hurricane Matthew) it was 107%.
+- *Why it's not "overcharged":* NFIP premiums must also pay for expenses (agents, insurers that service policies), a catastrophe and reserve loading, debt, and **national** catastrophes like Katrina, Harvey and Ian. Virginia's quiet years help pay for Louisiana's bad ones. Risk Rating 2.0 (October 2021) also re-priced every policy, with yearly increase limits ("glide path"), so premiums are still moving.
+- *How I used it:* the useful comparison is **relative**. Divide each segment's modelled-loss-to-premium ratio by the statewide one, which removes the common loadings. Segments above 1 pay less than their modelled share of risk; below 1, more.
+
+**Why Bühlmann–Straub was chosen and the app uses frequency × severity.**
+- *County method:* both credibility methods cut county-level error on unseen years by about a third (mean |log A/E| 0.50 → 0.34). Only Bühlmann–Straub *also* improved the overall fit: LOYO 10.2% → 10.7%, better in 13 of 16 years, and holdout 6.4% → 8.9%. On the development years alone both slightly hurt, which I report honestly.
+- *Structure:* the Tweedie (p = 1.7) scored about 1 point better on deviance and Gini. But the double lift showed frequency × severity was right where the two disagreed. The Tweedie predicted about 2× too much for commercial buildings and low-coverage policies, because at p = 1.7 the fitting gives high-cost cells little weight (each cell is weighted by mean^(1−p)).
+
+### Interview questions
+
+**Q: What is an off-balance factor and why did you need one?**
+A: It's a single multiplier that makes the model's predicted total equal the actual total. Each GLM balances on its own, but multiplying them cell by cell doesn't preserve totals, because the average of a product isn't the product of the averages. Mine was 0.993: a 1.9% mix effect, partly offset by 1.2% of losses in cells with no exposure.
+
+**Q: How did you handle geography when county effects didn't validate in your GLMs?**
+A: With credibility. Each county's actual ÷ expected ratio is blended with 1 using a weight Z. Bühlmann–Straub estimates Z from the data: county frequency differences were no bigger than storm noise, so Z = 0, while severity differences became credible after about 33 claims (k = 33.4). Out of sample, it cut county-level error by a third, and I still label it as less certain in the app.
+
+**Q: Why not just use a Tweedie GLM for pure premium? It's one model.**
+A: I tried it, and it scored slightly better on overall deviance. But a double-lift chart showed that where the two models disagreed, frequency × severity matched actual losses and the Tweedie didn't. The Tweedie also produced a backwards coverage relativity (lower limits → higher losses). Two models also explain *why* an area is expensive: more claims, or bigger ones.
+
+**Q: Virginia's NFIP loss ratio is 19%. Is flood insurance overpriced there?**
+A: Not necessarily. NFIP premiums also pay for expenses, catastrophe and reserve loadings, debt, and national cross-subsidies, and one bad year (107% in 2016) can wipe out many quiet ones. The useful part is relative. After dividing out the statewide ratio, pre-1980 buildings pay less than their modelled share and newer buildings more. That fits Risk Rating 2.0's glide path still phasing in full-risk rates.

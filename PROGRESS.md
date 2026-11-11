@@ -1,6 +1,39 @@
 # Progress Log
 
-## Summary (latest: 2026-11-11, Milestone 8: severity GLM)
+## Summary (latest: 2026-11-11, Milestone 9: pure premium)
+All eight parts are done, committed, and pushed (no data files in Git).
+
+- **Pure premium** (`notebooks/07_pure_premium.ipynb`, write-up **`reports/06_pure_premium.md`**, code **`src/models/pure_premium.py`** with self-test):
+  - Formula: frequency GLM × severity GLM × large-loss load **1.000** (no cap, per Milestone 8) × ICC bridge **1.0092** × **off-balance 0.9933** × county factor.
+  - The off-balance makes predicted total = actual total ($292.7M). It decomposes into mix 0.981 × ICC 1.0005 × unmatched claims 1.012.
+  - Base building **$137.83 per policy-year**.
+  - Combined relativities: built 1960–79 **3.52×**, before 1960 2.79×, 2000+ 0.58×, B/C/X **0.34×**, non-residential 3.07×, multi-unit 2.10×, elevated 0.76×; floors cancel out (≈ 1.00).
+- **Credibility county factor (your Q7, both frequency and severity):**
+  - **Limited fluctuation:** n_full 1,082 claims for frequency and 2,713 for severity (CV 1.58).
+  - **Bühlmann–Straub:** frequency VHM < 0, so **Z = 0**: county frequency differences are storm noise. Severity k = **33.4 claims**, so Z runs up to 0.98.
+  - **Chosen: Bühlmann–Straub.** Factors run 0.73 (York) to 1.78 (Newport News): Virginia Beach 1.20, Norfolk 0.84, Hampton 0.81.
+  - **Validated out of fold:** county mean |log A/E| 0.50 → 0.34; overall LOYO 10.2% → 10.7% (better in 13 of 16 years); holdout 6.4% → 8.9%.
+  - **But** it's slightly worse on development years (12.7% → 12.2%) and in cat years. It's labelled less certain.
+- **Tweedie GLM:**
+  - **p = 1.7**, best on the development-years grid; theory said 1.51.
+  - It wins overall deviance and Gini by about 1 point (LOYO 11.5%, holdout 9.8%).
+  - It **loses the double lift** badly (end-decile error 0.63 vs 0.17), over-predicts non-residential and under-$100K coverage about 2×, and has a backwards coverage relativity.
+  - **Recommendation: the app uses frequency × severity + Bühlmann–Straub county factor.** The Tweedie stays as the challenger.
+- **Loss ratios** (premium fields exist; earned like exposure, reconciles exactly):
+  - **19.4%** for 2010–2025 (2016: 107%, median year 10%).
+  - Relative to modelled risk in 2023–25, **pre-1980 buildings (1.3–1.7), A/V zones, Newport News (2.4), Portsmouth (1.6)** look under-priced, and **post-1980 buildings (0.3–0.5), B/C/X zones and York County** over-priced. Caveated: expenses, cat and reserve loads, national cross-subsidy, RR2.0 glide path.
+- **Five rating worksheets:** Virginia Beach 1960s house $585; Norfolk elevated second home $57; Roanoke bungalow $90; Newport News condo building $579; Arlington commercial $516 per policy-year.
+- **Saved for the app:** `models/pure_premium.json` (loads, off-balance, county factors with A/E and Z, combined relativities) and `reports/06_*.csv`.
+
+**Judgment calls worth a look** (details under Milestone 9 decisions):
+1. **Frequency × severity over the Tweedie**, even though the Tweedie scores slightly better on deviance and Gini.
+2. **Bühlmann–Straub** over the classical method. It gives frequency zero county credit, so big frequency A/Es (Danville 6.5) are ignored.
+3. The county factor helps on all-years LOYO and the holdout but **not** on development years alone.
+4. **Segment imbalance** in frequency × severity (multi-unit A/E 1.33, elevated 0.85) points to occupancy and elevation effects on frequency that the Milestone 7 rule rejected. It's worth re-checking in the frequency second pass or XGBoost.
+
+**What you need to do:** nothing required. Read `reports/06_pure_premium.md` (about 12 minutes) and the Milestone 9 learning notes. Question 7 is resolved and moved to "Earlier (resolved)". No new questions.
+
+## Summary (previous: 2026-11-11, Milestone 8: severity GLM)
 All six parts are done, committed, and pushed (no data files in Git).
 
 - **Final severity model** (`notebooks/06_severity_glm.ipynb`, write-up **`reports/05_severity_glm.md`**): a **Gamma GLM with log link** on **9,553 individual paid claims** (building + contents, 2025 dollars), calendar year as a factor, average-year prediction. Features: **occupancy** (multi-unit **2.10×**, non-residential **3.07×**), **building coverage** (under $100K **0.69×**, contents-only 0.28×), **elevated 0.76×**, **B/C/X zone 0.75×**, **built 1960–79 1.28×**, floors (1: 1.12×, 3+: 0.89×), not primary residence 1.12×. Base claim $28,498 (average year). Storm-aware CIs are 1.7× wider than plain Gamma.
@@ -92,12 +125,12 @@ The data is downloaded and explored. Everything except the data files is committ
 **What you need to do:** nothing required. To get the data on another computer, run `.venv\Scripts\python.exe src\download_data.py all` (about 35 minutes). Optionally, confirm you're happy with the v2 → v3 switch (Question 3).
 
 ## Questions for Theo
-7. *(Optional, Milestone 7)* **Geography in the app.** The frequency model has no county or coastal factor, because those effects didn't hold up on unseen years. So for now, county differences in the app will come only from each county's mix of flood zones and building ages (the severity model, next milestone, may add geography back). If you'd rather the app show a county factor anyway (e.g. a credibility-weighted one, clearly labelled as less certain), tell me and I'll plan it for the app milestone. Otherwise I'll test geography again with XGBoost. ✅ Theo: Yes, plan a credibility-weighted county factor for the app milestone (blend each county's experience with the statewide average based on its exposure; explain the credibility method used and label it clearly as less certain in the app). Also still test geography with XGBoost as planned.
-   *Status (Milestone 8):* added to the app row of `docs/PROJECT_PLAN.md`. The severity model also dropped geography (Tidewater and county group failed on unseen years), so the credibility-weighted county factor will cover both frequency and severity. Out-of-fold severity A/E by county (Newport News 1.67, Norfolk 0.79) shows it is needed.
-
 5. *(Week 8, decided)* **Hosting the app.** The plan puts the Streamlit app on a free host (Streamlit Community Cloud), which needs an account linked to your GitHub. **Decision: you'll create the Streamlit Community Cloud account yourself in week 8.** I won't sign up for anything.
 
 ### Earlier (resolved)
+7. *(Resolved in Milestone 9)* **Geography in the app.** The frequency model has no county or coastal factor, because those effects didn't hold up on unseen years. So for now, county differences in the app will come only from each county's mix of flood zones and building ages (the severity model, next milestone, may add geography back). If you'd rather the app show a county factor anyway (e.g. a credibility-weighted one, clearly labelled as less certain), tell me and I'll plan it for the app milestone. Otherwise I'll test geography again with XGBoost. ✅ Theo: Yes, plan a credibility-weighted county factor for the app milestone (blend each county's experience with the statewide average based on its exposure; explain the credibility method used and label it clearly as less certain in the app). Also still test geography with XGBoost as planned.
+   *Status (Milestone 8):* added to the app row of `docs/PROJECT_PLAN.md`. The severity model also dropped geography (Tidewater and county group failed on unseen years), so the credibility-weighted county factor will cover both frequency and severity. Out-of-fold severity A/E by county (Newport News 1.67, Norfolk 0.79) shows it is needed.
+   **Outcome (Milestone 9):** built in `src/models/pure_premium.py` with Bühlmann–Straub credibility on county A/E, frequency and severity separately (limited fluctuation also compared). Frequency gets Z = 0 (county differences are storm noise), and severity k = 33 claims. Factors 0.73–1.78, saved in `models/pure_premium.json` for the app to display, labelled less certain. It improves held-out county fit and the overall holdout fit. See `reports/06_pure_premium.md` §2.
 6. *(Resolved in Task 5)* **Coastal definition.** Original note: the Census coastline-county list (25 localities) leaves out Chesapeake, which holds a third of "inland" exposure. ✅ Theo: compare it with a broader "tidal" definition, cite the source, and keep whichever separates risk better (or explain why neither does). **Outcome:** Tidewater Virginia (Code of Virginia § 62.1-44.15:68, 46 localities) separates risk clearly better and is recommended. Both flags are kept as features. See `reports/03_one_way_findings.md`.
 3. *(Resolved)* **v2 → v3.** The v2 datasets are gone from OpenFEMA, so I used v3, which is the same NFIP program data under new names, with a few renamed fields.
 4. *(Resolved)* **FEMA's one-file claims download refused our script (HTTP 403 "Forbidden").** The script downloaded the same data through the official API instead. If you ever want the single file, download `https://www.fema.gov/about/reports-and-data/openfema/v3/NfipClaimsV3.parquet` in your browser and save it as `data/raw/NfipClaimsV3.parquet`.
@@ -146,6 +179,20 @@ The data is downloaded and explored. Everything except the data files is committ
 - **Checks are assertions inside the script** (rather than a pytest suite), so they run on every build without a new package.
 - Project-plan week-2 file names updated to the real ones (`build_dataset.py`, `va_model_data.parquet`).
 
+### Milestone 9 decisions (2026-11-11)
+- **Refit vs load.** `fit_combined` refits both GLMs (needed for the LOYO folds). On all years it reproduces the saved JSON parameters exactly (asserted in the notebook).
+- **Large-loss load kept as a multiplier (1.000)**, read from the severity model, so a future cap needs no code change. P99 shown as a sensitivity.
+- **Off-balance** uses all losses, including ICC and the 95 unmatched claims, so the statewide total is right. County factors get a second off-balance (re-centring) so they only move money between counties.
+- **County A/E for frequency uses fitted year effects**, so storm-year levels don't count as county signal. Severity A/E = actual ÷ expected building + contents dollars per county. The county factor is the product of the two blended factors.
+- **Both credibility methods implemented.** Limited fluctuation uses the existing 1,082-claim standard (p = 90%, k = 5%), × CV² for severity. Bühlmann–Straub uses county × year A/E with expected claims (frequency) or claim counts (severity) as weights. Negative VHM means k = ∞ (Z = 0), the standard convention.
+- **Chosen Bühlmann–Straub** by the plan's rule (improve held-out county A/E without worsening the overall held-out fit). Limited fluctuation worsened overall LOYO (9.8% vs 10.2%). Disclosed: both slightly worse on development years.
+- **Tweedie power by the pre-stated rule** (best development-LOYO deviance improvement): 1.7, not the theory value 1.51. All models are scored on the same yardstick (Tweedie deviance at p = 1.5, re-based per year, plus Gini). Tweedie features = the union of both GLMs' features, so the comparison is about structure.
+- **App recommendation = frequency × severity + county**, despite the Tweedie's ≈1-point edge on deviance and Gini. Reasons: the double lift, segment balance (non-residential and low coverage), the coverage relativity's direction, cat years, and explainability. Added an in-sample segment-balance check after seeing the out-of-fold A/E by feature.
+- **Pooled lift ranking fix.** The first notebook run ranked frequency × severity by each fold's absolute average-year rate. The fold without 2016 has a much lower level, which pushed all 2016 cells down and made the pooled lift look ragged (Gini 0.38). Now both models rank by fold-relative rate (Gini 0.48). Per-fold scores were unaffected.
+- **Earned premium** = premium × (days in year ÷ term days), via `actuarial.earned_exposure(weight=...)`. Cached in `data/processed/va_cell_premium.parquet` (not in Git). Exposure reconciles to the cell table. `policyCost` (with fees) is shown as an alternative, not used for the indications.
+- **Relative indications use 2023–2025** (mostly RR2.0 premiums), with modelled loss including county factors, divided by the statewide ratio.
+- The notebook generator lives outside the repo, as before. No new packages.
+
 ### Milestone 8 decisions (2026-11-11)
 - **Individual claims as the modelling unit.** Features are on the claim record (same `make_features()`), so attaching them needs no claim-to-policy link. `severity_glm.build_claims_table()` asserts that the claims rebuild every cell's paid-claim count and 2025-dollar losses. The claim table is cached in `data/processed/va_claims_severity.parquet` (not in Git). The 95 unmatched claims are kept.
 - **Amount = building + contents, 2025 $; ICC excluded and bridged.** ICC is 0.96% of dollars, 78 claims, 4 ICC-only (b+c = $0, which a Gamma can't take). Bridge factor = (total paid per paid claim) ÷ (b+c per claim with b+c > 0) = 1.0092, so pure premium = frequency × severity × bridge reproduces total paid. Including ICC changes relativities by at most 8% (built 2000+).
@@ -186,6 +233,14 @@ The data is downloaded and explored. Everything except the data files is committ
 - No new packages.
 
 ## Log
+### 2026-11-11: Milestone 9, pure premium
+1. Read the plan docs, Q7 and reports 04–05. Moved the county factor into this milestone in `docs/PROJECT_PLAN.md`. Committed.
+2. Wrote `src/models/pure_premium.py` with a simulated-data self-test. First-run fix: the relativity test used a randomly chosen base level, so I pinned the bases and compared with the data's raw ratio. Committed.
+3. Dry-ran the off-balance, both credibility methods, all-years and development LOYO, the holdout, the Tweedie power grid and the double lift. Built the earned-premium table (exposure reconciles).
+4. Built notebook 07 from a generator and ran it with nbconvert (no errors). Checking the charts found: log-axis labels rendered as raw math text; two clipped axes; and a ragged frequency × severity pooled lift, which turned out to be a ranking bug (fold-level differences) and was fixed in the module. Added a segment-balance cell and re-ran. Corrected the recommendation text, which pre-dated the p = 1.7 results (it claimed frequency × severity + county was best on the holdout; the Tweedie is). Committed.
+5. Saved `models/pure_premium.json` and the tables (JSON round-trip asserted). Committed. Wrote report 06, checking numbers against the notebook, and updated the README. Committed.
+6. Updated LEARNING_NOTES and this file. Committed and pushed.
+
 ### 2026-11-11: Milestone 8, severity GLM
 1. Read the plan docs. Committed your Q7 answer. Probed the claims file: ICC is 0.9% of dollars, 85/104 building/contents limit hits. (My first probe command hung on a stray `cat`, so I stopped it and re-ran it as a script.)
 2. Wrote `src/models/severity_glm.py` with a simulated-data self-test. Two first-run fixes: the dollar-balance check (a log-link Gamma only balances ratios) and the noise-feature check (noise passed the rule by chance; the test now checks effect sizes). Built the claim table: it reconciles cell by cell. Committed.
