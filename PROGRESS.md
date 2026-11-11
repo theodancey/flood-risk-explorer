@@ -1,6 +1,24 @@
 # Progress Log
 
-## Summary (latest: 2026-11-11, Milestone 7: frequency GLM)
+## Summary (latest: 2026-11-11, Milestone 8: severity GLM)
+All six parts are done, committed, and pushed (no data files in Git).
+
+- **Final severity model** (`notebooks/06_severity_glm.ipynb`, write-up **`reports/05_severity_glm.md`**): a **Gamma GLM with log link** on **9,553 individual paid claims** (building + contents, 2025 dollars), calendar year as a factor, average-year prediction. Features: **occupancy** (multi-unit **2.10×**, non-residential **3.07×**), **building coverage** (under $100K **0.69×**, contents-only 0.28×), **elevated 0.76×**, **B/C/X zone 0.75×**, **built 1960–79 1.28×**, floors (1: 1.12×, 3+: 0.89×), not primary residence 1.12×. Base claim $28,498 (average year). Storm-aware CIs are 1.7× wider than plain Gamma.
+- **Modelling unit:** individual claims. The features come from the claim record itself, and the claims rebuild the cell table **cell by cell**. Claim-weighted cell averages give identical coefficients. **ICC is excluded** from the amount (0.96% of dollars) and added back as a bridge factor of 1.0092.
+- **Distribution:** median $14K vs mean $30K, skewness 4.7. Top 1% of claims = 11% of dollars, top 5% = 31%. **178 claims (1.9%) hit a coverage limit**, holding 7.2% of dollars.
+- **Large losses: no cap.** Uncapped is best on unseen years, and capping at P99 doesn't stabilize anything. Capping at P95 with a flat load moved cost from commercial and multi-unit buildings onto homes (multi-unit 2.1 → 1.7). NFIP limits already cap the tail. P99 (load 1.03) is kept as a documented sensitivity.
+- **Selection** (same storm-aware + LOYO keep rule as frequency, 2010–2020 only): the forward pass kept year built, coverage, zone, floors. A **second pass** (added after a dry run showed order effects) added primary residence (narrowly) and elevated. **Geography failed again:** Tidewater isn't significant after clumping (p = 0.084), and county group makes unseen years worse (−0.91 points).
+- **Frequency vs severity:** zone and building age drive **both**. Occupancy, coverage, elevation and second homes drive **severity only**. **Floors offset** (frequency 0.89 / severity 1.12, so pure premium 1.00).
+- **Fit:** Gamma beats lognormal (AIC 197,754 vs 197,886; unseen-year improvement 19.2% vs 17.6%). The lognormal's mean is 0.54× uncorrected and 1.12× with the σ²/2 correction. The Gamma under-fits the top ~2% tail.
+- **Held-out:** LOYO beats the no-features baseline in **14 of 16 years**, mean improvement **15.7%** (non-cat 17.1%, cat 9.8%), Gini 0.29, top/bottom decile 4.7×. **Holdout 2021–2025: 16.7%, A/E 1.02.** Raw A/E by year 0.49–1.77 (2016 Matthew). Leftover signal: county (Newport News 1.67, Norfolk 0.79) and a flat, under-predicted bottom of the lift chart.
+- **Saved:** `models/severity_glm.json` (committed), pickle gitignored, `reports/05_*.csv`. Reusable code: **`src/models/severity_glm.py`** (with self-test). `frequency_glm.make_spec` gained a `weight` argument (backward compatible; frequency self-test still passes).
+- Learning notes for Milestone 8 explain severity vs frequency, skewness and heavy tails, the Gamma distribution, policy limits and censoring, capping and large-loss loads, ICC, residuals and Q–Q plots, Gamma vs lognormal, order effects, and why drivers differ, with 4 interview Q&As.
+
+**Judgment calls worth a look** (details under Milestone 8 decisions): (1) **no cap**, against the usual habit of capping; (2) the **second pass** was added after seeing the forward pass. It's the same rule, but it means the frequency model (forward pass only) should get the same check later; (3) **primary residence** is borderline (Wald p = 0.047, CI 1.00–1.25); (4) ICC handled as a bridge factor rather than modelled.
+
+**What you need to do:** nothing required. Read `reports/05_severity_glm.md` (about 10 minutes) and the Milestone 8 learning notes. No new questions.
+
+## Summary (previous: 2026-11-11, Milestone 7: frequency GLM)
 All five parts are done, committed, and pushed (no data files in Git).
 
 - **Final frequency model** (`notebooks/05_frequency_glm.ipynb`, write-up **`reports/04_frequency_glm.md`**): a Poisson GLM with log link, log(exposure) offset and calendar year as a factor, plus **flood zone, year built and floors**. B/C/X zones **0.46×** A/V (storm-aware 95% CI 0.34–0.61); built before 1960 **2.73×**, 1960–79 **2.75×**, 2000+ **0.64×** vs 1980–99; floors 0.89× (1) / 1.13× (3+). Base rate: 4.82 paid claims per 1,000 policy-years in an average year.
@@ -75,6 +93,7 @@ The data is downloaded and explored. Everything except the data files is committ
 
 ## Questions for Theo
 7. *(Optional, Milestone 7)* **Geography in the app.** The frequency model has no county or coastal factor, because those effects didn't hold up on unseen years. So for now, county differences in the app will come only from each county's mix of flood zones and building ages (the severity model, next milestone, may add geography back). If you'd rather the app show a county factor anyway (e.g. a credibility-weighted one, clearly labelled as less certain), tell me and I'll plan it for the app milestone. Otherwise I'll test geography again with XGBoost. ✅ Theo: Yes, plan a credibility-weighted county factor for the app milestone (blend each county's experience with the statewide average based on its exposure; explain the credibility method used and label it clearly as less certain in the app). Also still test geography with XGBoost as planned.
+   *Status (Milestone 8):* added to the app row of `docs/PROJECT_PLAN.md`. The severity model also dropped geography (Tidewater and county group failed on unseen years), so the credibility-weighted county factor will cover both frequency and severity. Out-of-fold severity A/E by county (Newport News 1.67, Norfolk 0.79) shows it is needed.
 
 5. *(Week 8, decided)* **Hosting the app.** The plan puts the Streamlit app on a free host (Streamlit Community Cloud), which needs an account linked to your GitHub. **Decision: you'll create the Streamlit Community Cloud account yourself in week 8.** I won't sign up for anything.
 
@@ -127,6 +146,19 @@ The data is downloaded and explored. Everything except the data files is committ
 - **Checks are assertions inside the script** (rather than a pytest suite), so they run on every build without a new package.
 - Project-plan week-2 file names updated to the real ones (`build_dataset.py`, `va_model_data.parquet`).
 
+### Milestone 8 decisions (2026-11-11)
+- **Individual claims as the modelling unit.** Features are on the claim record (same `make_features()`), so attaching them needs no claim-to-policy link. `severity_glm.build_claims_table()` asserts that the claims rebuild every cell's paid-claim count and 2025-dollar losses. The claim table is cached in `data/processed/va_claims_severity.parquet` (not in Git). The 95 unmatched claims are kept.
+- **Amount = building + contents, 2025 $; ICC excluded and bridged.** ICC is 0.96% of dollars, 78 claims, 4 ICC-only (b+c = $0, which a Gamma can't take). Bridge factor = (total paid per paid claim) ÷ (b+c per claim with b+c > 0) = 1.0092, so pure premium = frequency × severity × bridge reproduces total paid. Including ICC changes relativities by at most 8% (built 2000+).
+- **Base levels = the frequency model's**, not the most-claims level, so the two relativity tables line up level for level.
+- **No cap.** Decided from the development-years comparison (none / P99 / P95, cap set per training fold). See report 05 §3. The cap and load machinery stays in the module for XGBoost.
+- **Keep rule unchanged from frequency** (cluster Wald p < 0.05 by county group × year AND better dev-LOYO re-based deviance). In-sample tests are reported but not used. AIC and the F-test would have kept 9 of 10.
+- **Second pass added after a dry run** showed elevated failing only because it was tested before zone and year built. It re-tests every dropped feature against the current model with the same rule and adds the best passer each round. Disclosed in the notebook and report. The frequency model had no second pass, so that's a follow-up for the model-comparison milestone (added to the plan).
+- **Gamma log link doesn't balance dollars exactly** (it balances the average ratio actual/predicted per level). The average-year level is chosen so total predicted = total actual training dollars, so overall calibration holds by construction.
+- **Cluster-robust errors require unweighted rows** (statsmodels warns otherwise), so weights are only passed for cell averages.
+- **Lognormal comparison** uses AIC on the dollar scale (with the Jacobian, Σ log y) and an ML-shape Gamma likelihood, so both have their own fitted spread. Q–Q plots use quantile residuals for the Gamma.
+- **Numbering:** pure premium becomes report 06 / notebook 07, XGBoost notebook 08, the model comparison report 07 / notebook 09 (`docs/PROJECT_PLAN.md` updated, week 4 split into 4a done / 4b next).
+- The notebook generator lives outside the repo (as for notebooks 04–05). No new packages.
+
 ### Milestone 7 decisions (2026-11-11)
 - **Year as a factor in every model; average-year prediction.** Storm years would otherwise distort the building relativities. An unseen year is predicted at the level where training predictions sum to training claims (`FreqGLM.predict(..., "average")`).
 - **Keep rule = cluster-robust Wald p < 0.05 AND better dev-LOYO** (mean re-based % improvement over the no-features model, each year weighted once). Decided before running the selection. Plain LRT/AIC assume independent claims and would have kept 10 of 11 candidates. The quasi-F (cell-level φ of about 2) barely changes that, because cell-level φ understates storm clumping.
@@ -154,6 +186,13 @@ The data is downloaded and explored. Everything except the data files is committ
 - No new packages.
 
 ## Log
+### 2026-11-11: Milestone 8, severity GLM
+1. Read the plan docs. Committed your Q7 answer. Probed the claims file: ICC is 0.9% of dollars, 85/104 building/contents limit hits. (My first probe command hung on a stray `cat`, so I stopped it and re-ran it as a script.)
+2. Wrote `src/models/severity_glm.py` with a simulated-data self-test. Two first-run fixes: the dollar-balance check (a log-link Gamma only balances ratios) and the noise-feature check (noise passed the rule by chance; the test now checks effect sizes). Built the claim table: it reconciles cell by cell. Committed.
+3. Dry-ran the cap comparison and selection, which surfaced the order effect behind the second pass. Built notebook 06 from a generator and ran it with nbconvert (no errors first time). Checked all 9 charts. Fixed the broken log-axis labels, overlapping percentile labels and raw feature names. Rewrote the residual narrative (my pre-written text had the Gamma's tail misfit backwards). Committed.
+4. Saved the model JSON and tables. Committed. Wrote report 05, checking numbers against the notebook. A spot check corrected my explanation of the under-predicted bottom decile (it's elevated buildings with $100K+ cover, not contents-only claims). Committed.
+5. Updated LEARNING_NOTES, README, PROJECT_PLAN, and this file. Committed and pushed.
+
 ### 2026-11-11: Milestone 7, frequency GLM
 1. Read the plan docs. Confirmed `main` and that the existing self-tests pass. Profiled fit speed: formulas took 18 s per fit, so I built the design matrices by hand.
 2. Wrote `src/models/frequency_glm.py` with a simulated-data self-test (recovers known relativities, balance, offset, aggregation invariance, JSON round trip). Raised the simulated claim rate after one noise-driven failure. Committed.

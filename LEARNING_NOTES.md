@@ -328,3 +328,80 @@ I built the project's first real model: a **Poisson GLM** that predicts how many
    I tested it (Pearson φ and the Cameron–Trivedi test), then compared quasi-Poisson, negative binomial and cluster-robust standard errors. The key finding was that φ grows when you combine cells, which means the extra variance comes from storms making whole areas move together, not from cell-level noise. Quasi-Poisson and NB both still treat cells as independent, so their intervals are too narrow. I kept the Poisson relativities, which balance to the actual claims, and reported cluster-robust confidence intervals by county group × year, about 3.6× wider than plain Poisson's. NB fits better on AIC and is slightly better out of sample, so it's the challenger for the next milestone.
 4. **How good is the model?**
    It beats a no-features baseline in 14 of 16 held-out years: typically a few percent of deviance, more in hurricane years. Its Gini is about 0.3, and the lift chart rises clearly in held-out years and in the 2021–2025 holdout. The weak spot is the very top decile, where the small floors effect decides the order. In raw terms it under-predicts hurricane years by up to 5.6× and over-predicts quiet years. That's by design: it's an average-year rate, and no frequency model can predict when a hurricane will come.
+
+
+## Milestone 8: The claim-severity GLM (2026-11-11)
+
+### What I did
+I built the second half of the loss model: a **Gamma GLM with a log link** that predicts **how big** a paid flood claim is, in 2025 dollars. I fitted it to the 9,553 individual paid claims, each carrying the same features as the rating cells, and checked that they add back up to the cell table exactly. Before modelling, I looked at how skewed claim sizes are, how many claims hit their coverage limit, and whether capping the largest claims helps. It doesn't, so the model uses uncapped amounts. I built the model step by step with the same storm-aware rule as the frequency model, plus a second pass to fix order effects. The final model has **occupancy, year built, building coverage, flood zone, floors, primary residence and elevation**; geography was tested and dropped. Files: `src/models/severity_glm.py`, `notebooks/06_severity_glm.ipynb`, `reports/05_severity_glm.md`, `models/severity_glm.json`.
+
+### Why I did it that way
+
+**Severity vs frequency.**
+- *Intuition:* expected loss cost has two parts. **Frequency** is how *often* claims happen (claims per policy-year). **Severity** is how *big* a claim is when it happens (dollars per paid claim). Multiply them and you get the **pure premium**, the expected loss per policy-year.
+- *Example:* 6.45 paid claims per 1,000 policy-years × $30,625 per claim ≈ $197 per policy-year (Virginia, 2025 dollars).
+- *Why model them separately:* they have different drivers (below) and different statistical shapes. Counts are whole numbers, mostly 0; claim sizes are positive dollar amounts with a long right tail. Two models, each with a suitable distribution, are easier to understand and check than one.
+- *Formula:* pure premium = frequency × severity = (claims ÷ exposure) × (losses ÷ claims) = losses ÷ exposure.
+
+**Skewness and heavy tails.**
+- *Intuition:* a distribution is **right-skewed** when most values are small but a few are very large, so the long "tail" sits on the right. Then the **mean** (the average) is pulled far above the **median** (the middle value). A **heavy tail** means extreme values are more common than a bell curve would suggest.
+- *Example:* our median claim is $14,003, but the mean is $30,345 (2.2×). The largest 1% of claims (96 claims) hold 11% of all dollars, and the largest 5% hold 31%.
+- *Why it matters:* the average is what pricing needs, but a few big claims can move it, so models must be robust to them. Ordinary least squares (which squares the errors) gets dragged around by big claims. That's one reason to use a Gamma GLM.
+- *Formula (skewness):* the average of ((x − mean) ÷ sd)³. It's 0 for a symmetric distribution; ours is 4.7.
+
+**The Gamma distribution.**
+- *Intuition:* a flexible distribution for amounts that are always positive and skewed to the right. Its key property: its **spread grows in proportion to its mean**. A $100K claim can miss by $100K, while a $5K claim misses by about $5K. Errors are about *percentages*, not fixed dollar amounts, which is how claim sizes behave.
+- *Example:* if expected claims are $10,000 and the coefficient of variation (sd ÷ mean) is 1.2, a typical claim is $10,000 ± $12,000. That's very uncertain one claim at a time, but the *average* over many claims is well determined.
+- *Formula:* mean μ, variance φ × μ² (φ is the **dispersion**; ours is 1.53, so sd ≈ 1.24 × μ). With a log link, log(μ) = β₀ + β₁x₁ + …, so each feature **multiplies** the expected claim by e^β, exactly like the frequency model.
+- *Gamma deviance:* 2 × Σ[(y − μ)/μ − log(y/μ)]. It depends only on the **ratio** y/μ, so a claim that is 2× its prediction counts the same whether it's $10K or $200K. That's why one huge claim doesn't dominate the fit.
+- *A surprise I hit:* unlike Poisson, a log-link Gamma does **not** make predicted dollars add up exactly to actual dollars. It balances the *average ratio* actual ÷ predicted within each level. So the average-year level is set so total predicted dollars equal total actual dollars.
+
+**Modelling unit: individual claims vs cell averages.**
+- *Intuition:* a Gamma GLM on cell averages, weighted by how many claims each cell has, gives exactly the same coefficients as fitting every claim separately (I checked: they differ by 7×10⁻¹²). But only individual claims let you see percentiles, policy-limit hits, residuals and capping effects.
+- *Why it was possible here:* every feature is recorded on the claim itself, so no claim-to-policy link is needed.
+
+**Policy limits.**
+- *Intuition:* an insurance policy pays at most its **limit**, the amount of coverage bought. NFIP homes can buy up to $250,000 of building and $100,000 of contents cover. If the damage is bigger, the payment stops at the limit. A claim at the limit is **censored**: the damage was *at least* that much, but we can't see how much more.
+- *Example:* 178 claims (1.9%) paid 99% or more of a limit, holding 7.2% of dollars. 85 building limits: 16 at the $250K maximum, 69 at a lower limit the owner chose.
+- *Why it matters:* (1) limits cap the tail, so NFIP claims can't be unboundedly large; (2) the coverage-band feature is partly **mechanical**: low limits mean smaller claims (under $100K of cover: 0.69×; contents-only: 0.28×).
+
+**Capping and large-loss loads.**
+- *Intuition:* to stop a few huge claims from swinging the factors, actuaries often **cap** ("limit") claims at a threshold for modelling, then add the cut-off dollars back as a flat **large-loss load** spread over everyone.
+- *Example:* capping at the 99th percentile ($241,051) removes about 3.3% of dollars, so the load is 1 ÷ (1 − 0.033) ≈ 1.034: every prediction is multiplied by 1.034.
+- *Formula:* load = total losses ÷ total capped losses; predicted severity = capped-model prediction × load.
+- *What I found:* capping didn't help on unseen years, and at the 95th percentile it was **harmful**. The load is flat, but the capped-off dollars come mostly from big buildings (39% of non-residential dollars sit above P95, vs 5% for single-family homes), so capping shifted cost from commercial buildings onto homes. Combined with policy limits that already cap the tail, the decision was **no cap**. The load also swings a lot by year (1.00 to 1.21 at P99), which is why loads are averaged over many years.
+
+**ICC (Increased Cost of Compliance).**
+- *Intuition:* a separate NFIP coverage (up to $30,000) that pays to elevate, move or demolish a building after the local government declares it "substantially damaged." It's triggered by a local decision, not directly by the damage, so I left it out of the modelled amount (it's under 1% of dollars) and added it back as a small multiplier (1.0092).
+
+**Residuals.**
+- *Intuition:* a **residual** is what the model got wrong for one data point: actual vs predicted. If the model is right, residuals look like random noise. They show no pattern against the predictions or the features. A pattern means the model is missing something.
+- *Deviance residual:* each claim's signed share of the deviance. Plot it against the fitted value: a flat average line means no systematic bias for small vs large claims.
+- *Quantile residual:* ask "what percentile of its own predicted distribution did this claim land on?" and convert that to a normal z-score. If the distribution is right, these z-scores follow a standard bell curve, which you check with a **Q–Q plot** (sorted residuals against the quantiles a bell curve expects; a straight diagonal line means a good fit).
+- *What ours showed:* the middle 95% of claims fit well. The top ~2% are bigger than a Gamma expects. The lognormal had the opposite problem (its tail is too heavy).
+
+**Gamma vs lognormal.**
+- *Intuition:* the alternative is to take log(claim size) and fit an ordinary regression. It handles skew too, but it predicts the **median** on the original scale, not the mean. To get the mean you have to multiply by a correction (e^(σ²/2)), and if the spread differs between groups, that correction is wrong.
+- *Example:* uncorrected, the lognormal predicted only 54% of actual dollars. With the textbook correction it predicted 112%. The Gamma GLM predicts the mean directly (99%), had a better AIC, and did better on unseen years, so it's the choice.
+
+**Order effects in step-by-step selection.**
+- *Intuition:* forward selection tests each feature once, against whatever is in the model at that moment. A feature tested *before* its overlapping partners can look useless and never get another chance.
+- *Example:* elevation was tested second, when the model had only occupancy, and it failed. Re-tested at the end (with zone and building age in), it passed clearly. So I added a **second pass** that re-tests every dropped feature with the same rule. I was open that I added it after a dry run showed the problem.
+
+**Why drivers differ between frequency and severity.**
+- *Intuition:* frequency asks *"does water get into the building?"* That's about **hazard and vintage**: is the building in the floodplain (flood zone), and was it built before modern floodplain rules (building age)? Severity asks *"once water is in, how much does it damage?"* That's about **what's in harm's way**: how big and valuable the building is (occupancy), how much cover was bought (limit), and whether the living space sits above the water (elevation, floors).
+- *Our results:*
+  - **Flood zone and building age drive both.** B/C/X zones claim 0.46× as often *and* claims are 0.75× as big, so the loss cost is 0.34×.
+  - **Occupancy, coverage, elevation and second homes drive only severity.** Multi-unit claims are 2.1× bigger but not much more frequent.
+  - **Floors work in opposite directions:** single-storey homes claim slightly *less* often (0.89×) but *bigger* (1.12×), because all their value is at ground level. The product is about 1.00.
+- *Why it matters for pricing:* a factor can look unimportant in one model and matter a lot in the other. Rating only on frequency would miss most of what makes commercial and multi-unit flood losses expensive.
+
+### Interview questions
+1. **Why a Gamma GLM for claim severity?**
+   Claim sizes are positive and right-skewed, and their spread grows with their size. A $200K claim varies far more in dollars than a $5K one. The Gamma has exactly that property (variance proportional to the mean squared). Its deviance judges errors as ratios, so a few huge claims don't dominate the fit. With a log link, the factors multiply like a rating plan. I compared it with a lognormal: the Gamma had a better AIC and better held-out performance, and it predicts the mean directly, while the lognormal's mean needed a back-transform correction that over-shot by 12%.
+2. **Did you cap large losses?**
+   I tested caps at the 95th and 99th percentile with a flat large-loss load. Neither helped on unseen years, and the 95th-percentile cap distorted the factors: the load spreads capped dollars evenly, but large claims come mostly from multi-unit and commercial buildings, so it underpriced them and overpriced single-family homes. NFIP policy limits already cap the tail, and the Gamma is fairly robust to large claims, so I modelled uncapped amounts and kept the 99th-percentile cap (load 1.03) as a documented sensitivity check.
+3. **What drives frequency vs severity in your models?**
+   Flood zone and building age drive both: they decide whether water gets in, and somewhat how deep. Occupancy, coverage limit, elevation and second-home status drive only severity: they decide how much is damaged once water gets in. A multi-unit building's claims are about 2.1× a home's, and an elevated building's about 0.76×. Floors are the interesting case: single-storey buildings claim a bit less often but bigger, and the two effects cancel in the loss cost.
+4. **How do you know the severity model works?**
+   On leave-one-year-out validation it beats a no-features baseline in 14 of 16 years, with a mean improvement of about 16% in Gamma deviance, and 16.7% on the untouched 2021–2025 holdout, where A/E is 1.02. The top decile's actual average claim is 4.7× the bottom decile's. Out-of-fold A/E is close to 1 for almost every feature level. The weaknesses: the bottom deciles are flat (and under-predicted), county-level differences remain (Newport News 1.67, Norfolk 0.79), and storm years still swing the overall level, from 0.49 to 1.77 of the average.
