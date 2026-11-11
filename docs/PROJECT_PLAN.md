@@ -36,7 +36,7 @@ Enter a **county** (later a ZIP code) to see the area's claim frequency, average
 ## Week-by-week plan (weeks 2–9, a few hours per week)
 | Week | Goal | Deliverable |
 |---|---|---|
-| **2** | Clean data and build the modelling table: inflation-adjust dollars (CPI), add area features (flood-zone mix, building traits, coastal flag), handle negatives/blanks | `src/build_features.py`, `data/processed/va_model_table.parquet`, notebook 03 |
+| **2** ✅ | Clean data and build the modelling table: rating cells (county × year × 8 building/policy features), losses in 2025 dollars (CPI-U), coastal flag, data checks | `src/build_dataset.py`, `data/processed/va_model_data.parquet`, `docs/modeling_dataset.md`, notebook 03 |
 | **3** | Frequency GLM: Poisson, then negative binomial; interpret relativities | notebook 04, frequency section of report 03 |
 | **4** | Severity Gamma GLM; combine into pure premium; Tweedie cross-check | notebook 05, report 03 |
 | **5** | XGBoost frequency/severity/Tweedie with the same features and year split; light tuning | notebook 06 |

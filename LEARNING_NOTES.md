@@ -119,3 +119,63 @@ I computed the four building blocks of insurance pricing for Virginia: **exposur
    About $149 per policy-year for 2010–2025: 6.5 paid claims per 1,000 policy-years times a $23,000 average paid claim. It's the expected claim cost per policy, the base before adding expenses, profit, and a catastrophe margin. But the median year is only $79, because a few storm years drive the average.
 3. **What makes flood risk hard to price?**
    It's catastrophe-driven: three of seventeen years produced 69% of Virginia's losses, and claim counts are about 28 times more variable than a Poisson model assumes. You need long histories, overdispersed models like the negative binomial, careful testing on held-out years, and capital or reinsurance for the bad years.
+
+---
+
+## Task 4: Building the modelling dataset (2026-11-11)
+
+### What I did
+I built the table the models will learn from: `data/processed/va_model_data.parquet`, made by `src/build_dataset.py`. Each row is a **rating cell**: a group of Virginia policies that share the same county, year, flood-zone group, occupancy, floors, elevated / primary-residence / post-FIRM flags, construction-year band, and coverage band. For each cell I added up the exposure (policy-years), paid claims, and paid losses, and converted the losses to **2025 dollars** using the government's inflation index (CPI-U). The script checks itself every time it runs: the totals must match notebook 02 exactly, nothing may be negative or missing, and every claim must land in a cell. The rules are written up in `docs/modeling_dataset.md`, and `notebooks/03_dataset_summary.ipynb` describes the result.
+
+### Why I did it that way
+
+**Rating cells.**
+- *Intuition:* an insurer can't know the risk of one particular house, but it can learn the risk of "houses like this one." A rating cell is a bucket of similar policies. We count how much insurance was in the bucket and how many claims came out of it.
+- *Example:* "Norfolk, 2016, A/V zone, single-unit home, 1 floor, not elevated, primary residence, pre-FIRM, built 1960–79, $100K–$249K coverage" is one cell. Say it had 40 policy-years and 3 paid claims.
+- *Why cells here:* the claims file and the policy file have **no shared ID**, so a claim can't be linked to its exact policy. But both files record the same building facts. So I put policies and claims into cells using the *same* rules on both sides, then compare claims with exposure inside each cell.
+- *No information lost:* for a Poisson GLM with categorical features, adding up rows that share features gives exactly the same fitted model as using each policy separately. The model only "sees" the sums.
+
+**Choosing and grouping features.**
+- I used only features that are filled in, and coded the same way, in **both** files. Basement type (more than half blank), CRS class (blank in 63% of claims but only 18% of policies, so the cells wouldn't line up), and foundation type (mostly "not reported") were left out.
+- FEMA changed its occupancy codes in October 2021 (Risk Rating 2.0). Before then a condo unit or a mobile home was coded "single family," so I grouped them together. The groups then mean the same thing in 2012 and in 2024.
+
+**Sparse cells and the rare-category rule.**
+- *Intuition:* with many features, some combinations are rare. A level that holds very little exposure (say, V-zone homes, 0.7% of exposure) gives the model too little data to learn from, so its estimate would be noisy.
+- *Rule:* every level of every feature must hold at least **1% of exposure**. Smaller levels are merged into the most similar one: V zones join A zones (both high risk), split-level joins 2 floors, mobile homes join 1 floor.
+- *Counties:* 32 counties have at least 5,000 policy-years and get their own level. The rest (about 100 smaller Virginia counties and cities) are pooled into "other coastal" / "other inland," and blank or out-of-state codes go into "other/unknown." This is a simple version of **credibility**: trust an area's own experience only when there's enough of it. The full county code stays in the table, so the pooling can be changed later.
+- *Cells are still small* (median 1 policy-year). That's fine: a sparse cell isn't a problem for a Poisson model; a rare *level* is.
+
+**Targets vs. features.**
+- A **feature** is something known *before* the loss that the model uses to predict, e.g. flood zone or year built.
+- A **target** is what the model predicts: `claims` (frequency model) and `losses_2025` (severity model).
+- **Exposure** is neither. It's the amount of insurance at risk, given to the model as an **offset**, so the model predicts claims *per policy-year* and then scales up by each cell's size.
+
+**Trending and inflation adjustment.**
+- *Intuition:* a $20,000 repair in 2011 would cost about $29,000 today. If we mixed old and new dollars, the model would think claims are getting worse when partly it's just prices rising.
+- *Example:* CPI-U averaged 218.06 in 2010 and 322.15 in 2025, so factor = 322.15 ÷ 218.06 = 1.477, and a $10,000 claim in 2010 becomes $14,774 in 2025 dollars.
+- *Formula:* losses_2025 = losses_nominal × CPI(2025) ÷ CPI(year of loss).
+- *Real-world wrinkle:* the BLS didn't publish October 2025 CPI (government shutdown), so I filled it with a straight line between September and November. That changes the 2025 average by 0.07%.
+- *Actuarial term:* restating past losses to today's cost level is part of **trending**. A full trend study would use construction-cost indices too (repair costs rose faster than CPI in 2021–23). CPI is the standard, transparent first step.
+- Coverage bands stay in **nominal** dollars on purpose: the NFIP's $250,000 limit hasn't changed since 1994, so "insured to the limit" means the same thing every year.
+
+**Data leakage.**
+- *Intuition:* leakage is like a student who has seen the answer key: amazing on the practice test, useless on the real one. It happens when a feature secretly contains information from the outcome.
+- *Example here:* the claims file has water depth, damage amount, and cause of damage. These would "predict" claims perfectly, but they only exist *because* a claim happened, and you'd never know them when pricing a policy. Also `floodZoneCurrent` (today's map) could have been redrawn after the flood, so I used `ratedFloodZone` (the zone the policy was priced on).
+- *Rule I followed:* every feature describes the policy or building before the loss. County-level features use only exposure and an external list, never claim counts.
+
+**Why so many cells have zero claims.**
+- *Intuition:* flood claims are rare: about 6 per 1,000 policy-years. A cell with 1 policy-year has a tiny expected count, so zero is the normal result.
+- *Poisson math:* if a cell's expected number of claims is λ, P(zero claims) = e^(−λ). With λ = 1 × 0.0065, that's about 99.4%. Even 100 policy-years (λ = 0.65) gives about 52% zeros.
+- *Result:* 98% of cells have zero paid claims. Poisson with each year's statewide rate predicts 97%, very close.
+- *Why the GLM is fine with this:* maximum likelihood counts a zero in a tiny cell as very probable, so it barely moves the estimates, while a zero in a big cell pushes that cell's rate down. **Dropping the zero rows would be a big mistake:** you'd keep only the cells that had claims, and frequency would look far too high.
+- *Bonus finding:* big cells have *more* zeros than a flat rate predicts. Risk isn't spread evenly; claims cluster in certain kinds of cells. That's what the features need to explain.
+
+**Unmatched claims.** 95 paid claims (1% of paid claims) have a feature combination that no in-force policy had, so their cell has zero exposure. I kept them, flagged, so totals still reconcile. They can't be used for frequency (no exposure to divide by), but they're fine for severity. I documented this instead of quietly forcing them into the nearest cell.
+
+### Interview questions
+1. **How did you combine policy and claim data when they don't share an ID?**
+   I built rating cells. I defined each feature the same way on both files and grouped policies by county, year, and eight building and policy features to get exposure. Then I put each claim into the cell matching its own features. The totals reconcile exactly with the raw data. About 1% of paid claims fell into combinations with no exposure, and I kept them, flagged, for the severity model.
+2. **Why adjust for inflation, and how?**
+   Claims from 2011 and 2024 are in different dollars, so without adjusting, the model would confuse price inflation with rising flood risk. I multiplied each year's losses by CPI-U for 2025 divided by CPI-U for that year, using BLS data. It raised total losses by 33% and severity from about $23K to $31K. I'd refine it with a construction-cost index, since repair costs outpaced CPI recently.
+3. **98% of your rows have zero claims. Isn't that a problem?**
+   No, that's what rare events look like. A cell with one policy-year expects about 0.006 claims, so zero is almost certain, and a Poisson model predicts nearly the same 97% zero share. The Poisson GLM with a log-exposure offset uses those zeros correctly. Dropping them would bias frequency upward. Sparse cells aren't the issue; rare feature levels are, so I merged any level with under 1% of exposure.

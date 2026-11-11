@@ -1,6 +1,21 @@
 # Progress Log
 
-## Summary (latest: 2026-11-10, Task 3: actuarial basics + project plan)
+## Summary (latest: 2026-11-11, Task 4: modelling dataset)
+Done, committed, and pushed (no data files in Git).
+
+- **`src/build_dataset.py`** builds **`data/processed/va_model_data.parquet`**: **252,531 rating cells** (county × year × 8 features), Virginia 2010–2025, with exposure, paid claims, all claims, and losses in nominal and **2025 dollars**. Runtime about 20 seconds.
+- **The checks pass on every run** and stop the script if anything is off. Totals equal notebook 02 exactly: **1,482,412.77 policy-years, 12,545 claims, 9,557 paid, $220,183,315.29**. No negatives, no missing values, no duplicate cells, and every claim is counted once. The script also self-tests the grouping rules.
+- **Features** (each complete in both files): flood zone (A/V vs B/C/X), occupancy (3 groups, consistent across Risk Rating 2.0), floors (1/2/3+), elevated, primary residence, post-FIRM, construction-year band (4), building-coverage band (4). Plus `county_group` (32 credible counties + 3 pooled groups) and `coastal`. **Rare-category rule:** every level holds ≥1% of exposure.
+- **Inflation:** CPI-U from the **BLS public API** (free, no key). Losses rise 33% to $292.7M in 2025 dollars, and the loss cost is about **$197/policy-year** (vs $149 nominal).
+- **Unmatched claims:** **95 paid claims (0.99%, 1.23% of losses)** have feature combinations with no in-force policy. They're kept with exposure 0 and a flag (frequency models drop them; severity uses them), and the reasons are reported.
+- New docs: **`docs/modeling_dataset.md`** (every column and rule, CPI method, leakage, limitations), **`notebooks/03_dataset_summary.ipynb`** (run, 2 figures), Task 4 in `LEARNING_NOTES.md`. README and the project plan are updated.
+- `src/download_data.py` has two new options, `cpi` and `coastal` (small files). `openpyxl` was added to requirements (to read the Census `.xlsx`).
+
+**Judgment calls worth a look** (details under Task 4 decisions): (1) the full county is kept in the cell key, so there are many small cells (median 1 policy-year, 98% with zero claims, which is normal for Poisson); (2) coverage bands stay in nominal dollars on purpose; (3) October 2025 CPI is missing (shutdown) and was interpolated; (4) Chesapeake counts as *inland* on the official coastline list (Question 6).
+
+**What you need to do:** nothing required. Read `docs/modeling_dataset.md` and the Task 4 learning notes. Question 6 is an FYI.
+
+## Summary (previous: 2026-11-10, Task 3: actuarial basics + project plan)
 All five parts are done, committed, and pushed (no data files in Git).
 
 - **`notebooks/02_actuarial_basics.ipynb`** (run, outputs saved) computes **earned exposure**, **frequency**, **severity**, and **pure premium** for Virginia by year and by county. It has 5 new charts in `reports/figures/02_*.png`. All the built-in checks pass: the toy-policy test, exposure reconciling to total days of cover (within 0.01%), every claim landing in the tables, and frequency × severity = pure premium.
@@ -30,6 +45,7 @@ The data is downloaded and explored. Everything except the data files is committ
 **What you need to do:** nothing required. To get the data on another computer, run `.venv\Scripts\python.exe src\download_data.py all` (about 35 minutes). Optionally, confirm you're happy with the v2 → v3 switch (Question 3).
 
 ## Questions for Theo
+6. *(FYI, no action needed)* **"Coastal" uses the Census Bureau's official coastline-county list**, which has 25 Virginia counties and cities. **Chesapeake city isn't on it** (it has tidal rivers but doesn't touch the Bay or ocean directly), and it holds a third of the "inland" exposure. That's partly why coastal vs inland looks flat in the one-way view ($192 vs $203 per policy-year). I kept the official definition because it's citable. In week 3 I can test a broader "tidal" definition if you'd like.
 5. *(Week 8, decided)* **Hosting the app.** The plan puts the Streamlit app on a free host (Streamlit Community Cloud), which needs an account linked to your GitHub. **Decision: you'll create the Streamlit Community Cloud account yourself in week 8.** I won't sign up for anything.
 
 ### Earlier (resolved)
@@ -67,7 +83,29 @@ The data is downloaded and explored. Everything except the data files is committ
 - **Dollars stay nominal** for now. Inflation adjustment is planned for week 2 (see `docs/PROJECT_PLAN.md`).
 - **Chart palette:** kept notebook 01's blue/orange pair (a standard colorblind-safe pair). The palette-checking script I'd normally run needs Node.js, which isn't installed, and I didn't install system software to run it.
 
+### Task 4 decisions (2026-11-11)
+- **Rating cell = year × county × 8 features.** Policies and claims share no ID, so both are put into cells with the same `make_features()` rules. The full county stays in the key (it can be pooled later but never split again, and the app needs counties). The models use `county_group`.
+- **Features kept:** only those complete and coded alike in both files. **Rejected:** basement type (54–58% blank), CRS class (63% blank in claims vs 18% in policies), foundation type (mostly "not reported" pre-RR2.0), deductible (code set changed with RR2.0; a candidate for later), `floodZoneCurrent` (possible post-loss map change = leakage risk), ZIP (too sparse).
+- **Occupancy groups are time-consistent:** {1, 11, 14, 16} / {2, 3, 12, 13, 15} / {4, 6, 17, 18, 19}. Pre-RR2.0, condo units and mobile homes were coded 1.
+- **Rare-category rule: each level ≥1% of 2010–2025 exposure**, merged into the most similar level (V → A, split-level → 2 floors, mobile → 1 floor). Blanks/implausible values go to the most common level: 114 zones, 237 floors, 728 construction years (policy terms). Counts are printed every run.
+- **`county_group`:** a county keeps its own level at ≥5,000 policy-years (the same floor as notebook 02's ranking; 32 counties). The rest are pooled by coastal/inland. Blank and **out-of-state census codes** (8 codes, 52 policy-years, 0 claims, almost certainly geocoding errors) go to `Other/unknown county`. They're kept, so totals still reconcile with notebook 02.
+- **Coverage bands are nominal.** The $250K NFIP limit is fixed in nominal dollars, so restating limits would move buildings between bands just because time passed.
+- **CPI source: BLS API, not FRED.** FRED's CSV link answered `curl` but timed out for every Python request (likely bot filtering). I didn't try to get around it; I used the BLS Public Data API v1 (the original publisher, no key). Same series (CUUR0000SA0 = CPIAUCNS). Annual averages; factor = CPI(2025)/CPI(year of loss). **October 2025 wasn't published** (government shutdown) and was linearly interpolated (2025 average 322.153 vs 321.943 from 11 months, 0.07%). Check: 2010 = 218.056, matching BLS.
+- **Coastal flag** from the Census Bureau's 2016 coastline-county list (`coastline-counties-list.xlsx`, Aug 2018 release). Needed `openpyxl` (installed in `.venv`, added to requirements).
+- **Unmatched claims kept, not forced into a nearby cell:** 111 cells / 122 claims (95 paid) with exposure 0 and `exposure_matched=False`. None are in a county-year without exposure. Ignoring county alone would re-match 118, and ignoring coverage band 105, so they're rare combinations (probably small differences between claim and policy records, or missing policy rows).
+- **Checks are assertions inside the script** (rather than a pytest suite), so they run on every build without a new package.
+- Project-plan week-2 file names updated to the real ones (`build_dataset.py`, `va_model_data.parquet`).
+
 ## Log
+### 2026-11-11: Task 4, modelling dataset
+1. Planning: read the docs, profiled every candidate feature in both files, and prototyped the cell grouping (cell counts, unmatched claims under different groupings).
+2. Committed your README pitch and the PROGRESS question updates.
+3. Added `cpi` and `coastal` to `download_data.py`. FRED timed out from Python, so I switched to the BLS API and downloaded both. Let the `actuarial.py` loaders take extra columns. Committed.
+4. Wrote `src/build_dataset.py`. All checks passed on the first run. Made the unmatched-claim reasons readable. Found and pooled the out-of-state census codes. Confirmed two runs give identical output (same hash). Committed.
+5. Wrote `docs/modeling_dataset.md`. Committed.
+6. Built and ran notebook 03 with nbconvert (no errors). Checked both charts and moved a legend that overlapped the bars. Committed.
+7. Updated LEARNING_NOTES, README, PROJECT_PLAN, and this file. Committed and pushed.
+
 ### 2026-11-10: Task 3, actuarial basics + project plan
 1. Checked the policy data during planning: term lengths, cancellations, `policyCount`, and the 2009 start-date gap. Also checked which claim payment fields are complete.
 2. Wrote `src/actuarial.py` (with a self-test on made-up policies) and added the Census county-names download. Ran it: the self-test passed and the claim totals match the raw data. Committed.

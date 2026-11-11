@@ -8,7 +8,7 @@ I'm building a flood insurance risk model using FEMA's public data on 2.7 millio
 - **Models (in progress):** Poisson / negative binomial GLMs for frequency, a Gamma GLM for severity, compared against XGBoost, with relativities and SHAP to explain what drives risk. Models are tested on held-out years.
 - **App (planned):** a Streamlit app where you pick a county or ZIP code and see its area-level flood risk, expected claim cost, and the reasons behind it.
 
-**Status:** week 1 of 9 done (data, exploration, actuarial basics). See [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
+**Status:** weeks 1–2 of 9 done (data, exploration, actuarial basics, modelling dataset). See [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
 
 > **Disclaimer:** All results are **area-level** estimates built from aggregated public data. They are not predictions, quotes, or risk ratings for any individual property.
 
@@ -18,6 +18,7 @@ I'm building a flood insurance risk model using FEMA's public data on 2.7 millio
 - **Storms drive frequency, not severity:** claim frequency swings about 40-fold between years, while the average claim stays roughly between $10K and $44K.
 - **Risk per policy ≠ total losses:** Salem, Newport News, and the Roanoke area have the highest pure premiums (about $300–$455, inland river flooding in three of them). Virginia Beach has the most dollars: **30%** of losses from **20%** of exposure.
 - **Counts are overdispersed** (about 28× Poisson variance), so the frequency model will need a negative binomial or similar.
+- **In 2025 dollars** (CPI-U), the loss cost is about **$197** per policy-year. First one-way views of the modelling table: A/V flood zones $292 vs $94 elsewhere; pre-FIRM buildings $297 vs $89 post-FIRM ([`docs/modeling_dataset.md`](docs/modeling_dataset.md), notebook 03).
 
 Details: [`reports/01_data_overview.md`](reports/01_data_overview.md) · [`reports/02_actuarial_basics.md`](reports/02_actuarial_basics.md)
 
@@ -27,8 +28,10 @@ Details: [`reports/01_data_overview.md`](reports/01_data_overview.md) · [`repor
 ```
 src/download_data.py        download FEMA data (+ Census county names) into data/raw/
 src/actuarial.py            earned exposure, frequency, severity, pure premium
+src/build_dataset.py        modelling table: rating cells, 2025 dollars, data checks
 notebooks/01_first_look     data exploration
 notebooks/02_actuarial_basics   Virginia actuarial measures by year and county
+notebooks/03_dataset_summary    the modelling table: cell sizes, zero-claim cells, one-way views
 reports/                    written findings + figures
 docs/                       data dictionary, project plan
 app/                        Streamlit app (coming)
@@ -42,7 +45,9 @@ py -3.13 -m venv .venv
 .venv\Scripts\python.exe src\check_setup.py
 .venv\Scripts\python.exe src\download_data.py all      # about 35 minutes, ~270 MB
 .venv\Scripts\python.exe src\actuarial.py              # self-test + county-year table
+.venv\Scripts\python.exe src\build_dataset.py          # modelling table + data checks (~20 s)
 .venv\Scripts\jupyter-nbconvert.exe --to notebook --execute --inplace notebooks\02_actuarial_basics.ipynb
+.venv\Scripts\jupyter-nbconvert.exe --to notebook --execute --inplace notebooks\03_dataset_summary.ipynb
 ```
 
 *This product uses FEMA's OpenFEMA API but is not endorsed by FEMA. FEMA may update the data at any time.*
