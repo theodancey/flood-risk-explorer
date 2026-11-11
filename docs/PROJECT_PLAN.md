@@ -17,10 +17,10 @@ FEMA OpenFEMA, free and public: **NFIP claims v3** (2.7M US claims since 1978) a
 3. **Pure premium** = predicted frequency × predicted severity. We'll also try a single **Tweedie** GLM as a cross-check.
 4. **XGBoost comparison.** Gradient-boosted trees with Poisson (frequency), Gamma (severity), and Tweedie objectives, using the same features. The question: does the extra flexibility beat the GLMs on unseen years, and is the gain worth the lost transparency?
 5. **Explainability.** For the GLMs, **relativities**: e.g. "V-zone share +10 points → frequency ×1.3." For XGBoost, **SHAP** values (how much each feature pushes a prediction up or down). Each area gets a plain-English "why."
-- **Candidate features** (area level): flood-zone mix, share of pre-FIRM / elevated / primary-residence buildings, coastal vs inland, average coverage and deductible, Community Rating System class, past claim history.
+- **Candidate features** (rating-cell level, see `docs/modeling_dataset.md`): flood zone, occupancy, floors, elevated, primary residence, post-FIRM, year built, coverage band, Tidewater (tidal) flag, county group. The week 3 shortlist is in `reports/03_one_way_findings.md`.
 
 ## Evaluation
-- **Hold out years, not random rows.** Train on **2010–2020** and test on **2021–2025**, so we test the way pricing is used: predicting the future. Because a single storm can dominate a test period, we'll also run **leave-one-year-out** checks and report results with and without the catastrophe years.
+- **Hold out years, not random rows** (full design: `docs/validation_plan.md`, code: `src/validation.py`). **Main comparison: leave-one-year-out cross-validation** (16 folds), scored per year and summarized with and without the 3 catastrophe years. Model development uses only 2010–2020. **Final one-time check:** train 2010–2020, test 2021–2025. *Changed in Task 5:* the plan originally made the 2021–2025 holdout the headline, but that window has no hurricane year, only 7% of claims, and an unusually inland mix of floods.
 - **Metrics:** Poisson / Gamma **deviance** (a goodness-of-fit score for these distributions; lower is better); **actual vs expected** totals overall and by county; **lift charts and Gini** (does the model rank risky areas above safe ones?).
 - **Sanity checks:** predicted statewide losses match actual on average; relativities make sense (high-risk zones > low-risk zones); small counties are not over-fit.
 
@@ -37,10 +37,11 @@ Enter a **county** (later a ZIP code) to see the area's claim frequency, average
 | Week | Goal | Deliverable |
 |---|---|---|
 | **2** ✅ | Clean data and build the modelling table: rating cells (county × year × 8 building/policy features), losses in 2025 dollars (CPI-U), coastal flag, data checks | `src/build_dataset.py`, `data/processed/va_model_data.parquet`, `docs/modeling_dataset.md`, notebook 03 |
-| **3** | Frequency GLM: Poisson, then negative binomial; interpret relativities | notebook 04, frequency section of report 03 |
-| **4** | Severity Gamma GLM; combine into pure premium; Tweedie cross-check | notebook 05, report 03 |
-| **5** | XGBoost frequency/severity/Tweedie with the same features and year split; light tuning | notebook 06 |
-| **6** | Evaluation and explainability: holdout years, leave-one-year-out, lift/Gini, SHAP vs relativities | notebook 07, report 04 (model comparison) |
+| **2b** ✅ | One-way analysis of risk factors, Tidewater coastal flag, validation design | notebook 04, `reports/03_one_way_findings.md`, `docs/validation_plan.md`, `src/one_way.py`, `src/validation.py` |
+| **3** | Frequency GLM: Poisson, then negative binomial; interpret relativities (shortlist in report 03) | notebook 05, frequency section of report 04 |
+| **4** | Severity Gamma GLM; combine into pure premium; Tweedie cross-check | notebook 06, report 04 |
+| **5** | XGBoost frequency/severity/Tweedie with the same features and year split; light tuning | notebook 07 |
+| **6** | Evaluation and explainability: leave-one-year-out, final holdout, lift/Gini, SHAP vs relativities | notebook 08, report 05 (model comparison) |
 | **7** | Streamlit app MVP: county picker, metrics, history chart, drivers, disclaimer | `app/app.py` running locally |
 | **8** | App polish: ZIP lookup, explanations, tests; free hosting (e.g. Streamlit Community Cloud, *needs Theo's OK: account sign-up*) | public app link (if approved) |
 | **9** | Write-up: README results, final report, 2-minute demo script, interview Q&A review | finished portfolio repo |

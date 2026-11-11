@@ -179,3 +179,68 @@ I built the table the models will learn from: `data/processed/va_model_data.parq
    Claims from 2011 and 2024 are in different dollars, so without adjusting, the model would confuse price inflation with rising flood risk. I multiplied each year's losses by CPI-U for 2025 divided by CPI-U for that year, using BLS data. It raised total losses by 33% and severity from about $23K to $31K. I'd refine it with a construction-cost index, since repair costs outpaced CPI recently.
 3. **98% of your rows have zero claims. Isn't that a problem?**
    No, that's what rare events look like. A cell with one policy-year expects about 0.006 claims, so zero is almost certain, and a Poisson model predicts nearly the same 97% zero share. The Poisson GLM with a log-exposure offset uses those zeros correctly. Dropping them would bias frequency upward. Sparse cells aren't the issue; rare feature levels are, so I merged any level with under 1% of exposure.
+
+## Task 5: One-way analysis, the coastal question, and validation design (2026-11-11)
+
+### What I did
+I looked at every candidate rating factor on its own: for each level (e.g. "A/V zone" vs "B/C/X zone") I computed exposure, claims, frequency, severity, and pure premium, plus **relativities** to a base level, with 95% confidence intervals and credibility flags. I checked whether each effect holds year after year and without the three hurricane years, and measured how much the factors overlap. I built a second, broader coastal flag from Virginia law ("Tidewater Virginia," 46 localities) and showed it separates risk much better than the Census coastline list. Then I chose how the models will be tested from week 3 on. Files: `notebooks/04_one_way_analysis.ipynb`, `src/one_way.py`, `src/validation.py`, `docs/validation_plan.md`, `reports/03_one_way_findings.md`.
+
+### Why I did it that way
+
+**One-way analysis.**
+- *Intuition:* before building a model that looks at everything at once, look at each factor alone: "how do old buildings compare with new ones?" It's the first exhibit in every actuarial rate review. It catches data problems, shows which factors are worth modelling, and gives a baseline to compare the model against.
+- *Example:* pre-1960 buildings had 10.21 paid claims per 1,000 policy-years; 1980–99 buildings had 3.43.
+- *Formula:* for each level, frequency = claims ÷ exposure, severity = losses ÷ claims, pure premium = losses ÷ exposure = frequency × severity.
+
+**Relativities and the base level.**
+- *Intuition:* a relativity says "how many times riskier than the reference group." Rating plans are built by multiplying relativities together, so it's the natural language for rating factors.
+- *Example:* pre-1960 frequency ÷ 1980–99 frequency = 10.21 ÷ 3.43 = **2.98**: about 3 times as many claims per policy-year.
+- *Base level:* by convention, the level with the **most exposure**, because its estimate is the most reliable, and every other level is measured against it. The base always has relativity 1.
+- *Charts* use a log scale, so 2× and 0.5× sit the same distance from 1.
+
+**Confidence intervals and over-dispersion.**
+- *Intuition:* 3,196 claims is a lot of data, but it's still a sample of the weather. A **95% confidence interval** is a range that, if we could replay these 16 years many times, would contain the true long-run frequency 95% of the time.
+- *Poisson interval:* if claims arrived independently (like raindrops), the standard error of a claim count n is about √n. For 3,196 claims that's √3,196 ≈ 57, or 1.8% of the count, so the 95% interval is about ±3.5% (1.96 × 1.8%): very narrow.
+- *But flood claims come in clumps:* one hurricane floods thousands of homes at once. So the counts vary much more than Poisson predicts. This is **over-dispersion**, measured by φ ("phi"): φ = 50 means 50× the Poisson variance. I estimated φ from the year-by-level table and widened the intervals by √φ. Example: the B/C/X frequency relativity is 0.41, with a widened 95% CI of 0.30–0.56.
+- *Formula (on the log scale):* relativity × exp(±1.96 × √(φ × (1/n_level + 1/n_base))).
+
+**Credibility.**
+- *Intuition:* how much should we trust a group's own numbers? A town with 3 claims could look terrible or perfect just by luck.
+- *Classic rule ("limited fluctuation" credibility):* **1,082 claims** gives 90% confidence that the observed frequency is within ±5% of the truth. That number comes from (1.645 ÷ 0.05)², using the normal approximation to the Poisson.
+- *Partial credibility:* with n claims, Z = √(n ÷ 1,082). A blended estimate would be Z × (own experience) + (1 − Z) × (a broader average). Example: 270 claims → Z = 0.5, so trust it halfway.
+- *In this project:* levels under 2% of exposure or under 30 claims are flagged (only "$0 contents-only" coverage). Small counties are pooled before modelling, which is credibility in its simplest form.
+
+**Stability across years.**
+- *Intuition:* a real risk factor should show up most years, not just in one storm. If a factor only mattered in 2016, next year's storm may hit somewhere else.
+- *What I found:* building age and post-FIRM point the same way in **all 16 years**. Flood zone is real in both kinds of year but 2.6× stronger in hurricanes (B/C/X 0.29× vs 0.75×). "Elevated" and both coastal flags **flip direction** between hurricane years and normal years. Virginia has two flood regimes: coastal storm surge (rare, huge) and inland river and flash flooding (frequent, steadier).
+
+**Confounding.**
+- *Intuition:* confounding means a factor looks important (or unimportant) because it travels with another factor that's the real cause. Ice-cream sales and drownings both rise in summer; ice cream isn't the cause.
+- *Our example, elevated buildings:* on their own they look slightly *riskier* (6.72 vs 6.25 claims per 1,000). But within the high-risk zone they claim *less* (8.46 vs 9.78), and within the low-risk zone they also claim *less* (3.23 vs 3.91). How can they be lower in every zone but higher overall? Because 67% of elevated buildings are in high-risk zones (floodplain rules require elevation there) vs 40% of non-elevated ones. This reversal is **Simpson's paradox**. Comparing like with like (within zone) gives **0.86**: elevation is linked to about 14% fewer claims.
+- *A second example:* post-FIRM buildings have 0.35× the claims, but most of that is building **age**. After also adjusting for year built, it's 0.86.
+- *Tool:* a **Mantel–Haenszel** rate ratio: compute the comparison inside each zone, then take a weighted average across zones.
+
+**Why we need GLMs.**
+- Comparing within zones works for one confounder. We have 8 building features plus geography, and slicing by all of them at once leaves groups too small to compare.
+- A **GLM** (generalized linear model) is regression adapted to counts and dollar amounts. A Poisson GLM with a log link says log(expected frequency) = base + effect of zone + effect of age + ..., so on the original scale the relativities **multiply**, exactly like a rating plan. It estimates every factor's relativity *at the same time*, each one "holding the others fixed." It's the automatic, multi-factor version of what I did by hand for elevated buildings.
+
+**The coastal question.**
+- The Census list's "inland" group mixed tidal Hampton Roads cities with *low* frequency (Chesapeake 4.7 per 1,000) with mountain towns with *high* frequency (Roanoke city 14.5), so coastal vs inland looked flat (1.04).
+- **Tidewater Virginia**, defined in state law (Code of Virginia § 62.1-44.15:68) and used for Virginia's coastal zone program, draws the line at tidal water. Non-tidal Virginia then shows 1.42× the frequency and 1.81× the pure premium. A small Poisson GLM confirmed it fits better: deviance improvement 39 vs 0.4.
+- I also switched small-county pooling to tidal/non-tidal, because the old "other inland" pool mixed two very different kinds of place. (This updates the Task 4 pooling.)
+
+**Holdout and cross-validation.**
+- *Intuition:* a model always looks good on the data it learned from, like a student grading their own homework. To know how it will do in real use, test it on data it never saw.
+- *Holdout:* keep some data aside, train on the rest, test once. Ours: train on 2010–2020, test on 2021–2025.
+- *Cross-validation:* do that several times with different pieces held out, then average. **Leave-one-year-out (LOYO):** 16 rounds, each holding out one year.
+- *Why years, not random rows:* a hurricane hits thousands of rows in the same year. Random rows would let the model "see" the storm in training, and the test would be far too easy.
+- *Catastrophe years:* the 2021–2025 holdout has **no** hurricane year and only 677 claims (44% from inland non-tidal areas vs 12.5% before), so it's a single, unusual draw of the weather. LOYO tests across 16 different kinds of year, including each hurricane year. To stop 2011 and 2016 dominating the average, every year is scored separately and results are shown with and without the cat years.
+- *Decision:* LOYO is the main comparison (development uses only 2010–2020), and the 2021–2025 holdout is a one-time final check.
+
+### Interview questions
+1. **Your one-way analysis says elevated buildings have more claims. Does elevation not work?**
+   It's confounding. Elevated buildings are concentrated in high-risk flood zones, because floodplain rules require elevation there: 67% of elevated exposure is in A/V zones vs 40% for non-elevated. Within each zone, elevated buildings have fewer claims (8.5 vs 9.8 per 1,000 in A/V). Adjusting for zone gives a relativity of about 0.86. That's exactly why we fit a GLM instead of trusting one-way relativities.
+2. **How did you decide which features matter?**
+   Three tests. Size and significance: relativities with confidence intervals widened for over-dispersion, plus a deviance-based importance score. Stability: does the effect hold year by year and without the three hurricane years? Overlap: does it survive adjusting for flood zone and building age? Building age and post-FIRM pass all three for frequency. Occupancy, elevation, and second homes lead for severity. The Census coastal flag fails all three.
+3. **Why leave-one-year-out instead of a simple train/test split?**
+   Three storm years hold two-thirds of our claims, so which years land in the test set can change the answer more than the model does. Our 2021–2025 holdout has no hurricane, few claims, and an unusually inland mix of floods. LOYO gives 16 tests across hurricane, inland-flood, and quiet years, so I can see whether a model wins consistently. I score each year separately so the storm years don't dominate, and I keep the 2021–2025 holdout as a final check.

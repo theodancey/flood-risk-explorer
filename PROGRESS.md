@@ -1,6 +1,20 @@
 # Progress Log
 
-## Summary (latest: 2026-11-11, Task 4: modelling dataset)
+## Summary (latest: 2026-11-11, Task 5: one-way analysis, coastal question, validation design)
+All five parts are done, committed, and pushed (no data files in Git).
+
+- **`notebooks/04_one_way_analysis.ipynb`** (run, 8 charts in `reports/figures/04_*.png`) covers every candidate feature: exposure, claims, frequency, severity, pure premium, relativities to the highest-exposure level, 95% CIs **widened for over-dispersion** (storm clumping makes plain Poisson intervals far too narrow), and credibility flags (1,082-claim rule). Reusable code is in **`src/one_way.py`** (with a self-test).
+- **What matters most.** *Frequency:* building age (pre-1980 about 3× the 1980–99 rate) and post-FIRM (0.35×) are **stable in all 16 years**. Flood zone (B/C/X 0.41×) is real but much stronger in hurricane years. *Severity:* occupancy (multi-unit 2.3×, non-residential 3.1×), elevated (0.54×), second homes (1.7×). Ranked tables and the **week 3 GLM shortlist** are in **`reports/03_one_way_findings.md`**.
+- **Confounding example:** elevated buildings look riskier one-way (1.08×) but are safer within *every* flood zone (zone-adjusted 0.86×), because 67% of them sit in A/V zones (Simpson's paradox). Post-FIRM is mostly building age (0.35× → 0.86× after adjusting for zone and year built).
+- **Coastal (your Q6):** I added `coastal_tidal` = **Tidewater Virginia, Code of Virginia § 62.1-44.15:68** (46 localities, including Chesapeake). It beats the Census list on every measure: inland relativity 1.42 vs 1.04, and Poisson GLM deviance gain 39 vs 0.4. **Recommendation: use Tidewater.** Caveat: coastal effects flip between hurricane years (coast riskier) and normal years (inland riskier). Both flags are in the dataset, and small counties are now pooled by tidal/non-tidal.
+- **Validation (`docs/validation_plan.md`, `src/validation.py`):** I compared a 2021–2025 holdout, leave-one-year-out (LOYO), and rolling origin. **Recommendation: LOYO as the main comparison** (scored per year, with and without the 3 cat years), development on 2010–2020 only, and the 2021–2025 holdout as a one-time final check. Reason: 2021–2025 has no hurricane, only 7% of claims, and 44% of its claims are inland (vs 12.5% before), so it's one unusual draw of the weather.
+- Learning notes for Task 5 cover one-way analysis, relativities, CIs and credibility, confounding, why GLMs are needed, and holdout vs cross-validation. README and the project plan are updated.
+
+**Judgment calls worth a look** (details under Task 5 decisions): (1) the validation headline changed from the planned 2021–2025 holdout to LOYO; (2) `county_group`'s small-county pools are now tidal/non-tidal (notebook 03 re-run); (3) notebook/report numbering shifted by one (GLMs are now notebook 05 / report 04).
+
+**What you need to do:** nothing required. Read `reports/03_one_way_findings.md` (about 10 minutes) and the Task 5 learning notes.
+
+## Summary (previous: 2026-11-11, Task 4: modelling dataset)
 Done, committed, and pushed (no data files in Git).
 
 - **`src/build_dataset.py`** builds **`data/processed/va_model_data.parquet`**: **252,531 rating cells** (county × year × 8 features), Virginia 2010–2025, with exposure, paid claims, all claims, and losses in nominal and **2025 dollars**. Runtime about 20 seconds.
@@ -45,10 +59,12 @@ The data is downloaded and explored. Everything except the data files is committ
 **What you need to do:** nothing required. To get the data on another computer, run `.venv\Scripts\python.exe src\download_data.py all` (about 35 minutes). Optionally, confirm you're happy with the v2 → v3 switch (Question 3).
 
 ## Questions for Theo
-6. *(FYI, no action needed)* **"Coastal" uses the Census Bureau's official coastline-county list**, which has 25 Virginia counties and cities. **Chesapeake city isn't on it** (it has tidal rivers but doesn't touch the Bay or ocean directly), and it holds a third of the "inland" exposure. That's partly why coastal vs inland looks flat in the one-way view ($192 vs $203 per policy-year). I kept the official definition because it's citable. In week 3 I can test a broader "tidal" definition if you'd like. ✅ Theo: Yes. In Milestone 6, compare the official coastline-county definition with a broader "tidal" definition (e.g., including Chesapeake and other Hampton Roads localities with tidal flooding), cite the source for the broader list, and keep whichever separates risk better (or explain why neither does).
+*No open questions this time.*
+
 5. *(Week 8, decided)* **Hosting the app.** The plan puts the Streamlit app on a free host (Streamlit Community Cloud), which needs an account linked to your GitHub. **Decision: you'll create the Streamlit Community Cloud account yourself in week 8.** I won't sign up for anything.
 
 ### Earlier (resolved)
+6. *(Resolved in Task 5)* **Coastal definition.** Original note: the Census coastline-county list (25 localities) leaves out Chesapeake, which holds a third of "inland" exposure. ✅ Theo: compare it with a broader "tidal" definition, cite the source, and keep whichever separates risk better (or explain why neither does). **Outcome:** Tidewater Virginia (Code of Virginia § 62.1-44.15:68, 46 localities) separates risk clearly better and is recommended. Both flags are kept as features. See `reports/03_one_way_findings.md`.
 3. *(Resolved)* **v2 → v3.** The v2 datasets are gone from OpenFEMA, so I used v3, which is the same NFIP program data under new names, with a few renamed fields.
 4. *(Resolved)* **FEMA's one-file claims download refused our script (HTTP 403 "Forbidden").** The script downloaded the same data through the official API instead. If you ever want the single file, download `https://www.fema.gov/about/reports-and-data/openfema/v3/NfipClaimsV3.parquet` in your browser and save it as `data/raw/NfipClaimsV3.parquet`.
 1. *(Optional)* To pick this project's Python from a list inside Jupyter (outside VS Code), run once:
@@ -96,7 +112,29 @@ The data is downloaded and explored. Everything except the data files is committ
 - **Checks are assertions inside the script** (rather than a pytest suite), so they run on every build without a new package.
 - Project-plan week-2 file names updated to the real ones (`build_dataset.py`, `va_model_data.parquet`).
 
+### Task 5 decisions (2026-11-11)
+- **Tidal source: the statute itself.** "Tidewater Virginia" in Code of Virginia § 62.1-44.15:68 (law.lis.virginia.gov, fetched 2026-11-11). The same localities define Virginia's Coastal Zone Management area, but DEQ's website refused automated access (403), so I cite only the statute. The 46 names were matched to FIPS codes via the Census names file, and the build checks that each name matches. All 25 Census coastline localities are inside Tidewater.
+- **Small-county pooling switched to Tidewater** (`Other tidal (small)` / `Other non-tidal (small)`). The old `Other inland (small)` mixed 5.5 and 9.3 claims per 1,000. Notebook 03 was re-run (only its county-group table labels changed). Totals are unchanged.
+- **One-way tables use every row**, including the 1% of unmatched claims, so frequency × severity = pure premium exactly. The GLMs will drop them for frequency, as documented.
+- **Over-dispersion-widened CIs** are shown in the charts (√φ, with φ from the year × level table; a level-only model for a level's frequency, level + year for relativities, because common storm swings cancel in a ratio). Plain exact Poisson CIs are in the tables too. Severity CIs use the Gamma dispersion.
+- **Importance score** = one-way deviance drop ÷ parameters ÷ φ (a quasi-likelihood F). It ranks features without being fooled by over-dispersion.
+- **Stability verdict rules** are stated in the notebook: "flips" if the cat-year and normal-year relativities sit on opposite sides of 1; "storm-dependent" if they differ by more than 2×; otherwise stable / mostly stable / mixed by share of years pointing the same way. My first rule compared all years with excluding-cat years and mislabelled the coverage band as stable, so I changed it.
+- **No dual-axis charts.** The classic exhibit (exposure bars + relativity line on two y-axes) was drawn as stacked panels sharing the x-axis, so no number is read off the wrong scale. Same blue/orange palette as notebooks 01–03, plus aqua for pure premium.
+- **Validation: LOYO headline, holdout as final check** (reasons in `docs/validation_plan.md`). Development uses only 2010–2020. Caveat noted: notebook 04 itself looked at all years before the shortlist was written.
+- **Renumbering:** this task took notebook 04 and report 03, so the GLMs move to notebook 05 / report 04, etc. (`docs/PROJECT_PLAN.md` updated, with a "2b" row for this task).
+- **2024 attribution:** 75% of 2024's claims were in non-tidal localities. I attributed this to Hurricane Helene's remnants flooding southwest Virginia (Sept 2024), and checked it against the claims' `floodEvent` field: 109 of the 139 non-tidal paid claims in 2024 are labelled "Hurricane Helene."
+- No new packages.
+
 ## Log
+### 2026-11-11: Task 5, one-way analysis + coastal + validation
+1. Committed your Q6 answer. Fetched the Tidewater statute, mapped 46 localities to FIPS, and added `coastal_tidal` with checks to `build_dataset.py`. Rebuilt (totals unchanged). Committed.
+2. Wrote `src/one_way.py` and `src/validation.py` with self-tests. Fixed two edge cases the first runs hit (Cramér's V of a column with itself; stratifying a feature by itself). Committed.
+3. Built notebook 04 from a generator script and ran it with nbconvert. Found the Census-vs-Tidewater result and the mixed small-county pool, so I switched pooling to Tidewater, rebuilt, and re-ran notebook 03. Committed.
+4. Checked every chart visually and fixed overlapping titles, `$` signs rendering as math, clipped points, colliding labels, and an invisible low-credibility hatch (now labelled). Fixed the stability verdict rule. Committed notebook 04 + 8 figures.
+5. Wrote `docs/validation_plan.md` (numbers re-checked against the data). Committed.
+6. Wrote `reports/03_one_way_findings.md`, checking each number against the notebook output. Committed.
+7. Updated LEARNING_NOTES, README, PROJECT_PLAN, and this file. Committed and pushed.
+
 ### 2026-11-11: Task 4, modelling dataset
 1. Planning: read the docs, profiled every candidate feature in both files, and prototyped the cell grouping (cell counts, unmatched claims under different groupings).
 2. Committed your README pitch and the PROGRESS question updates.
