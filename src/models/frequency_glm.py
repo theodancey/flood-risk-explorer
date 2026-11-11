@@ -105,10 +105,11 @@ class Spec:
         return cols
 
 
-def ordered_levels(df, feature, base):
-    """Levels as strings: base first, then natural order (if defined) or by exposure."""
+def ordered_levels(df, feature, base, weight="exposure"):
+    """Levels as strings: base first, then natural order (if defined) or by `weight`
+    (exposure for frequency; claim count for severity)."""
     s = df[feature].astype(str)
-    exp = df.groupby(s, observed=True)["exposure"].sum().sort_values(ascending=False)
+    exp = df.groupby(s, observed=True)[weight].sum().sort_values(ascending=False)
     order = LEVEL_ORDER.get(feature, list(exp.index))
     if feature == "year":
         order = sorted(exp.index)
@@ -116,16 +117,17 @@ def ordered_levels(df, feature, base):
     return [base] + [l for l in lv if l != base]
 
 
-def make_spec(train, features, interactions=(), year_factor=True, bases=None):
+def make_spec(train, features, interactions=(), year_factor=True, bases=None, weight="exposure"):
     """Base level = the level with the most exposure (as in the one-way analysis),
-    unless given in `bases`."""
+    unless given in `bases`. `weight` names the column that decides "most" (the severity
+    model passes its claim-count column)."""
     bases = dict(bases or {})
     spec = Spec(list(features), [list(p) for p in interactions], year_factor)
     for f in list(features) + (["year"] if year_factor else []):
         s = train[f].astype(str)
-        base = str(bases.get(f, train.groupby(s, observed=True)["exposure"].sum().idxmax()))
+        base = str(bases.get(f, train.groupby(s, observed=True)[weight].sum().idxmax()))
         spec.bases[f] = base
-        spec.levels[f] = ordered_levels(train, f, base)
+        spec.levels[f] = ordered_levels(train, f, base, weight)
     return spec
 
 
