@@ -40,10 +40,10 @@ Enter a **county** (later a ZIP code) to see the area's claim frequency, average
 | **2b** ✅ | One-way analysis of risk factors, Tidewater coastal flag, validation design | notebook 04, `reports/03_one_way_findings.md`, `docs/validation_plan.md`, `src/one_way.py`, `src/validation.py` |
 | **3** ✅ | Frequency GLM: Poisson, then negative binomial; interpret relativities (shortlist in report 03) | notebook 05, `reports/04_frequency_glm.md`, `src/models/frequency_glm.py`, `models/frequency_glm.json` |
 | **4a** ✅ | Severity Gamma GLM on individual claims; large-loss (cap) analysis; frequency vs severity drivers | notebook 06, `reports/05_severity_glm.md`, `src/models/severity_glm.py`, `models/severity_glm.json` |
-| **4b** | Combine into pure premium (frequency × severity × ICC bridge); Tweedie cross-check | notebook 07, report 06 |
+| **4b** | Combine into pure premium (frequency × severity × ICC bridge, off-balance); **credibility-weighted county factor** (frequency and severity; moved here from the app milestone at Theo's request); Tweedie cross-check; loss ratios vs NFIP premiums; rating worksheets | notebook 07, report 06, `src/models/pure_premium.py`, `models/pure_premium.json` |
 | **5** | XGBoost frequency/severity/Tweedie with the same features and year split; light tuning; re-test geography; second-pass check of the frequency selection; NB challenger | notebook 08 |
 | **6** | Evaluation and explainability: leave-one-year-out, final holdout, lift/Gini, SHAP vs relativities | notebook 09, report 07 (model comparison) |
-| **7** | Streamlit app MVP: county picker, metrics, history chart, drivers, credibility-weighted county factor (labelled less certain), disclaimer | `app/app.py` running locally |
+| **7** | Streamlit app MVP: county picker, metrics, history chart, drivers, *display* the credibility-weighted county factor from `models/pure_premium.json` (labelled less certain), disclaimer | `app/app.py` running locally |
 | **8** | App polish: ZIP lookup, explanations, tests; free hosting (e.g. Streamlit Community Cloud, *needs Theo's OK: account sign-up*) | public app link (if approved) |
 | **9** | Write-up: README results, final report, 2-minute demo script, interview Q&A review | finished portfolio repo |
 
