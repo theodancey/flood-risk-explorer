@@ -1,0 +1,25 @@
+feature,label,level,is_base,freq_rel,freq_in_final,sev_rel,sev_in_final,pure_premium_rel,drives frequency,drives severity,class
+flood_zone_group,Flood zone,A/V high risk,True,1.0,True,1.0,True,1.0,True,True,both
+flood_zone_group,Flood zone,B/C/X moderate-low risk,False,0.4575482320982031,True,0.7458191877081362,True,0.3412482508007756,True,True,both
+construction_band,Year built,1980-1999,True,1.0,True,1.0,True,1.0,True,True,both
+construction_band,Year built,before 1960,False,2.72823942999287,True,1.021881209518283,True,2.787936608576585,True,True,both
+construction_band,Year built,1960-1979,False,2.7480494928950545,True,1.2820404798871412,True,3.5231106906247907,True,True,both
+construction_band,Year built,2000 or later,False,0.6425177506223931,True,0.8966884274089096,True,0.5761382313879037,True,True,both
+building_coverage_band,Building coverage,$250K or more,True,1.0,False,1.0,True,1.0,False,True,severity only
+building_coverage_band,Building coverage,$0 (contents only),False,1.7818977579765183,False,0.27969558734955013,True,0.4983889400140888,False,True,severity only
+building_coverage_band,Building coverage,under $100K,False,1.1404844939504593,False,0.6917013762102845,True,0.7888746940120226,False,True,severity only
+building_coverage_band,Building coverage,$100K-$249K,False,1.0963546453594266,False,0.8528813262699595,True,0.9350604039963789,False,True,severity only
+occupancy_group,Occupancy,single-unit residential,True,1.0,False,1.0,True,1.0,False,True,severity only
+occupancy_group,Occupancy,multi-unit residential,False,1.3882318107352392,False,2.098097433030488,True,2.9126455985548714,False,True,severity only
+occupancy_group,Occupancy,non-residential,False,0.9396191987124609,False,3.0668355079082925,True,2.881657522523713,False,True,severity only
+elevated,Elevated,False,True,1.0,False,1.0,True,1.0,False,True,severity only
+elevated,Elevated,True,False,0.985696787415891,False,0.7582171476232127,True,0.747372206575841,False,True,severity only
+post_firm,Post-FIRM,False,True,1.0,False,1.0,False,1.0,False,False,neither
+post_firm,Post-FIRM,True,False,0.7851419109075212,False,0.8004486998321849,False,0.6284658217696825,False,False,neither
+primary_residence,Primary residence,True,True,1.0,False,1.0,True,1.0,False,True,severity only
+primary_residence,Primary residence,False,False,0.8343800743873258,False,1.1159881186570062,True,0.9311582494604046,False,True,severity only
+floors_group,Floors,2,True,1.0,True,1.0,True,1.0,True,True,both
+floors_group,Floors,1,False,0.8915835815006514,True,1.1226648036388849,True,1.0009495064530824,True,True,both
+floors_group,Floors,3+,False,1.132119031792299,True,0.8913630762136558,True,1.0091291028184093,True,True,both
+coastal_tidal,Tidewater (tidal),True,True,1.0,False,1.0,False,1.0,False,False,neither
+coastal_tidal,Tidewater (tidal),False,False,1.0927978276457713,False,1.3001997018826787,False,1.4208554097230708,False,False,neither

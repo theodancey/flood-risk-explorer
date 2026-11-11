@@ -1,0 +1,313 @@
+{
+  "spec": {
+    "features": [
+      "occupancy_group",
+      "construction_band",
+      "building_coverage_band",
+      "flood_zone_group",
+      "floors_group",
+      "primary_residence",
+      "elevated"
+    ],
+    "interactions": [],
+    "year_factor": true,
+    "levels": {
+      "occupancy_group": [
+        "single-unit residential",
+        "multi-unit residential",
+        "non-residential"
+      ],
+      "construction_band": [
+        "1980-1999",
+        "before 1960",
+        "1960-1979",
+        "2000 or later"
+      ],
+      "building_coverage_band": [
+        "$250K or more",
+        "$0 (contents only)",
+        "under $100K",
+        "$100K-$249K"
+      ],
+      "flood_zone_group": [
+        "A/V high risk",
+        "B/C/X moderate-low risk"
+      ],
+      "floors_group": [
+        "2",
+        "1",
+        "3+"
+      ],
+      "primary_residence": [
+        "True",
+        "False"
+      ],
+      "elevated": [
+        "False",
+        "True"
+      ],
+      "year": [
+        "2011",
+        "2010",
+        "2012",
+        "2013",
+        "2014",
+        "2015",
+        "2016",
+        "2017",
+        "2018",
+        "2019",
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024",
+        "2025"
+      ]
+    },
+    "bases": {
+      "occupancy_group": "single-unit residential",
+      "construction_band": "1980-1999",
+      "building_coverage_band": "$250K or more",
+      "flood_zone_group": "A/V high risk",
+      "floors_group": "2",
+      "primary_residence": "True",
+      "elevated": "False",
+      "year": "2011"
+    }
+  },
+  "params": {
+    "const": 10.036669216138245,
+    "occupancy_group[multi-unit residential]": 0.7410309498063832,
+    "occupancy_group[non-residential]": 1.1206462507979251,
+    "construction_band[before 1960]": 0.021645251677833915,
+    "construction_band[1960-1979]": 0.2484529335749735,
+    "construction_band[2000 or later]": -0.10904682686306409,
+    "building_coverage_band[$0 (contents only)]": -1.2740534552678162,
+    "building_coverage_band[under $100K]": -0.3686009537718458,
+    "building_coverage_band[$100K-$249K]": -0.159134866292398,
+    "flood_zone_group[B/C/X moderate-low risk]": -0.2932720838824787,
+    "floors_group[1]": 0.11570514824404231,
+    "floors_group[3+]": -0.11500344156941042,
+    "primary_residence[False]": 0.10974021753775655,
+    "elevated[True]": -0.27678545992877585,
+    "year[2010]": -0.3493958938164123,
+    "year[2012]": 0.10559698111657319,
+    "year[2013]": -0.3633356567733669,
+    "year[2014]": -0.1604156661670138,
+    "year[2015]": -0.1311961001770862,
+    "year[2016]": 0.5569522586132516,
+    "year[2017]": -0.295221157995481,
+    "year[2018]": 0.2718603229203598,
+    "year[2019]": 0.493027169321822,
+    "year[2020]": -0.005150370691253982,
+    "year[2021]": -0.008953224332199286,
+    "year[2022]": -0.15726140572968503,
+    "year[2023]": -0.2856645851177627,
+    "year[2024]": 0.600255751602456,
+    "year[2025]": 0.20557356310808594
+  },
+  "phi": 1.527679413228919,
+  "avg_year_log": 0.22091607607093325,
+  "cap": null,
+  "load": 1.0,
+  "description": "Gamma GLM, log link, claim severity (building + contents paid, 2025 dollars), one row per paid claim, calendar year as a factor; predict() uses the average-year level.",
+  "fitted_on_years": [
+    2010,
+    2025
+  ],
+  "created": "2026-11-11",
+  "data_file_sha256_16": "99d00f782502e437",
+  "claims": 9553,
+  "target": "amount_2025",
+  "recommended_ci": "cluster-robust by county_group x year",
+  "base_severity_average_year": 28497.888967831754,
+  "icc_bridge_factor": 1.0092453559345234,
+  "large_loss": {
+    "approach": "uncapped (no cap, load 1.0)",
+    "sensitivity_cap_p99": 241051.30294193406,
+    "sensitivity_load_p99": 1.0343677928019637
+  },
+  "relativities": [
+    {
+      "feature": "occupancy_group",
+      "level": "single-unit residential",
+      "is_base": true,
+      "claims": 8262,
+      "relativity": 1.0,
+      "lo_cluster": 1.0,
+      "hi_cluster": 1.0
+    },
+    {
+      "feature": "occupancy_group",
+      "level": "multi-unit residential",
+      "is_base": false,
+      "claims": 799,
+      "relativity": 2.098097433030488,
+      "lo_cluster": 1.6560216323644634,
+      "hi_cluster": 2.6581855891604147
+    },
+    {
+      "feature": "occupancy_group",
+      "level": "non-residential",
+      "is_base": false,
+      "claims": 492,
+      "relativity": 3.0668355079082925,
+      "lo_cluster": 2.5692621295495317,
+      "hi_cluster": 3.6607708977581734
+    },
+    {
+      "feature": "construction_band",
+      "level": "1980-1999",
+      "is_base": true,
+      "claims": 1567,
+      "relativity": 1.0,
+      "lo_cluster": 1.0,
+      "hi_cluster": 1.0
+    },
+    {
+      "feature": "construction_band",
+      "level": "before 1960",
+      "is_base": false,
+      "claims": 3196,
+      "relativity": 1.021881209518283,
+      "lo_cluster": 0.8475787412572345,
+      "hi_cluster": 1.2320285485424045
+    },
+    {
+      "feature": "construction_band",
+      "level": "1960-1979",
+      "is_base": false,
+      "claims": 4210,
+      "relativity": 1.2820404798871412,
+      "lo_cluster": 1.1444067140292693,
+      "hi_cluster": 1.4362269741343145
+    },
+    {
+      "feature": "construction_band",
+      "level": "2000 or later",
+      "is_base": false,
+      "claims": 580,
+      "relativity": 0.8966884274089096,
+      "lo_cluster": 0.7904250773201964,
+      "hi_cluster": 1.0172376344321723
+    },
+    {
+      "feature": "building_coverage_band",
+      "level": "$250K or more",
+      "is_base": true,
+      "claims": 4386,
+      "relativity": 1.0,
+      "lo_cluster": 1.0,
+      "hi_cluster": 1.0
+    },
+    {
+      "feature": "building_coverage_band",
+      "level": "$0 (contents only)",
+      "is_base": false,
+      "claims": 199,
+      "relativity": 0.27969558734955013,
+      "lo_cluster": 0.21143319850640513,
+      "hi_cluster": 0.3699968696280208
+    },
+    {
+      "feature": "building_coverage_band",
+      "level": "under $100K",
+      "is_base": false,
+      "claims": 1294,
+      "relativity": 0.6917013762102845,
+      "lo_cluster": 0.6295850369910538,
+      "hi_cluster": 0.759946259424841
+    },
+    {
+      "feature": "building_coverage_band",
+      "level": "$100K-$249K",
+      "is_base": false,
+      "claims": 3674,
+      "relativity": 0.8528813262699595,
+      "lo_cluster": 0.7925812448236714,
+      "hi_cluster": 0.9177690759788721
+    },
+    {
+      "feature": "flood_zone_group",
+      "level": "A/V high risk",
+      "is_base": true,
+      "claims": 6853,
+      "relativity": 1.0,
+      "lo_cluster": 1.0,
+      "hi_cluster": 1.0
+    },
+    {
+      "feature": "flood_zone_group",
+      "level": "B/C/X moderate-low risk",
+      "is_base": false,
+      "claims": 2700,
+      "relativity": 0.7458191877081362,
+      "lo_cluster": 0.6811023450449145,
+      "hi_cluster": 0.8166852820290069
+    },
+    {
+      "feature": "floors_group",
+      "level": "2",
+      "is_base": true,
+      "claims": 4753,
+      "relativity": 1.0,
+      "lo_cluster": 1.0,
+      "hi_cluster": 1.0
+    },
+    {
+      "feature": "floors_group",
+      "level": "1",
+      "is_base": false,
+      "claims": 3030,
+      "relativity": 1.1226648036388849,
+      "lo_cluster": 0.9733684085483809,
+      "hi_cluster": 1.294860455980054
+    },
+    {
+      "feature": "floors_group",
+      "level": "3+",
+      "is_base": false,
+      "claims": 1770,
+      "relativity": 0.8913630762136558,
+      "lo_cluster": 0.8150595987256235,
+      "hi_cluster": 0.9748098603824144
+    },
+    {
+      "feature": "primary_residence",
+      "level": "True",
+      "is_base": true,
+      "claims": 6645,
+      "relativity": 1.0,
+      "lo_cluster": 1.0,
+      "hi_cluster": 1.0
+    },
+    {
+      "feature": "primary_residence",
+      "level": "False",
+      "is_base": false,
+      "claims": 2908,
+      "relativity": 1.1159881186570062,
+      "lo_cluster": 0.9984528897866248,
+      "hi_cluster": 1.2473592832705005
+    },
+    {
+      "feature": "elevated",
+      "level": "False",
+      "is_base": true,
+      "claims": 5436,
+      "relativity": 1.0,
+      "lo_cluster": 1.0,
+      "hi_cluster": 1.0
+    },
+    {
+      "feature": "elevated",
+      "level": "True",
+      "is_base": false,
+      "claims": 4117,
+      "relativity": 0.7582171476232127,
+      "lo_cluster": 0.6488302103459245,
+      "hi_cluster": 0.8860457385968137
+    }
+  ]
+}
