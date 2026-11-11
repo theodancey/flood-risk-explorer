@@ -432,7 +432,10 @@ def loyo_combined(cells, claims, freq_features, sev_features, freq_bases=None, s
             rows.append({"model": name, "test_year": yr, "cat_year": val.is_cat_year(yr),
                          **score_cells(test, pr, train_rate, all_test_losses=all_losses)})
             o[name] = pr
-        o["rank_freq_x_sev"] = m.rate(test, county=False)
+        # Ranking scores RELATIVE to each fold's base level, so pooling folds in a lift chart
+        # isn't distorted by fold-to-fold level differences (e.g. the fold without 2016 has a
+        # much lower average-year level, which would push all 2016 cells down the ranking).
+        o["rank_freq_x_sev"] = m.rate(test, county=False) / m.base_pure_premium()
         if tweedie_power is not None:
             o["rank_tweedie"] = tw.relative_rate(test)
         oof.append(o)
