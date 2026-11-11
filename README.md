@@ -20,8 +20,9 @@ I'm building a flood insurance risk model using FEMA's public data on 2.7 millio
 - **Counts are overdispersed** (about 28× Poisson variance), so the frequency model will need a negative binomial or similar.
 - **In 2025 dollars** (CPI-U), the loss cost is about **$197** per policy-year. First one-way views of the modelling table: A/V flood zones $292 vs $94 elsewhere; pre-FIRM buildings $297 vs $89 post-FIRM ([`docs/modeling_dataset.md`](docs/modeling_dataset.md), notebook 03).
 - **What drives risk (one factor at a time):** building age is the most stable frequency driver (pre-1980 buildings claim about 3× as often as 1980–99 ones, in every one of 16 years). Occupancy, elevation, and second homes drive claim *size*. One-way views can mislead: elevated buildings look riskier overall but are safer within every flood zone (Simpson's paradox), which is why the models are GLMs. A **Tidewater** (tidal) coastal flag from Virginia law separates risk far better than the Census coastline list, revealing two flood regimes: coastal hurricanes vs inland river and flash floods ([`reports/03_one_way_findings.md`](reports/03_one_way_findings.md)).
+- **Frequency GLM** (Poisson, log(exposure) offset, year factor): **flood zone, year built and floors** survive. B/C/X zones claim 0.46× as often as A/V zones (storm-aware 95% CI 0.34–0.61), and pre-1980 buildings about 2.7× as often as 1980–99 ones. AIC and plain likelihood-ratio tests would keep almost every feature. With storm-aware tests and leave-one-year-out validation, geography and most other factors fail, because their effects change from storm to storm. Out of sample the model beats a no-features baseline in 14 of 16 years ([`reports/04_frequency_glm.md`](reports/04_frequency_glm.md)).
 
-Details: [`reports/01_data_overview.md`](reports/01_data_overview.md) · [`reports/02_actuarial_basics.md`](reports/02_actuarial_basics.md) · [`reports/03_one_way_findings.md`](reports/03_one_way_findings.md)
+Details: [`reports/01_data_overview.md`](reports/01_data_overview.md) · [`reports/02_actuarial_basics.md`](reports/02_actuarial_basics.md) · [`reports/03_one_way_findings.md`](reports/03_one_way_findings.md) · [`reports/04_frequency_glm.md`](reports/04_frequency_glm.md)
 
 ![Frequency, severity, and pure premium by year](reports/figures/02_measures_by_year.png)
 
@@ -32,10 +33,13 @@ src/actuarial.py            earned exposure, frequency, severity, pure premium
 src/build_dataset.py        modelling table: rating cells, 2025 dollars, data checks
 src/one_way.py              one-way tables: relativities, confidence intervals, credibility, confounding checks
 src/validation.py           year-based train/test splits (leave-one-year-out, time holdout)
+src/models/frequency_glm.py claim-frequency GLM: fitting, forward selection, over-dispersion, LOYO scoring
 notebooks/01_first_look     data exploration
 notebooks/02_actuarial_basics   Virginia actuarial measures by year and county
 notebooks/03_dataset_summary    the modelling table: cell sizes, zero-claim cells, one-way views
 notebooks/04_one_way_analysis   risk factors one at a time, stability, confounding, coastal definitions
+notebooks/05_frequency_glm      frequency GLM: model build, relativities, over-dispersion, held-out evaluation
+models/                     saved model coefficients (frequency_glm.json)
 reports/                    written findings + figures
 docs/                       data dictionary, modelling dataset, project plan, validation plan
 app/                        Streamlit app (coming)

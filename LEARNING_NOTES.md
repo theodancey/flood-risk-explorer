@@ -244,3 +244,87 @@ I looked at every candidate rating factor on its own: for each level (e.g. "A/V 
    Three tests. Size and significance: relativities with confidence intervals widened for over-dispersion, plus a deviance-based importance score. Stability: does the effect hold year by year and without the three hurricane years? Overlap: does it survive adjusting for flood zone and building age? Building age and post-FIRM pass all three for frequency. Occupancy, elevation, and second homes lead for severity. The Census coastal flag fails all three.
 3. **Why leave-one-year-out instead of a simple train/test split?**
    Three storm years hold two-thirds of our claims, so which years land in the test set can change the answer more than the model does. Our 2021–2025 holdout has no hurricane, few claims, and an unusually inland mix of floods. LOYO gives 16 tests across hurricane, inland-flood, and quiet years, so I can see whether a model wins consistently. I score each year separately so the storm years don't dominate, and I keep the 2021–2025 holdout as a final check.
+
+## Milestone 7: The claim-frequency GLM (2026-11-11)
+
+### What I did
+I built the project's first real model: a **Poisson GLM** that predicts how many paid flood claims each rating cell will have, using **log(exposure) as an offset** so it really models the claim *rate* per policy-year. I started from flood zone alone and tested the shortlist features one at a time. A feature stayed only if it was still significant after allowing for storms *and* it helped predict years the model hadn't seen. The final model is **flood zone + year built + floors** (plus calendar year). I compared its relativities with the one-way ones, tested and handled **over-dispersion**, and scored it on held-out years against a "no features" baseline. Files: `src/models/frequency_glm.py`, `notebooks/05_frequency_glm.ipynb`, `reports/04_frequency_glm.md`, `models/frequency_glm.json`.
+
+### Why I did it that way
+
+**Regression.**
+- *Intuition:* regression finds the best rule for predicting an outcome from some inputs ("features"). It's "draw the line of best fit," generalized to many inputs.
+- *Example:* predicting a house price from its size: price ≈ $50,000 + $150 × square feet. The $150 is a **coefficient** (written β, "beta"): how much the prediction changes per unit of the feature.
+- *Categorical features* (like flood zone) get one 0/1 column per level, except a **base level**, which is the reference that the other levels' coefficients are measured against.
+- *Formula (ordinary linear regression):* y = β₀ + β₁x₁ + β₂x₂ + … + noise, where the noise is assumed normal (bell-shaped) with the same spread everywhere.
+
+**GLM (generalized linear model).**
+- *Intuition:* ordinary regression assumes the outcome can be any number, with a bell-shaped spread. Claim counts are whole numbers ≥ 0, and claim sizes are positive and very skewed. A GLM keeps the "β × features" idea but lets you choose (1) a **distribution** that suits the outcome and (2) a **link function** connecting the features to the mean.
+- *Formula:* g(expected y) = β₀ + β₁x₁ + …, where g is the link. Fitted by **maximum likelihood**: pick the β's that make the observed data most probable.
+
+**Poisson distribution.**
+- *Intuition:* the classic model for counts of independent events in a fixed amount of time or exposure (calls per hour, typos per page, claims per policy-year). It has one parameter, the mean μ, and its **variance equals its mean**.
+- *Example:* if a group of policies expects 4 claims a year, Poisson says 0 claims has probability e^−4 ≈ 2%, exactly 4 about 20%, and the typical spread is ±2 (√4).
+- *Formula:* P(N = k) = e^(−μ) × μ^k ÷ k!.
+
+**Log link.**
+- *Intuition:* we model log(expected claims) as β₀ + β₁x₁ + …, so on the normal scale the effects **multiply**: expected = e^β₀ × e^β₁ × …. That (1) keeps predictions positive and (2) matches how rating plans work: a base rate times a factor for zone, times a factor for age, and so on.
+- *Example:* base rate 4.82 per 1,000 policy-years (A/V zone, built 1980–99, 2 floors, average year); B/C/X zone × 0.46; built before 1960 × 2.73 → 4.82 × 0.46 × 2.73 ≈ 6.0 per 1,000.
+
+**Offset.**
+- *Intuition:* a cell with 100 policy-years should expect 100× the claims of a cell with 1 policy-year, all else equal. The offset builds that in: log(exposure) goes into the equation with its coefficient **fixed at 1** (not estimated).
+- *Formula:* log(expected claims) = log(exposure) + β₀ + β₁x₁ + …, which is the same as expected claims ÷ exposure = e^(β₀ + β₁x₁ + …). So the β's describe the **rate** (frequency), and exposure just scales it.
+
+**Reading e^β as relativities.**
+- *Intuition:* because of the log link, e^β is the factor by which a level multiplies the claim rate compared with the base level, **holding the other features fixed**. That's exactly an actuarial relativity.
+- *Example:* β for B/C/X = −0.78 → e^−0.78 = 0.46: moderate/low-risk zones have 54% fewer claims per policy-year than A/V zones with the same building age and floors.
+- *Unlike one-way relativities,* GLM relativities are adjusted for the other features. Post-FIRM is 0.35 one-way but about 0.79 once year built is in the model, because "post-FIRM" mostly means "newer building."
+
+**Calendar year as a feature, and average-year prediction.**
+- Year is in the model as a factor, so hurricane years (Irene 4.2× the average-year level, Matthew 3.9×) don't get blamed on building features. To predict a *future* year, whose weather nobody knows, the model uses the **average-year level**: the level at which the training years' predicted claims add up to their actual claims.
+
+**Confidence intervals (CIs) for relativities.**
+- *Intuition:* the estimate 0.46 comes from one 16-year sample of the weather. A **95% CI** is the range that would contain the true relativity in 95% of replays. If it excludes 1, the effect is "statistically significant."
+- *Formula:* on the log scale, β ± 1.96 × SE (SE = **standard error**, the estimate's typical sampling error); then take e^ of both ends. B/C/X: plain Poisson CI 0.44–0.48; storm-aware CI 0.34–0.61.
+
+**Over-dispersion (and the fixes).**
+- *Intuition:* Poisson assumes variance = mean, i.e. claims happen independently. Floods break this: one storm floods thousands of homes at once, so counts swing far more than Poisson expects. The coefficients are still fine, but plain-Poisson CIs are **too narrow** and its tests too eager.
+- *Measure:* **φ (phi)** = Σ (actual − expected)² ÷ expected, divided by the degrees of freedom. About 1 under Poisson. Ours is about 2 on small cells and about 12 when cells are combined by tidal/non-tidal area. A φ that grows when cells are combined is the signature of cells **moving together** (storms). The **Cameron–Trivedi test** confirmed over-dispersion (p < 0.0001).
+- *Fix 1, quasi-Poisson:* same β's; multiply every SE by √φ. Simple, but φ from small cells understates storm clumping.
+- *Fix 2, negative binomial (NB):* a count distribution with variance = μ + α·μ² (α ≈ 3.6 here). Better AIC, and slightly better on unseen years. But it changes the β's (big cells get less weight, so zone becomes 0.61 instead of 0.46), it depends on how cells are cut, and its CIs still treat cells as independent.
+- *Fix 3, cluster-robust ("sandwich") errors:* same β's as Poisson; the SEs are measured from how much whole **clusters** (county group × year) actually vary. That lets claims from the same storm in the same area move together. CIs come out about 3.6× wider than plain Poisson's.
+- *My choice:* Poisson relativities (they **balance**: fitted claims equal actual claims in every level of every feature, and they're standard practice) with cluster-robust CIs. NB stays as the challenger for the model-comparison milestone.
+
+**Deviance and AIC.**
+- *Deviance intuition:* how far the model's predictions are from a "perfect" model that fits every cell exactly. It's the GLM version of the sum of squared errors. Lower is better.
+- *Poisson deviance formula:* 2 × Σ [ y × log(y ÷ μ) − (y − μ) ], where y = actual and μ = predicted claims.
+- *Catch:* adding any feature always lowers training deviance, even pure noise.
+- *AIC (Akaike information criterion)* = −2 × log-likelihood + 2 × (number of parameters). It is fit plus a penalty for complexity; lower is better. Adding a feature "pays" if it cuts deviance by more than 2 per parameter. Here AIC would have added 10 of 11 candidates, because its penalty assumes independent claims.
+
+**Likelihood-ratio test (LRT), and its storm-aware versions.**
+- *Intuition:* compare a model with and without a feature. If the feature does nothing, the deviance drop behaves like a χ² ("chi-square") random variable with degrees of freedom = parameters added. A drop far bigger than that is "significant."
+- *Example:* adding year built cut deviance by 2,397 for 3 parameters. Under "no effect" we'd expect about 3. p < 0.0001.
+- *Over-dispersion breaks it:* the χ² rule assumes independent claims. The **quasi-F** test divides the drop by φ. The **cluster-robust Wald test** asks whether the new β's are zero using storm-aware SEs. Building coverage, for example, passes the LRT (p < 0.0001) but not the cluster Wald (p = 0.08).
+
+**Validation by held-out years, and the keep rule.**
+- Each candidate was also scored by **leave-one-year-out** on 2010–2020: fit on 10 years, predict the 11th, repeat. A feature stayed only if it was storm-aware significant *and* improved the held-out deviance. County group cut training deviance by 1,170 but made 10 of 11 held-out years worse, because *which* counties flood depends on where the storm goes. This is **overfitting**: learning the noise (past storm tracks) instead of the signal.
+
+**Re-basing, the baseline, and actual vs expected (A/E).**
+- *Baseline:* "every policy-year gets the average frequency." Any useful model must beat it.
+- *Re-basing:* scale a year's predictions so they add up to that year's actual claims. That removes the "was there a hurricane?" part, which nobody can predict, and scores only *where* the claims landed.
+- *A/E* = actual claims ÷ expected claims. 1.0 is perfect. In hurricane years raw A/E was 1.9–5.6, and in quiet years mostly 0.1–0.7. That's correct behaviour for an average-year rate, which is meant to be right *on average* (summed over all 16 years, A/E ≈ 1).
+
+**Lift charts and the Gini index.**
+- *Intuition:* does the model put the risky cells at the top? Sort cells from lowest to highest predicted frequency, cut them into 10 groups of equal exposure (**deciles**), and plot the actual frequency in each group. A good model's bars climb steeply; a useless one's are flat.
+- *Gini index:* plot cumulative share of exposure (x) vs cumulative share of actual claims (y), sorted from safest to riskiest. Gini = 1 − 2 × (area under that curve). 0 = random ranking; higher = better. Ours is about 0.3 per held-out year.
+- *A trap I caught:* when pooling several years into one lift chart, ranking by the re-based prediction sorts storm-year cells to the top and makes the chart look far better than it is. My first draft did this (it showed a 56× top-to-bottom ratio). I now rank by the year-free predicted rate.
+
+### Interview questions
+1. **Why a Poisson GLM with an offset, rather than regressing claim frequency directly?**
+   Claim counts are small non-negative whole numbers, and 97% of our cells have zero claims, so a normal-errors regression on frequency would be badly wrong: it can predict negative rates, and it gives a cell with 0.1 policy-years the same weight as one with 1,000. Poisson is the natural count distribution. The log link makes the effects multiply like a rating plan. The log(exposure) offset makes the model predict a rate per policy-year while still weighting each cell by its exposure. With categorical features it also balances: fitted claims equal actual claims in every level.
+2. **Your one-way analysis had nine useful-looking factors. Why does the final model only have three?**
+   Two reasons. First, confounding: post-FIRM, elevation and second-home status mostly reflected building age and flood zone, so once those are in the model, they add little. Second, storm dependence: coverage band and geography fit the training years well, but their effects change from storm to storm, so they made held-out years worse. AIC and plain likelihood-ratio tests would have kept almost everything, because they assume claims are independent. I used cluster-robust tests and leave-one-year-out validation instead. The trade-off: the nine-feature model is slightly better in ordinary years, but much worse in hurricane years.
+3. **Your data is over-dispersed. What did you do about it?**
+   I tested it (Pearson φ and the Cameron–Trivedi test), then compared quasi-Poisson, negative binomial and cluster-robust standard errors. The key finding was that φ grows when you combine cells, which means the extra variance comes from storms making whole areas move together, not from cell-level noise. Quasi-Poisson and NB both still treat cells as independent, so their intervals are too narrow. I kept the Poisson relativities, which balance to the actual claims, and reported cluster-robust confidence intervals by county group × year, about 3.6× wider than plain Poisson's. NB fits better on AIC and is slightly better out of sample, so it's the challenger for the next milestone.
+4. **How good is the model?**
+   It beats a no-features baseline in 14 of 16 held-out years: typically a few percent of deviance, more in hurricane years. Its Gini is about 0.3, and the lift chart rises clearly in held-out years and in the 2021–2025 holdout. The weak spot is the very top decile, where the small floors effect decides the order. In raw terms it under-predicts hurricane years by up to 5.6× and over-predicts quiet years. That's by design: it's an average-year rate, and no frequency model can predict when a hurricane will come.

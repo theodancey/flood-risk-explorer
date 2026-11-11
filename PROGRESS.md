@@ -1,6 +1,21 @@
 # Progress Log
 
-## Summary (latest: 2026-11-11, Task 5: one-way analysis, coastal question, validation design)
+## Summary (latest: 2026-11-11, Milestone 7: frequency GLM)
+All five parts are done, committed, and pushed (no data files in Git).
+
+- **Final frequency model** (`notebooks/05_frequency_glm.ipynb`, write-up **`reports/04_frequency_glm.md`**): a Poisson GLM with log link, log(exposure) offset and calendar year as a factor, plus **flood zone, year built and floors**. B/C/X zones **0.46×** A/V (storm-aware 95% CI 0.34–0.61); built before 1960 **2.73×**, 1960–79 **2.75×**, 2000+ **0.64×** vs 1980–99; floors 0.89× (1) / 1.13× (3+). Base rate: 4.82 paid claims per 1,000 policy-years in an average year.
+- **How features were chosen:** each shortlist feature was tested against the current model on 2010–2020 only. It was kept only if a **storm-aware (cluster-robust) Wald test** gave p < 0.05 **and** it improved **leave-one-year-out** deviance. AIC and plain LRTs would have kept 10 of 11 candidates. Coverage, occupancy, elevated, post-FIRM, primary residence and all three geography options (Tidewater, Tidewater + Census, county group) failed. County group cut training deviance by 1,170 but made 10 of 11 unseen years worse.
+- **One-way vs GLM (confounding):** post-FIRM 0.35 → 0.79, elevated 1.08 → 0.99, second homes 1.13 → 0.83, coverage under $100K 1.89 → 1.14, non-tidal 1.37 → 1.09.
+- **Over-dispersion:** clearly present (Cameron–Trivedi p < 0.0001). φ grows from about 2 to 12 when cells are combined: storm clumping. Compared quasi-Poisson, negative binomial (α = 3.6) and cluster-robust errors. **Choice:** Poisson relativities (they balance to actual claims in every level) with cluster-robust (county group × year) CIs, about 3.6× wider than plain Poisson. NB has a better AIC and is slightly better on unseen years (6.2% vs 5.6%), so it's the challenger for the model-comparison milestone.
+- **Held-out:** LOYO over 16 years: beats the no-features baseline in **14 of 16 years**; mean re-based deviance improvement **4.7%** (2.5% normal years, 14.1% cat years); Gini about 0.30. Final 2021–2025 holdout: 2.2% improvement, Gini 0.26. Raw A/E is 5.6 / 1.9 / 4.8 in the Irene / Sandy / Matthew years and 0.1–0.7 in quiet years. That's what an average-year rate does (summed over all years, A/E = 1.00).
+- **Saved:** `models/frequency_glm.json` (5 KB, committed; what the app will read), `models/frequency_glm.pickle` (1.4 MB, gitignored), `reports/04_frequency_relativities.csv`. Reusable code: **`src/models/frequency_glm.py`** (with a self-test).
+- Learning notes for Milestone 7 explain regression, GLMs, Poisson, log link, offset, e^β, CIs, over-dispersion, deviance/AIC, LRTs and lift charts from scratch, with 4 interview Q&As.
+
+**Judgment calls worth a look** (details under Milestone 7 decisions): (1) the keep rule is stricter than AIC/LRT, so the model is much smaller than the shortlist, and **geography is not in the frequency model**; (2) floors was kept narrowly and is doubtful under storm-aware CIs; (3) Poisson over NB despite NB's better AIC; (4) the 9-feature model is slightly better in 10 of 16 individual (mostly normal) years, but worse on average, in hurricane years and on the holdout.
+
+**What you need to do:** nothing required. Read `reports/04_frequency_glm.md` (about 10 minutes) and the Milestone 7 learning notes. Question 7 below is optional.
+
+## Summary (previous: 2026-11-11, Task 5: one-way analysis, coastal question, validation design)
 All five parts are done, committed, and pushed (no data files in Git).
 
 - **`notebooks/04_one_way_analysis.ipynb`** (run, 8 charts in `reports/figures/04_*.png`) covers every candidate feature: exposure, claims, frequency, severity, pure premium, relativities to the highest-exposure level, 95% CIs **widened for over-dispersion** (storm clumping makes plain Poisson intervals far too narrow), and credibility flags (1,082-claim rule). Reusable code is in **`src/one_way.py`** (with a self-test).
@@ -59,7 +74,7 @@ The data is downloaded and explored. Everything except the data files is committ
 **What you need to do:** nothing required. To get the data on another computer, run `.venv\Scripts\python.exe src\download_data.py all` (about 35 minutes). Optionally, confirm you're happy with the v2 → v3 switch (Question 3).
 
 ## Questions for Theo
-*No open questions this time.*
+7. *(Optional, Milestone 7)* **Geography in the app.** The frequency model has no county or coastal factor, because those effects didn't hold up on unseen years. So for now, county differences in the app will come only from each county's mix of flood zones and building ages (the severity model, next milestone, may add geography back). If you'd rather the app show a county factor anyway (e.g. a credibility-weighted one, clearly labelled as less certain), tell me and I'll plan it for the app milestone. Otherwise I'll test geography again with XGBoost.
 
 5. *(Week 8, decided)* **Hosting the app.** The plan puts the Streamlit app on a free host (Streamlit Community Cloud), which needs an account linked to your GitHub. **Decision: you'll create the Streamlit Community Cloud account yourself in week 8.** I won't sign up for anything.
 
@@ -112,6 +127,19 @@ The data is downloaded and explored. Everything except the data files is committ
 - **Checks are assertions inside the script** (rather than a pytest suite), so they run on every build without a new package.
 - Project-plan week-2 file names updated to the real ones (`build_dataset.py`, `va_model_data.parquet`).
 
+### Milestone 7 decisions (2026-11-11)
+- **Year as a factor in every model; average-year prediction.** Storm years would otherwise distort the building relativities. An unseen year is predicted at the level where training predictions sum to training claims (`FreqGLM.predict(..., "average")`).
+- **Keep rule = cluster-robust Wald p < 0.05 AND better dev-LOYO** (mean re-based % improvement over the no-features model, each year weighted once). Decided before running the selection. Plain LRT/AIC assume independent claims and would have kept 10 of 11 candidates. The quasi-F (cell-level φ of about 2) barely changes that, because cell-level φ understates storm clumping.
+- **Forward selection in shortlist order**, starting from flood zone (as asked). Geography: (A) Tidewater, the Milestone 6 recommendation; (B) + Census coastal; (C) county group replacing the flags (it's collinear with them). All failed on unseen years. The result is order-dependent in principle, but the rejected features fail by clear margins, except post-FIRM (−0.02 points, a tie) and floors (+0.08, kept).
+- **Relativity table from a refit on all 16 years.** Selection used 2010–2020 only; validation refits inside each fold.
+- **Intervals: cluster-robust by county group × year** (up to 560 clusters on all years). The year-cluster version (16 clusters) is shown as a pessimistic sensitivity check. **Poisson, not NB, for the relativities:** balance by level, invariance to how cells are aggregated, standard practice; NB's gain on unseen years is 0.6 points vs 5.6 for the features themselves. NB is re-tested in the model-comparison milestone.
+- **Fitting speed:** hand-built 0/1 design matrices instead of statsmodels formulas (18 s → about 0.2–1 s per fit). Cells with identical features + county group + year are summed first (173,363 rows); this leaves coefficients and deviance differences unchanged (checked in the self-test).
+- **Lift chart ranking:** cells are ranked by the product of their feature relativities. My first two versions ranked by re-based, then fold-normalized predictions, which partly ranked *years* (storm-year cells sorted high). The first version showed a misleading 56× top/bottom ratio. Per-fold Gini is computed within a single year and wasn't affected.
+- **Comparison model:** a "full" GLM with all nine shortlist features is reported alongside the final model, to show what the dropped features do: slightly better in most normal years, much worse in hurricane years and on the holdout.
+- **`models/*.pickle` gitignored** (1.4 MB, version-fragile, rebuildable). `models/frequency_glm.json` (5 KB) is committed and carries everything needed to predict, plus the relativity table.
+- **Report numbering:** frequency got its own report 04, so severity/pure premium becomes report 05 and the model comparison report 06 (`docs/PROJECT_PLAN.md` updated).
+- The notebook generator script lives outside the repo (as for notebook 04). The notebook itself is the reproducible artifact. No new packages.
+
 ### Task 5 decisions (2026-11-11)
 - **Tidal source: the statute itself.** "Tidewater Virginia" in Code of Virginia § 62.1-44.15:68 (law.lis.virginia.gov, fetched 2026-11-11). The same localities define Virginia's Coastal Zone Management area, but DEQ's website refused automated access (403), so I cite only the statute. The 46 names were matched to FIPS codes via the Census names file, and the build checks that each name matches. All 25 Census coastline localities are inside Tidewater.
 - **Small-county pooling switched to Tidewater** (`Other tidal (small)` / `Other non-tidal (small)`). The old `Other inland (small)` mixed 5.5 and 9.3 claims per 1,000. Notebook 03 was re-run (only its county-group table labels changed). Totals are unchanged.
@@ -126,6 +154,14 @@ The data is downloaded and explored. Everything except the data files is committ
 - No new packages.
 
 ## Log
+### 2026-11-11: Milestone 7, frequency GLM
+1. Read the plan docs. Confirmed `main` and that the existing self-tests pass. Profiled fit speed: formulas took 18 s per fit, so I built the design matrices by hand.
+2. Wrote `src/models/frequency_glm.py` with a simulated-data self-test (recovers known relativities, balance, offset, aggregation invariance, JSON round trip). Raised the simulated claim rate after one noise-driven failure. Committed.
+3. A dry run showed in-sample tests keeping everything, while LOYO rejected most features. I replaced the step-comparison helper with `forward_selection` and a pre-stated keep rule.
+4. Built notebook 05 from a generator script and ran it with nbconvert. Fixed a bool-index bug in the A/E chart. Corrected four write-up claims that the results contradicted (NB *is* slightly better out of sample; full vs final is mixed; φ is not monotone in aggregation; one-way values without unmatched claims). Fixed the lift-chart ranking twice (see decisions) and chart layout issues (overlapping titles, legend, footnote, CI order, tick labels). Committed notebook + 7 figures.
+5. Saved the model JSON (pickle gitignored) and tables. Committed. Wrote `reports/04_frequency_glm.md`, checking numbers against the notebook output. Committed.
+6. Updated LEARNING_NOTES, README, PROJECT_PLAN, and this file. Committed and pushed.
+
 ### 2026-11-11: Task 5, one-way analysis + coastal + validation
 1. Committed your Q6 answer. Fetched the Tidewater statute, mapped 46 localities to FIPS, and added `coastal_tidal` with checks to `build_dataset.py`. Rebuilt (totals unchanged). Committed.
 2. Wrote `src/one_way.py` and `src/validation.py` with self-tests. Fixed two edge cases the first runs hit (Cramér's V of a column with itself; stratifying a feature by itself). Committed.

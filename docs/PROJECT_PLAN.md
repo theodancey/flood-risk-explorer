@@ -38,10 +38,10 @@ Enter a **county** (later a ZIP code) to see the area's claim frequency, average
 |---|---|---|
 | **2** ✅ | Clean data and build the modelling table: rating cells (county × year × 8 building/policy features), losses in 2025 dollars (CPI-U), coastal flag, data checks | `src/build_dataset.py`, `data/processed/va_model_data.parquet`, `docs/modeling_dataset.md`, notebook 03 |
 | **2b** ✅ | One-way analysis of risk factors, Tidewater coastal flag, validation design | notebook 04, `reports/03_one_way_findings.md`, `docs/validation_plan.md`, `src/one_way.py`, `src/validation.py` |
-| **3** | Frequency GLM: Poisson, then negative binomial; interpret relativities (shortlist in report 03) | notebook 05, frequency section of report 04 |
-| **4** | Severity Gamma GLM; combine into pure premium; Tweedie cross-check | notebook 06, report 04 |
+| **3** ✅ | Frequency GLM: Poisson, then negative binomial; interpret relativities (shortlist in report 03) | notebook 05, `reports/04_frequency_glm.md`, `src/models/frequency_glm.py`, `models/frequency_glm.json` |
+| **4** | Severity Gamma GLM; combine into pure premium; Tweedie cross-check | notebook 06, report 05 |
 | **5** | XGBoost frequency/severity/Tweedie with the same features and year split; light tuning | notebook 07 |
-| **6** | Evaluation and explainability: leave-one-year-out, final holdout, lift/Gini, SHAP vs relativities | notebook 08, report 05 (model comparison) |
+| **6** | Evaluation and explainability: leave-one-year-out, final holdout, lift/Gini, SHAP vs relativities | notebook 08, report 06 (model comparison) |
 | **7** | Streamlit app MVP: county picker, metrics, history chart, drivers, disclaimer | `app/app.py` running locally |
 | **8** | App polish: ZIP lookup, explanations, tests; free hosting (e.g. Streamlit Community Cloud, *needs Theo's OK: account sign-up*) | public app link (if approved) |
 | **9** | Write-up: README results, final report, 2-minute demo script, interview Q&A review | finished portfolio repo |
