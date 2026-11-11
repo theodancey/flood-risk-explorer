@@ -1,0 +1,198 @@
+{
+  "spec": {
+    "features": [
+      "flood_zone_group",
+      "construction_band",
+      "floors_group"
+    ],
+    "interactions": [],
+    "year_factor": true,
+    "levels": {
+      "flood_zone_group": [
+        "A/V high risk",
+        "B/C/X moderate-low risk"
+      ],
+      "construction_band": [
+        "1980-1999",
+        "before 1960",
+        "1960-1979",
+        "2000 or later"
+      ],
+      "floors_group": [
+        "2",
+        "1",
+        "3+"
+      ],
+      "year": [
+        "2013",
+        "2010",
+        "2011",
+        "2012",
+        "2014",
+        "2015",
+        "2016",
+        "2017",
+        "2018",
+        "2019",
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024",
+        "2025"
+      ]
+    },
+    "bases": {
+      "flood_zone_group": "A/V high risk",
+      "construction_band": "1980-1999",
+      "floors_group": "2",
+      "year": "2013"
+    }
+  },
+  "params": {
+    "const": -6.431736531249796,
+    "flood_zone_group[B/C/X moderate-low risk]": -0.7818729744721592,
+    "construction_band[before 1960]": 1.0036565037225602,
+    "construction_band[1960-1979]": 1.0108913847128553,
+    "construction_band[2000 or later]": -0.44236083516654323,
+    "floors_group[1]": -0.11475609228706848,
+    "floors_group[3+]": 0.12409112601291368,
+    "year[2010]": 0.08942270416379974,
+    "year[2011]": 2.536211598939373,
+    "year[2012]": 1.674874983069223,
+    "year[2014]": 0.3218614125975049,
+    "year[2015]": 0.512086626127249,
+    "year[2016]": 2.452289328595118,
+    "year[2017]": -0.9048780063479398,
+    "year[2018]": 1.1147615653694434,
+    "year[2019]": 0.3577262406278264,
+    "year[2020]": 0.7959884537360862,
+    "year[2021]": -0.20080694418944797,
+    "year[2022]": -0.4813609315512515,
+    "year[2023]": -1.132206807966573,
+    "year[2024]": 0.062446543436004955,
+    "year[2025]": 0.02967354341897917
+  },
+  "family": "poisson",
+  "alpha": null,
+  "avg_year_log": 1.0976185752875012,
+  "description": "Virginia NFIP paid-claim frequency GLM (Poisson, log link, log(exposure) offset, year factor). Area-level only: not a prediction for an individual property.",
+  "fitted_on_years": [
+    2010,
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "created": "2026-11-11",
+  "data_file_sha256_16": "d554de463a01678d",
+  "cells": 173363,
+  "exposure": 1482412.767609851,
+  "claims": 9462,
+  "pearson_phi": 1.9564457111019604,
+  "recommended_ci": "cluster-robust by county_group x year",
+  "base_rate_per_policy_year_average_year": 0.0048241633607480515,
+  "relativities": [
+    {
+      "feature": "flood_zone_group",
+      "level": "A/V high risk",
+      "is_base": true,
+      "relativity": 1.0,
+      "lo_cluster": 1.0,
+      "hi_cluster": 1.0,
+      "lo_poisson": 1.0,
+      "hi_poisson": 1.0
+    },
+    {
+      "feature": "flood_zone_group",
+      "level": "B/C/X moderate-low risk",
+      "is_base": false,
+      "relativity": 0.4575482320982031,
+      "lo_cluster": 0.3433438841347949,
+      "hi_cluster": 0.6097396644292675,
+      "lo_poisson": 0.4373971290689119,
+      "hi_poisson": 0.4786277064548542
+    },
+    {
+      "feature": "construction_band",
+      "level": "1980-1999",
+      "is_base": true,
+      "relativity": 1.0,
+      "lo_cluster": 1.0,
+      "hi_cluster": 1.0,
+      "lo_poisson": 1.0,
+      "hi_poisson": 1.0
+    },
+    {
+      "feature": "construction_band",
+      "level": "before 1960",
+      "is_base": false,
+      "relativity": 2.72823942999287,
+      "lo_cluster": 2.035084289060793,
+      "hi_cluster": 3.6574850621066695,
+      "lo_poisson": 2.566994652949503,
+      "hi_poisson": 2.8996127353889904
+    },
+    {
+      "feature": "construction_band",
+      "level": "1960-1979",
+      "is_base": false,
+      "relativity": 2.7480494928950545,
+      "lo_cluster": 2.4143467691773357,
+      "hi_cluster": 3.1278754617233213,
+      "lo_poisson": 2.59078863216353,
+      "hi_poisson": 2.914856087312066
+    },
+    {
+      "feature": "construction_band",
+      "level": "2000 or later",
+      "is_base": false,
+      "relativity": 0.6425177506223931,
+      "lo_cluster": 0.5148613054385411,
+      "hi_cluster": 0.8018257645391048,
+      "lo_poisson": 0.5836926165788279,
+      "hi_poisson": 0.7072713413518178
+    },
+    {
+      "feature": "floors_group",
+      "level": "2",
+      "is_base": true,
+      "relativity": 1.0,
+      "lo_cluster": 1.0,
+      "hi_cluster": 1.0,
+      "lo_poisson": 1.0,
+      "hi_poisson": 1.0
+    },
+    {
+      "feature": "floors_group",
+      "level": "1",
+      "is_base": false,
+      "relativity": 0.8915835815006514,
+      "lo_cluster": 0.8057099982594231,
+      "hi_cluster": 0.9866096790641778,
+      "lo_poisson": 0.8512970347873755,
+      "hi_poisson": 0.9337766376692155
+    },
+    {
+      "feature": "floors_group",
+      "level": "3+",
+      "is_base": false,
+      "relativity": 1.132119031792299,
+      "lo_cluster": 0.9153818580957133,
+      "hi_cluster": 1.4001735896455978,
+      "lo_poisson": 1.0711833471255092,
+      "hi_poisson": 1.1965211236579818
+    }
+  ]
+}
