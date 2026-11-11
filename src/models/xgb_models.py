@@ -22,8 +22,8 @@ Plain-English summary (full explanations in LEARNING_NOTES.md, Milestone 10):
     (docs/validation_plan.md): hyperparameters are tuned with leave-one-year-out on
     2010-2020 only; 2021-2025 is scored once at the end.
   * EARLY STOPPING on the cross-validation mean: the 11 fold models are trained side by side,
-    25 trees at a time. After each chunk we score every held-out year and average. When that
-    average hasn't improved for 200 trees we stop, and the best tree count is n_estimators.
+    10 trees at a time. After each chunk we score every held-out year and average. When that
+    average hasn't improved for 150 trees we stop, and the best tree count is n_estimators.
   * MONOTONIC CONSTRAINTS force a feature's effect to go only one way (e.g. a higher coverage
     limit can never lower the expected claim size), whatever the other features are.
 
@@ -35,9 +35,9 @@ Encoding (numbers XGBoost can split on):
     so no claim information leaks into the features. A level not seen in training -> all 0.
 
 Run the self-test:                .venv\\Scripts\\python.exe src\\models\\xgb_models.py
-Tune (writes reports/07_xgb_tuning_<kind>.csv and models/xgb_settings.json):
+Tune (one search per geography variant; writes reports/07_xgb_tuning_<kind>_<variant>.csv):
                                   .venv\\Scripts\\python.exe src\\models\\xgb_models.py tune frequency
-Compare monotone + geography:     .venv\\Scripts\\python.exe src\\models\\xgb_models.py compare frequency
+Geography + monotone choice:      .venv\\Scripts\\python.exe src\\models\\xgb_models.py compare frequency
 Fit and save the final models:    .venv\\Scripts\\python.exe src\\models\\xgb_models.py fit-final
 """
 
@@ -433,7 +433,7 @@ def evaluate(df, kind, params, n_rounds, features=ALL_FEATURES, monotone=None, y
 # Tuning: cross-validation with early stopping on the fold MEAN
 # ---------------------------------------------------------------------------
 def cv_lockstep(df, kind, params, features=ALL_FEATURES, monotone=None, years=val.DEV_YEARS,
-                chunk=25, max_rounds=2000, patience=200, unmatched=None, nthread=None):
+                chunk=None, max_rounds=None, patience=150, unmatched=None, nthread=None):
     """Train one model per leave-one-year-out fold, all in step, `chunk` trees at a time.
     After each chunk, score each held-out year (re-based deviance improvement over the
     no-features model, the validation plan's main metric) and average over folds, each year
@@ -441,6 +441,7 @@ def cv_lockstep(df, kind, params, features=ALL_FEATURES, monotone=None, years=va
 
     Only the folds in `years` are used, so with DEV_YEARS no 2021-2025 row is ever touched.
     Returns dict: best_rounds, best_score, curve (round x fold), fold_scores at the best round."""
+    max_rounds, chunk = max_rounds or MAX_ROUNDS[kind], chunk or CHUNK[kind]
     folds = []
     for y, train, test in val.leave_one_year_out(df, years):
         assert y not in set(train["year"]) and set(test["year"]) == {y}
@@ -481,14 +482,19 @@ def cv_lockstep(df, kind, params, features=ALL_FEATURES, monotone=None, years=va
             "folds_beating_null": int((at["improvement_rebased_pct"] > 0).sum())}
 
 
-SEARCH_MCW = {"frequency": (1.0, 300.0), "severity": (3.0, 150.0), "tweedie": (5.0, 2000.0)}
+# min_child_weight = the smallest total HESSIAN allowed in a leaf, and the hessian's unit
+# depends on the objective: Poisson ~ expected claims (x e^0.7, XGBoost's max_delta_step),
+# Gamma ~ 1 per claim, Tweedie ~ exposure x loss cost^0.3 (so about 1.5 per policy-year).
+SEARCH_MCW = {"frequency": (1.0, 300.0), "severity": (3.0, 150.0), "tweedie": (100.0, 100_000.0)}
+MAX_ROUNDS = {"frequency": 1500, "severity": 4000, "tweedie": 1500}
+CHUNK = {"frequency": 10, "severity": 20, "tweedie": 10}     # trees added between CV checks
 
 
 def sample_params(rng, kind):
     """One random draw from the search space (log-uniform where the scale matters)."""
     def logu(lo, hi):
         return float(np.exp(rng.uniform(np.log(lo), np.log(hi))))
-    return {"max_depth": int(rng.integers(2, 7)), "learning_rate": logu(0.03, 0.15),
+    return {"max_depth": int(rng.integers(2, 7)), "learning_rate": logu(0.01, 0.1),
             "min_child_weight": logu(*SEARCH_MCW[kind]), "subsample": float(rng.uniform(0.6, 1.0)),
             "colsample_bytree": float(rng.uniform(0.5, 1.0)), "reg_lambda": logu(0.1, 50.0),
             "reg_alpha": 0.0 if rng.random() < 0.5 else logu(0.1, 5.0),
@@ -647,113 +653,130 @@ def load_kind_data(kind, verbose=True):
 
 
 N_CONFIGS = {"frequency": 40, "severity": 40, "tweedie": 20}
+VARIANT_TAGS = {"no geography": "nogeo", "+ Tidewater": "tidal", "+ Tidewater + county group": "county"}
+
+
+def tuning_csv(kind, variant):
+    return REPORTS / f"07_xgb_tuning_{kind}_{VARIANT_TAGS[variant]}.csv"
 
 
 def cmd_tune(kind):
+    """A separate randomized search for EACH geography variant (the same random draws, so the
+    variants are compared config by config), all scored on the development folds only.
+    Why separately: a dry run showed county group makes unseen years much worse, so a search
+    run with county group in picks settings that work around it; the geography question is
+    only fair if each variant gets its own best settings."""
     df, unm = load_kind_data(kind)
-    out = REPORTS / f"07_xgb_tuning_{kind}.csv"
-    print(f"Tuning {kind}: {N_CONFIGS[kind]} random configs x 11 development folds (2010-2020), "
-          f"all {len(ALL_FEATURES)} candidate features, no monotone constraints.", flush=True)
-    res = random_search(df, kind, N_CONFIGS[kind], ALL_FEATURES, None, out, unmatched=unm)
-    ch = choose_config(res)
-    s = read_settings()
-    s.setdefault(kind, {})
-    s[kind].update({"objective": KINDS[kind]["objective"], "tuned_features": ALL_FEATURES,
-                    "tuning": {"configs": int(len(res)), "folds": "LOYO 2010-2020 (11)",
-                               "metric": "mean re-based deviance improvement vs no-features model, % (each year once)",
-                               "chosen_config": int(ch["config"]), "chosen_score": float(ch["score"]),
-                               "best_score": float(res["score"].max()), "tie_tolerance_pts": 0.1},
-                    "params": params_of(ch), "n_rounds": int(ch["best_rounds"])})
-    if kind == "tweedie":
-        s[kind]["tweedie_variance_power"] = TWEEDIE_POWER
-    write_settings(s)
-    print(f"Chosen config {int(ch['config'])}: {params_of(ch)}, {int(ch['best_rounds'])} trees, "
-          f"score {ch['score']:.2f}% (best {res['score'].max():.2f}%).")
+    for variant, feats in GEOGRAPHY_VARIANTS.items():
+        print(f"Tuning {kind} / {variant}: {N_CONFIGS[kind]} random configs x 11 development folds "
+              f"(2010-2020), {len(feats)} features, no monotone constraints.", flush=True)
+        random_search(df, kind, N_CONFIGS[kind], feats, None, tuning_csv(kind, variant), unmatched=unm)
 
 
 def cmd_compare(kind, top_k=5):
-    """Monotone constraints (top_k configs, constrained vs not) then geography variants."""
+    """(1) Geography: the best tuned config of each variant, compared fold by fold with the
+    GLMs' keep rule. (2) Monotone constraints on the winning variant's top_k configs.
+    Writes reports/07_xgb_{geography,monotone}_<kind>*.csv and models/xgb_settings.json."""
     df, unm = load_kind_data(kind)
-    res = pd.read_csv(REPORTS / f"07_xgb_tuning_{kind}.csv")
     s = read_settings()
-    top = res.sort_values("score", ascending=False).head(top_k)
-    rows, runs = [], {}
-    print(f"Monotone comparison for {kind}: top {top_k} configs, constraints {MONOTONE[kind]}", flush=True)
-    for _, r in top.iterrows():
-        prm = params_of(r)
-        for label, mono in (("unconstrained", None), ("constrained", MONOTONE[kind])):
-            t = time.time()
-            cv = cv_lockstep(df, kind, prm, ALL_FEATURES, mono, unmatched=unm)
-            runs[(int(r["config"]), label)] = cv
-            rows.append({"config": int(r["config"]), "variant": label, **prm, "best_rounds": cv["best_rounds"],
-                         "score": cv["best_score"], "non_cat": cv["non_cat"], "cat": cv["cat"],
-                         "gini": cv["gini"], "folds_beating_null": cv["folds_beating_null"]})
-            print(f"  config {int(r['config'])} {label}: {cv['best_score']:.2f}% at {cv['best_rounds']} trees "
-                  f"({time.time() - t:.0f}s)", flush=True)
-    mono_tbl = pd.DataFrame(rows)
-    # Per-fold scores of every run, for the notebook.
-    folds = pd.concat([v["fold_scores"].assign(config=k[0], variant=k[1]) for k, v in runs.items()])
-    folds.to_csv(REPORTS / f"07_xgb_monotone_folds_{kind}.csv", index=False)
-    mono_tbl.to_csv(REPORTS / f"07_xgb_monotone_{kind}.csv", index=False)
 
-    # Pre-stated rule on the chosen config's pair: constrained unless > 0.25 pts worse or worse
-    # in >= 8 of 11 folds.
-    chosen_cfg = int(choose_config(res)["config"])
-    pair = paired_comparison(runs[(chosen_cfg, "unconstrained")], runs[(chosen_cfg, "constrained")])
-    avg_diff = float(mono_tbl.pivot(index="config", columns="variant", values="score")
-                     .eval("constrained - unconstrained").mean())
-    use_mono = not (pair["mean_diff_pts"] < -0.25 or (pair["folds"] - pair["folds_better"]) >= 8)
-    # The configuration carried forward: chosen by the same rule among the top-k runs of that variant.
-    variant = "constrained" if use_mono else "unconstrained"
-    vt = mono_tbl[mono_tbl["variant"] == variant]
-    ch = choose_config(vt)
-    prm, mono = params_of(ch), (MONOTONE[kind] if use_mono else None)
-    print(f"Monotone rule: chosen config {chosen_cfg} pair diff {pair['mean_diff_pts']:+.2f} pts, "
-          f"constrained better in {pair['folds_better']}/{pair['folds']} folds -> {variant}. "
-          f"Carry forward config {int(ch['config'])}.", flush=True)
-
-    # Geography variants (Q7) on the carried-forward config.
-    geo_rows, geo_runs = [], {}
+    # ---- (1) geography
+    geo_rows, geo_runs, chosen = [], {}, {}
     for name, feats in GEOGRAPHY_VARIANTS.items():
-        t = time.time()
-        cv = cv_lockstep(df, kind, prm, feats, mono, unmatched=unm)
+        res = pd.read_csv(tuning_csv(kind, name))
+        ch = choose_config(res)
+        chosen[name] = (ch, res)
+        cv = cv_lockstep(df, kind, params_of(ch), feats, None, unmatched=unm)
         geo_runs[name] = cv
-        geo_rows.append({"variant": name, "features": "|".join(feats), "best_rounds": cv["best_rounds"],
-                         "score": cv["best_score"], "non_cat": cv["non_cat"], "cat": cv["cat"],
-                         "gini": cv["gini"], "folds_beating_null": cv["folds_beating_null"]})
-        print(f"  geography '{name}': {cv['best_score']:.2f}% at {cv['best_rounds']} trees "
-              f"({time.time() - t:.0f}s)", flush=True)
+        geo_rows.append({"variant": name, "features": "|".join(feats), "config": int(ch["config"]),
+                         **params_of(ch), "best_rounds": cv["best_rounds"], "score": cv["best_score"],
+                         "best_config_score_in_search": float(res["score"].max()),
+                         "median_config_score": float(res["score"].median()),
+                         "non_cat": cv["non_cat"], "cat": cv["cat"], "gini": cv["gini"],
+                         "folds_beating_null": cv["folds_beating_null"]})
+        print(f"  geography '{name}': config {int(ch['config'])}, {cv['best_score']:.2f}% at "
+              f"{cv['best_rounds']} trees", flush=True)
+    # Paired search comparison: how often does each variant beat 'no geography' on the SAME draw?
+    base_res = chosen["no geography"][1].set_index("config")["score"]
+    for r in geo_rows:
+        other = chosen[r["variant"]][1].set_index("config")["score"]
+        r["draws_better_than_no_geography"] = int((other > base_res).sum())
+        r["draws"] = int(len(other))
     names = list(GEOGRAPHY_VARIANTS)
     # Same keep rule as the GLMs: a geography step is kept if it improves the mean development
-    # LOYO score AND wins at least 6 of the 11 folds against the current set.
-    current = names[0]
-    steps = []
+    # LOYO score AND is better in at least 6 of the 11 folds than the current feature set.
+    current, steps = names[0], []
     for nxt in names[1:]:
         c = paired_comparison(geo_runs[current], geo_runs[nxt])
         keep = c["mean_diff_pts"] > 0 and c["folds_better"] >= 6
-        steps.append({"from": current, "to": nxt, **c, "kept": keep})
+        steps.append({"from": current, "to": nxt, **c, "kept": bool(keep)})
         if keep:
             current = nxt
-    geo_tbl = pd.DataFrame(geo_rows)
-    geo_tbl.to_csv(REPORTS / f"07_xgb_geography_{kind}.csv", index=False)
+    pd.DataFrame(geo_rows).to_csv(REPORTS / f"07_xgb_geography_{kind}.csv", index=False)
     pd.concat([v["fold_scores"].assign(variant=k) for k, v in geo_runs.items()]).to_csv(
         REPORTS / f"07_xgb_geography_folds_{kind}.csv", index=False)
     pd.DataFrame(steps).to_csv(REPORTS / f"07_xgb_geography_steps_{kind}.csv", index=False)
     print(f"Geography rule -> '{current}'. Steps: {steps}", flush=True)
+    feats = GEOGRAPHY_VARIANTS[current]
 
-    s.setdefault(kind, {})
-    s[kind].update({
-        "monotone_test": {"constraints": MONOTONE[kind], "configs_compared": int(top_k),
+    # ---- (2) monotone constraints on the chosen variant's top configs
+    res = chosen[current][1]
+    top = res.sort_values("score", ascending=False).head(top_k)
+    rows, runs = [], {}
+    print(f"Monotone comparison for {kind}: top {top_k} configs of '{current}', constraints {MONOTONE[kind]}",
+          flush=True)
+    chosen_cfg = int(chosen[current][0]["config"])
+    if chosen_cfg not in set(top["config"].astype(int)):          # always include the chosen config
+        top = pd.concat([top, res[res["config"] == chosen_cfg]])
+    for _, r in top.iterrows():
+        prm = params_of(r)
+        for label, mono in (("unconstrained", None), ("constrained", MONOTONE[kind])):
+            if label == "unconstrained" and int(r["config"]) == chosen_cfg:
+                cv = geo_runs[current]                              # already run above
+            else:
+                cv = cv_lockstep(df, kind, prm, feats, mono, unmatched=unm)
+            runs[(int(r["config"]), label)] = cv
+            rows.append({"config": int(r["config"]), "variant": label, **prm, "best_rounds": cv["best_rounds"],
+                         "score": cv["best_score"], "non_cat": cv["non_cat"], "cat": cv["cat"],
+                         "gini": cv["gini"], "folds_beating_null": cv["folds_beating_null"]})
+            print(f"  config {int(r['config'])} {label}: {cv['best_score']:.2f}% at {cv['best_rounds']} trees",
+                  flush=True)
+    mono_tbl = pd.DataFrame(rows)
+    mono_tbl.to_csv(REPORTS / f"07_xgb_monotone_{kind}.csv", index=False)
+    pd.concat([v["fold_scores"].assign(config=k[0], variant=k[1]) for k, v in runs.items()]).to_csv(
+        REPORTS / f"07_xgb_monotone_folds_{kind}.csv", index=False)
+    # Pre-stated rule, on the chosen config's pair: use the constraints unless they cost more than
+    # 0.25 points of mean development-LOYO improvement, or are worse in 8 or more of the 11 folds.
+    pair = paired_comparison(runs[(chosen_cfg, "unconstrained")], runs[(chosen_cfg, "constrained")])
+    piv = mono_tbl.pivot(index="config", columns="variant", values="score")
+    avg_diff = float((piv["constrained"] - piv["unconstrained"]).mean())
+    use_mono = not (pair["mean_diff_pts"] < -0.25 or (pair["folds"] - pair["folds_better"]) >= 8)
+    variant = "constrained" if use_mono else "unconstrained"
+    ch = choose_config(mono_tbl[mono_tbl["variant"] == variant])
+    final = runs[(int(ch["config"]), variant)]
+    print(f"Monotone rule: config {chosen_cfg} constrained - unconstrained = {pair['mean_diff_pts']:+.2f} pts, "
+          f"better in {pair['folds_better']}/{pair['folds']} folds -> {variant}; final config "
+          f"{int(ch['config'])}, {final['best_rounds']} trees, {final['best_score']:.2f}%.", flush=True)
+
+    s[kind] = {
+        "objective": KINDS[kind]["objective"],
+        **({"tweedie_variance_power": TWEEDIE_POWER} if kind == "tweedie" else {}),
+        "tuning": {"configs_per_variant": int(N_CONFIGS[kind]), "folds": "LOYO 2010-2020 (11 folds)",
+                   "metric": "mean re-based deviance improvement vs the no-features model, % (each year once)",
+                   "early_stopping": f"lockstep folds, {CHUNK[kind]}-tree chunks, stop after 150 trees without improvement, max {MAX_ROUNDS[kind]}",
+                   "tie_rule": "within 0.1 pts of the best: shallowest, then fewest trees"},
+        "geography_test": {"steps": steps, "chosen": current,
+                           "rule": "keep a geography step if mean dev-LOYO improves and >= 6 of 11 folds are better",
+                           "scores": {r["variant"]: r["score"] for r in geo_rows}},
+        "monotone_test": {"constraints": MONOTONE[kind], "configs_compared": int(len(top)),
                           "chosen_config_pair": pair, "avg_diff_pts_top_configs": avg_diff,
                           "rule": "use constraints unless > 0.25 pts worse or worse in >= 8 of 11 folds",
                           "use_constraints": bool(use_mono)},
-        "geography_test": {"steps": steps, "chosen": current,
-                           "rule": "keep a geography step if mean dev-LOYO improves and >= 6 of 11 folds better"},
-        "params": prm, "monotone": mono, "features": GEOGRAPHY_VARIANTS[current],
-        "n_rounds": int(geo_runs[current]["best_rounds"]),
-        "dev_loyo_score": float(geo_runs[current]["best_score"]),
-        "carried_config": int(ch["config"]),
-    })
+        "features": feats, "monotone": MONOTONE[kind] if use_mono else None,
+        "config": int(ch["config"]), "params": params_of(ch), "n_rounds": int(final["best_rounds"]),
+        "dev_loyo_score": float(final["best_score"]), "dev_loyo_non_cat": final["non_cat"],
+        "dev_loyo_cat": final["cat"], "dev_loyo_gini": final["gini"],
+    }
     write_settings(s)
 
 
