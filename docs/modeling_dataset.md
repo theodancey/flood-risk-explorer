@@ -18,7 +18,7 @@ Why cells instead of one row per policy?
 | Exposure | **1,482,412.77** policy-years |
 | Claims | **12,545** (all), **9,557** paid (total paid > $0) |
 | Paid losses | **$220,183,315** nominal = **$292,685,981** in 2025 dollars |
-| Statewide measures (2025 $) | frequency 6.45 per 1,000 policy-years · severity $30,625 · pure premium $197 |
+| Statewide measures (2025 $) | frequency 6.45 per 1,000 policy-years (6.38 using only cells with exposure) · severity $30,625 · pure premium $197 |
 
 These totals equal notebook 02's exactly (that's checked on every run; see "Data checks").
 
