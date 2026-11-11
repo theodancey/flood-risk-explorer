@@ -2,7 +2,9 @@
 
 ## About me
 - I'm Theo, a freshman at Virginia Tech majoring in Statistics & Data Science, aiming for an actuarial career.
-- I'm a beginner with Python, Git, and the command line. Explain things in plain English.
+- My statistics background is only intro-level coursework (means, variance, basic probability, distributions). I have no actuarial experience yet.
+- I'm a beginner with Python, Git, and the command line.
+- Explain every statistics, modeling, or insurance concept from scratch: plain-English intuition first, then a simple example, and only then any formula. Define every term the first time you use it (e.g., GLM, Poisson, exposure, severity).
 - I'm on Windows 11 using PowerShell.
 
 ## Project goal
