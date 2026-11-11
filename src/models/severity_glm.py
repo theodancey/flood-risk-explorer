@@ -494,6 +494,35 @@ def forward_selection(df, start_features, candidates, loyo_years, cluster_by=("c
     return pd.DataFrame(rows).set_index("step"), feats
 
 
+def second_pass(df, features, dropped, loyo_years, cluster_by=("county_group", "year"), alpha=0.05,
+                fit_kw=None):
+    """Forward selection depends on the ORDER candidates are tried: a feature tested early (before
+    the features it overlaps with are in) can fail and never be looked at again. This pass
+    re-tests every dropped feature against the CURRENT model with the same keep rule; of those
+    that pass, the one with the biggest unseen-year gain is added, and the rest are re-tested.
+    Repeats until nothing passes. Returns (table of every test, final features)."""
+    cache, rows, feats, left = {}, [], list(features), list(dropped)
+    rnd = 1
+    while left:
+        tested = []
+        for f in left:
+            r = compare_models(df, feats, feats + [f], loyo_years, cluster_by, cache, fit_kw)
+            ok = r["cluster_Wald_p"] < alpha and r["d_devLOYO_pct"] > 0
+            tested.append((f, ok, r))
+            rows.append({"round": rnd, "candidate": f, "passes": ok, **r})
+        passing = [(f, r) for f, ok, r in tested if ok]
+        if not passing:
+            break
+        best = max(passing, key=lambda t: t[1]["d_devLOYO_pct"])[0]
+        rows[-len(tested) + [t[0] for t in tested].index(best)]["added"] = True
+        feats.append(best)
+        left.remove(best)
+        rnd += 1
+    tbl = pd.DataFrame(rows)
+    tbl["added"] = tbl.get("added", pd.Series(False, index=tbl.index)).fillna(False).astype(bool)
+    return tbl, feats
+
+
 # ---------------------------------------------------------------------------
 # Relativity table
 # ---------------------------------------------------------------------------
