@@ -369,6 +369,38 @@ def fit_xgb(train, kind, params, n_rounds, features=ALL_FEATURES, monotone=None,
     return m
 
 
+@dataclass
+class XGBFreqSev:
+    """Pure premium from the two XGBoost models, built exactly like pure_premium.CombinedModel:
+    frequency x severity x ICC bridge x off-balance (no county factor: geography, if any, is
+    inside the trees)."""
+    freq: XGBModel
+    sev: XGBModel
+    icc_bridge: float = 1.0
+    off_balance: float = 1.0
+    train_rate: float = None
+
+    def rate(self, df):
+        return self.freq.rate(df) * self.sev.rate(df) * self.icc_bridge * self.off_balance
+
+    def predict(self, df):
+        return df["exposure"].to_numpy(float) * self.rate(df)
+
+    def relative_rate(self, df):
+        return self.rate(df) / self.train_rate
+
+
+def combine_freq_sev(freq, sev, cells_train, claims_train, unmatched_train=0.0):
+    """cells_train: cell table rows of the training years (exposure > 0); claims_train: ALL paid
+    claims of those years (incl. ICC-only, for the bridge); unmatched_train: losses in their
+    zero-exposure cells. The off-balance makes predicted = actual total training losses."""
+    m = XGBFreqSev(freq, sev, sv.icc_bridge_factor(claims_train))
+    actual = cells_train[LOSS].sum() + unmatched_train
+    m.off_balance = float(actual / m.predict(cells_train).sum())
+    m.train_rate = float(actual / cells_train["exposure"].sum())
+    return m
+
+
 # ---------------------------------------------------------------------------
 # Scoring (the validation plan's metrics, via the GLM modules so they're identical)
 # ---------------------------------------------------------------------------
@@ -395,9 +427,11 @@ def _unm(unmatched, years):
     return 0.0 if unmatched is None else float(unmatched.reindex(list(years), fill_value=0.0).sum())
 
 
-def evaluate(df, kind, params, n_rounds, features=ALL_FEATURES, monotone=None, years=None,
-             holdout=False, unmatched=None, cap_quantile=None, keep_cols=(), year_backfit=0):
+def evaluate(df, kind, params=None, n_rounds=None, features=ALL_FEATURES, monotone=None, years=None,
+             holdout=False, unmatched=None, cap_quantile=None, keep_cols=(), year_backfit=0, fit_fn=None):
     """Fit on each training split and score the held-out part.
+    fit_fn: optional fit_fn(train) -> any model with .predict(test) and .relative_rate(test)
+        (e.g. a GLM), scored by exactly the same code on the same rows. Default: fit_xgb.
     holdout=False: leave-one-year-out over `years` (default DEV_YEARS), one row per fold.
     holdout=True: train 2010-2020, test 2021-2025; one row per test year plus a "pooled" row.
     Returns (scores, out-of-fold predictions, the fitted models)."""
@@ -409,8 +443,9 @@ def evaluate(df, kind, params, n_rounds, features=ALL_FEATURES, monotone=None, y
     target = KINDS[kind]["target"]
     rows, oof, models = [], [], {}
     for label, train, test in splits:
-        m = fit_xgb(train, kind, params, n_rounds, features, monotone, cap_quantile,
-                    _unm(unmatched, train["year"].unique()), year_backfit)
+        m = fit_fn(train) if fit_fn is not None else fit_xgb(
+            train, kind, params, n_rounds, features, monotone, cap_quantile,
+            _unm(unmatched, train["year"].unique()), year_backfit)
         models[label] = m
         pred = m.predict(test)
         pnull = null_prediction(train, test, kind, _unm(unmatched, train["year"].unique()))
@@ -905,6 +940,12 @@ def _self_test():
     imp = importance_by_feature(m)
     assert imp.index[0] in ("construction_band", "flood_zone_group") and abs(imp.sum() - 100) < 1e-6
     assert len(interaction_pairs(m)) > 0
+
+    # 9. Frequency x severity combination balances to actual losses (+ unmatched)
+    cc = c.assign(total_2025=c[sv.TARGET] * 1.01)               # pretend 1% ICC on top
+    fs = combine_freq_sev(m, ms_, d, cc, unmatched_train=100.0)
+    assert abs(fs.icc_bridge - 1.01) < 1e-9
+    assert abs(fs.predict(d).sum() / (d[LOSS].sum() + 100.0) - 1) < 1e-9
     return True
 
 
