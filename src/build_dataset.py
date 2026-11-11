@@ -95,6 +95,35 @@ CONSTRUCTION_FALLBACK = "1980-1999"          # most common band, for blank / imp
 COVERAGE_BINS = [-np.inf, 0, 100_000, 250_000, np.inf]   # right edge excluded, see below
 COVERAGE_LABELS = ["$0 (contents only)", "under $100K", "$100K-$249K", "$250K or more"]
 
+# Broader "tidal" coastal definition: the 46 localities of "Tidewater Virginia" as defined in
+# the Code of Virginia, section 62.1-44.15:68 (Chesapeake Bay Preservation Act, definitions):
+# https://law.lis.virginia.gov/vacode/title62.1/chapter3.1/section62.1-44.15:68/
+# (checked 2026-11-11). These are the localities with tidal waters draining to the Chesapeake
+# Bay or the ocean. The same list defines Virginia's Coastal Zone Management Program area.
+# It contains all 25 Census coastline counties, plus 21 more (e.g. Chesapeake, Alexandria,
+# Richmond city, Henrico). 29 counties + 17 independent cities; FIPS codes from the Census
+# county-names file (names checked in the build).
+TIDEWATER_LOCALITIES = {
+    "51001": "Accomack County", "51013": "Arlington County", "51033": "Caroline County",
+    "51036": "Charles City County", "51041": "Chesterfield County", "51057": "Essex County",
+    "51059": "Fairfax County", "51073": "Gloucester County", "51085": "Hanover County",
+    "51087": "Henrico County", "51093": "Isle of Wight County", "51095": "James City County",
+    "51097": "King and Queen County", "51099": "King George County",
+    "51101": "King William County", "51103": "Lancaster County", "51115": "Mathews County",
+    "51119": "Middlesex County", "51127": "New Kent County", "51131": "Northampton County",
+    "51133": "Northumberland County", "51149": "Prince George County",
+    "51153": "Prince William County", "51159": "Richmond County",
+    "51177": "Spotsylvania County", "51179": "Stafford County", "51181": "Surry County",
+    "51193": "Westmoreland County", "51199": "York County",
+    # independent cities
+    "51510": "Alexandria city", "51550": "Chesapeake city", "51570": "Colonial Heights city",
+    "51600": "Fairfax city", "51610": "Falls Church city", "51630": "Fredericksburg city",
+    "51650": "Hampton city", "51670": "Hopewell city", "51700": "Newport News city",
+    "51710": "Norfolk city", "51730": "Petersburg city", "51735": "Poquoson city",
+    "51740": "Portsmouth city", "51760": "Richmond city", "51800": "Suffolk city",
+    "51810": "Virginia Beach city", "51830": "Williamsburg city",
+}
+
 
 def _group_codes(codes, groups, fallback):
     """Map numeric codes to group names using a {group: [codes]} dict.
@@ -281,7 +310,8 @@ def build():
     names = A.load_county_names()
     coastal = load_coastline_counties()
     cells["county_name"] = cells["county"].map(names).fillna("Unknown county")
-    cells["coastal"] = cells["county"].isin(coastal)
+    cells["coastal"] = cells["county"].isin(coastal)                       # Census coastline list
+    cells["coastal_tidal"] = cells["county"].isin(TIDEWATER_LOCALITIES)    # Tidewater Virginia
     county_exposure = cells.groupby("county")["exposure"].sum()
     credible = set(county_exposure[county_exposure >= COUNTY_CREDIBILITY_FLOOR].index) - {UNKNOWN_COUNTY}
     # A few Virginia policies (52 policy-years, no claims) have a census code from another
@@ -292,7 +322,7 @@ def build():
         [cells["county"], "Other/unknown county", "Other coastal (small)"],
         "Other inland (small)")
 
-    cols = ["year", "county", "county_name", "county_group", "coastal", *CELL_FEATURES,
+    cols = ["year", "county", "county_name", "county_group", "coastal", "coastal_tidal", *CELL_FEATURES,
             "exposure", "claims", "claims_all", "losses_nominal", "cpi_factor", "losses_2025",
             "exposure_matched"]
     cells = cells[cols].sort_values(CELL_KEYS).reset_index(drop=True)
@@ -302,7 +332,8 @@ def build():
             "unmatched_reasons": reasons, "unmatched_by_feature": by_feature, "n_claims_input": len(clm),
             "n_paid_input": int(clm["is_paid"].sum()), "losses_input": float(clm["total_paid"].sum()),
             "exposure_input": float(A.earned_exposure(pol, YEARS)["exposure"].sum()),
-            "n_coastal_counties": len(coastal), "n_credible_counties": len(credible)}
+            "n_coastal_counties": len(coastal), "n_credible_counties": len(credible),
+            "coastal_set": coastal, "county_names": names}
     return cells, info
 
 
@@ -357,6 +388,21 @@ def run_checks(cells, info):
         assert (share >= MIN_LEVEL_SHARE).all(), f"rare level in {feat}: {share.to_dict()}"
     assert cells["coastal"].sum() > 0 and info["n_coastal_counties"] == 25
 
+    # 6. Tidewater list: 46 Virginia localities, each name matching the Census names file,
+    #    and every Census coastline county is also Tidewater (so "tidal" is strictly broader).
+    tide = TIDEWATER_LOCALITIES
+    assert len(tide) == 46 and all(f.startswith("51") for f in tide)
+    if info["county_names"]:
+        wrong = {f: n for f, n in tide.items() if info["county_names"].get(f) != n}
+        assert not wrong, f"Tidewater FIPS/name mismatch: {wrong}"
+    assert info["coastal_set"] <= set(tide), info["coastal_set"] - set(tide)
+    assert (cells["coastal_tidal"] | ~cells["coastal"]).all()   # coastal implies tidal
+    added = sorted(set(tide) - info["coastal_set"])
+    tidal_exposure = {
+        "census_coastal": float(cells.loc[cells["coastal"], "exposure"].sum() / tot["exposure"]),
+        "tidewater": float(cells.loc[cells["coastal_tidal"], "exposure"].sum() / tot["exposure"]),
+    }
+
     return {
         "rows (cells)": len(cells),
         "cells with exposure": int(cells["exposure_matched"].sum()),
@@ -373,6 +419,9 @@ def run_checks(cells, info):
         "level_exposure_shares": {k: {str(kk): vv for kk, vv in v.items()} for k, v in level_shares.items()},
         "cpi": info["cpi"].round(4).to_dict(orient="records"),
         "cpi_notes": info["cpi_notes"],
+        "tidewater": {"localities": len(tide),
+                      "added_beyond_census": [tide[f] for f in added],
+                      "exposure_share": tidal_exposure},
         "counties": {"coastal_on_census_list": info["n_coastal_counties"],
                      "own_county_group_level": info["n_credible_counties"],
                      "county_group_levels": int(cells["county_group"].nunique())},
@@ -438,6 +487,10 @@ def main():
     for feat, shares in report["level_exposure_shares"].items():
         print(f"  {feat}: " + ", ".join(f"{k} {v:.1%}" for k, v in shares.items()))
     print(f"\nCounties: {report['counties']}")
+    tw = report["tidewater"]
+    print(f"Tidewater (tidal) localities: {tw['localities']}; exposure share "
+          f"{tw['exposure_share']['tidewater']:.1%} vs Census coastal {tw['exposure_share']['census_coastal']:.1%}")
+    print("  added beyond the Census list:", ", ".join(tw["added_beyond_census"]))
 
 
 if __name__ == "__main__":

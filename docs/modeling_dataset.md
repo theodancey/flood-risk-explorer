@@ -30,6 +30,7 @@ These totals equal notebook 02's exactly (that's checked on every run; see "Data
 | `county_name` | label | Census Bureau name (e.g. "Virginia Beach city") |
 | `county_group` | **feature** | Modelling version of county: the 32 counties with ≥5,000 policy-years keep their own level. The rest are pooled into `Other coastal (small)` / `Other inland (small)`, plus `Other/unknown county` (blank or out-of-state codes). |
 | `coastal` | **feature** | County is on the Census Bureau's coastline-county list |
+| `coastal_tidal` | **feature** | County is in **Tidewater Virginia** (Code of Virginia § 62.1-44.15:68): a broader "tidal" definition. 46 localities; includes every Census coastline county plus 21 more (e.g. Chesapeake, Alexandria, Richmond city) |
 | `flood_zone_group` | **key + feature** | `A/V high risk` or `B/C/X moderate-low risk` |
 | `occupancy_group` | **key + feature** | `single-unit residential`, `multi-unit residential`, `non-residential` |
 | `floors_group` | **key + feature** | `1`, `2`, `3+` |
@@ -75,6 +76,7 @@ The same function (`make_features()`) is applied to policies and to claims, so b
 | construction_band | before 1960 21.1% · 1960–79 28.9% · 1980–99 30.8% · 2000+ 19.1% |
 | building_coverage_band | $0 1.4% · under $100K 9.4% · $100K–$249K 28.4% · $250K+ 60.8% |
 | coastal | yes 74.0% · no 26.0% |
+| coastal_tidal | yes 89.2% · no 10.8% |
 
 ### Features considered and rejected
 | Candidate | Why not (for now) |
@@ -86,6 +88,16 @@ The same function (`make_features()`) is applied to policies and to claims, so b
 | `floodZoneCurrent` | The current map can be redrawn *after* the loss, which is a leakage risk. We use `ratedFloodZone` (the zone the policy was priced on). |
 | ZIP code / census tract | Too sparse for a first model. ZIP can come later through the app. |
 | Contents coverage, condo type | Kept the cell count manageable. Partly captured by occupancy and the $0-building band. |
+
+## Two coastal definitions
+| | `coastal` (Census) | `coastal_tidal` (Tidewater Virginia) |
+|---|---|---|
+| Source | Census Bureau coastline-county list (2016 list, Aug 2018 release): counties touching the ocean or a major estuary | Code of Virginia **§ 62.1-44.15:68** ("Tidewater Virginia", Chesapeake Bay Preservation Act), <https://law.lis.virginia.gov/vacode/title62.1/chapter3.1/section62.1-44.15:68/>, checked 2026-11-11. The same localities make up Virginia's Coastal Zone Management Program area. |
+| Localities | 25 | 46 (29 counties + 17 cities) |
+| Exposure share | 74.0% | 89.2% |
+| Added by Tidewater | n/a | Arlington, Caroline, Charles City, Chesterfield, Hanover, Henrico, King and Queen, King William, New Kent, Prince George, Spotsylvania counties; Alexandria, Chesapeake, Colonial Heights, Fairfax, Falls Church, Fredericksburg, Hopewell, Petersburg, Richmond, Williamsburg cities |
+
+The FIPS list is typed into `build_dataset.py` (`TIDEWATER_LOCALITIES`). The build checks 46 entries, that each name matches the Census county-names file, and that every Census coastline county is also Tidewater. `county_group` pooling of small counties still uses the Census flag. Which flag to model with is decided in `reports/03_one_way_findings.md`.
 
 ## Inflation adjustment (2025 dollars)
 - **Source:** CPI-U (Consumer Price Index for All Urban Consumers, all items, US city average, not seasonally adjusted, 1982–84 = 100), BLS series **CUUR0000SA0**, from the free BLS Public Data API v1 (no key needed). Downloaded by `src\download_data.py cpi` to `data/raw/cpi_u_bls.csv`. (FRED's copy, CPIAUCNS, is the same numbers, but its download link timed out for Python scripts.)
@@ -137,7 +149,7 @@ Likely causes: (1) a feature recorded on the claim differs slightly from the pol
 - **Condo one-per-policy-term simplification.** Exposure counts each policy term as 1, even a condo association master policy (RCBAP) covering dozens of units. Claims are counted the same way (one claim record per policy), so frequency is consistent. But a cell containing a big condo building looks like one "policy-year." Weighting by `policyCount` would add about 13% to exposure (notebook 02).
 - **Rare combinations can't be matched exactly:** 1% of paid claims (above).
 - **CPI isn't construction-cost inflation.** Repair costs (materials, labour) rose faster than general prices in 2021–2023, so CPI-adjusted severity may still show some upward trend. A proper actuarial **trend** study would also look at claim-cost indices.
-- **Coastal definition.** The Census list covers counties touching the ocean or a major estuary. **Chesapeake city (131K policy-years, a third of "inland" exposure) is not on it**, even though it has tidal waterways, and neither are some tidal-river counties. This mutes the coastal/inland difference (paid frequency 6.4 vs 6.6 per 1,000). Week 3 can test a broader "tidal" definition.
+- **Coastal definition.** The Census list covers counties touching the ocean or a major estuary. **Chesapeake city (131K policy-years, a third of "inland" exposure) is not on it**, even though it has tidal waterways, and neither are some tidal-river counties. This mutes the coastal/inland difference (paid frequency 6.4 vs 6.6 per 1,000). So the table also carries `coastal_tidal` (below), and notebook 04 compares the two.
 - **Risk Rating 2.0 (Oct 2021)** changed how several fields are coded. The groups are designed to be consistent across the change, but subtle recording differences may remain.
 - **County coding:** FEMA warns that a claim's county may not always be exact. 0.45% of exposure has no county, and 52 policy-years carry out-of-state census codes (pooled into `Other/unknown county`).
 - **Years:** 2009 is excluded (its exposure is only an estimate) and 2026 is incomplete. Recent years may still gain late-reported claims.
