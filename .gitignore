@@ -5,6 +5,9 @@ data/
 # Fitted-model pickles: version-fragile and rebuilt by running notebooks/05_frequency_glm.ipynb.
 # The small, readable models/*.json files ARE committed (the app reads them).
 models/*.pickle
+# XGBoost tree files (binary, rebuilt by: .venvScriptspython.exe srcmodelsxgb_models.py fit-final).
+# Their small models/xgb_*.meta.json companions and models/xgb_settings.json ARE committed.
+models/*.ubj
 
 # Virtual environment (rebuild it from requirements.txt instead of committing it)
 .venv/
