@@ -28,7 +28,7 @@ These totals equal notebook 02's exactly (that's checked on every run; see "Data
 | `year` | **key + feature** | Calendar year (2010–2025). For exposure, it's the year the cover was in force. For claims, `yearOfLoss`. |
 | `county` | **key** | 5-digit county FIPS code. Policies: first 5 digits of `censusGeoid`. Claims: `countyCode`. Same rule as notebook 02. Blank → `UNKNOWN`. |
 | `county_name` | label | Census Bureau name (e.g. "Virginia Beach city") |
-| `county_group` | **feature** | Modelling version of county: the 32 counties with ≥5,000 policy-years keep their own level. The rest are pooled into `Other coastal (small)` / `Other inland (small)`, plus `Other/unknown county` (blank or out-of-state codes). |
+| `county_group` | **feature** | Modelling version of county: the 32 counties with ≥5,000 policy-years keep their own level. The rest are pooled into `Other tidal (small)` / `Other non-tidal (small)` (by the Tidewater flag), plus `Other/unknown county` (blank or out-of-state codes). |
 | `coastal` | **feature** | County is on the Census Bureau's coastline-county list |
 | `coastal_tidal` | **feature** | County is in **Tidewater Virginia** (Code of Virginia § 62.1-44.15:68): a broader "tidal" definition. 46 localities; includes every Census coastline county plus 21 more (e.g. Chesapeake, Alexandria, Richmond city) |
 | `flood_zone_group` | **key + feature** | `A/V high risk` or `B/C/X moderate-low risk` |
@@ -60,7 +60,7 @@ The same function (`make_features()`) is applied to policies and to claims, so b
 | Elevated / primary residence / post-FIRM | as recorded (no blanks) | Complete in both files |
 | Construction year | 4 bands. Blank or before 1700 (728 terms, 3 claims; e.g. a year of "202") → `1980-1999`, the most common band | Vintage (year built) instead of age, so a building stays in the same band every year |
 | Building coverage | $0 / under $100K / $100K–$249,999 / $250K+, in **nominal** dollars | The NFIP residential limit has been $250,000 since 1994, so "at the limit" means the same thing every year. Restating limits in 2025 dollars would move buildings between bands just because time passed. |
-| County group | Own level if ≥5,000 policy-years in 2010–2025 (the credibility floor from notebook 02); otherwise pooled by coastal/inland | Small counties have too few claims to estimate their own effect. Pooling small counties with similar ones is a simple form of **credibility** (trust a group's own experience only when there's enough of it). `county` itself stays in the key, so the pooling can be changed later without rebuilding. |
+| County group | Own level if ≥5,000 policy-years in 2010–2025 (the credibility floor from notebook 02); otherwise pooled by tidal/non-tidal (`coastal_tidal`). Until Task 5 this used the Census flag; notebook 04 showed that pool mixed low-frequency tidal localities with high-frequency mountain ones | Small counties have too few claims to estimate their own effect. Pooling small counties with similar ones is a simple form of **credibility** (trust a group's own experience only when there's enough of it). `county` itself stays in the key, so the pooling can be changed later without rebuilding. |
 
 **Rare-category rule.** Every level of every feature must hold **at least 1% of 2010–2025 exposure** (about 15,000 policy-years). A level below that is merged into the most similar named level (V → A, split-level → 2 floors, mobile home → 1 floor). The script checks this on every run. Smallest resulting level: `$0 (contents only)` coverage, 1.4%.
 
@@ -97,7 +97,7 @@ The same function (`make_features()`) is applied to policies and to claims, so b
 | Exposure share | 74.0% | 89.2% |
 | Added by Tidewater | n/a | Arlington, Caroline, Charles City, Chesterfield, Hanover, Henrico, King and Queen, King William, New Kent, Prince George, Spotsylvania counties; Alexandria, Chesapeake, Colonial Heights, Fairfax, Falls Church, Fredericksburg, Hopewell, Petersburg, Richmond, Williamsburg cities |
 
-The FIPS list is typed into `build_dataset.py` (`TIDEWATER_LOCALITIES`). The build checks 46 entries, that each name matches the Census county-names file, and that every Census coastline county is also Tidewater. `county_group` pooling of small counties still uses the Census flag. Which flag to model with is decided in `reports/03_one_way_findings.md`.
+The FIPS list is typed into `build_dataset.py` (`TIDEWATER_LOCALITIES`). The build checks 46 entries, that each name matches the Census county-names file, and that every Census coastline county is also Tidewater. `county_group` pools small counties by the **Tidewater** flag (changed in Task 5; see `reports/03_one_way_findings.md` for why Tidewater was chosen).
 
 ## Inflation adjustment (2025 dollars)
 - **Source:** CPI-U (Consumer Price Index for All Urban Consumers, all items, US city average, not seasonally adjusted, 1982–84 = 100), BLS series **CUUR0000SA0**, from the free BLS Public Data API v1 (no key needed). Downloaded by `src\download_data.py cpi` to `data/raw/cpi_u_bls.csv`. (FRED's copy, CPIAUCNS, is the same numbers, but its download link timed out for Python scripts.)

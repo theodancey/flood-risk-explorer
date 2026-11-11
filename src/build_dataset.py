@@ -318,9 +318,12 @@ def build():
     # state, which is almost certainly a geocoding error. They're pooled with the blanks.
     unknown = (cells["county"] == UNKNOWN_COUNTY) | ~cells["county"].str.startswith("51")
     cells["county_group"] = np.select(
-        [cells["county"].isin(credible), unknown, cells["coastal"]],
-        [cells["county"], "Other/unknown county", "Other coastal (small)"],
-        "Other inland (small)")
+        [cells["county"].isin(credible), unknown, cells["coastal_tidal"]],
+        [cells["county"], "Other/unknown county", "Other tidal (small)"],
+        "Other non-tidal (small)")
+    # Small counties are pooled by the Tidewater flag, not the Census one. Notebook 04 found
+    # that the old "Other inland (small)" pool mixed tidal localities (5.5 paid claims per
+    # 1,000 policy-years) with non-tidal Piedmont/mountain ones (9.3 per 1,000).
 
     cols = ["year", "county", "county_name", "county_group", "coastal", "coastal_tidal", *CELL_FEATURES,
             "exposure", "claims", "claims_all", "losses_nominal", "cpi_factor", "losses_2025",
