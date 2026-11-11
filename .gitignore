@@ -1,0 +1,34 @@
+# ---- Project-specific ----
+# Data files never go into Git (see CLAUDE.md). This also covers data/raw and data/processed.
+data/
+
+# Virtual environment (rebuild it from requirements.txt instead of committing it)
+.venv/
+venv/
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Secrets / local settings
+.env
+.streamlit/secrets.toml
+
+# ---- Standard Python ----
+__pycache__/
+*.py[cod]
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
