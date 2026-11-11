@@ -30,11 +30,11 @@ The data is downloaded and explored. Everything except the data files is committ
 **What you need to do:** nothing required. To get the data on another computer, run `.venv\Scripts\python.exe src\download_data.py all` (about 35 minutes). Optionally, confirm you're happy with the v2 → v3 switch (Question 3).
 
 ## Questions for Theo
-5. *(Heads-up for week 8, no action now)* **Hosting the app.** The plan puts the Streamlit app on a free host (e.g. Streamlit Community Cloud), which needs an account sign-up linked to your GitHub. Per the rules, I won't sign up for anything. When we get there, either you create the account or we keep the app local-only.
-3. *(FYI, no action needed)* **v2 → v3.** The v2 datasets are gone from OpenFEMA, so I used v3, which is the same NFIP program data under new names, with a few renamed fields. If you saw "v2" in a tutorial or job posting, that's the reason for the difference.
-4. *(FYI)* **FEMA's one-file claims download refused our script (HTTP 403 "Forbidden").** fema.gov's web pages block automated requests, and only the API answers. I didn't try to get around the block (e.g. by pretending to be a browser), so the script downloaded the same data through the official API instead. If you ever want the single file, download `https://www.fema.gov/about/reports-and-data/openfema/v3/NfipClaimsV3.parquet` in your browser and save it as `data/raw/NfipClaimsV3.parquet`. The script will then skip it.
+5. *(Week 8, decided)* **Hosting the app.** The plan puts the Streamlit app on a free host (Streamlit Community Cloud), which needs an account linked to your GitHub. **Decision: you'll create the Streamlit Community Cloud account yourself in week 8.** I won't sign up for anything.
 
 ### Earlier (resolved)
+3. *(Resolved)* **v2 → v3.** The v2 datasets are gone from OpenFEMA, so I used v3, which is the same NFIP program data under new names, with a few renamed fields.
+4. *(Resolved)* **FEMA's one-file claims download refused our script (HTTP 403 "Forbidden").** The script downloaded the same data through the official API instead. If you ever want the single file, download `https://www.fema.gov/about/reports-and-data/openfema/v3/NfipClaimsV3.parquet` in your browser and save it as `data/raw/NfipClaimsV3.parquet`.
 1. *(Optional)* To pick this project's Python from a list inside Jupyter (outside VS Code), run once:
    `.venv\Scripts\python.exe -m ipykernel install --user --name flood-risk-explorer`
    I skipped this because it writes to `%APPDATA%\jupyter`, which is outside the project folder. VS Code finds `.venv` without it. Resolved
