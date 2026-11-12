@@ -1,0 +1,77 @@
+{
+  "kind": "frequency",
+  "features": [
+    "flood_zone_group",
+    "construction_band",
+    "building_coverage_band",
+    "occupancy_group",
+    "elevated",
+    "post_firm",
+    "primary_residence",
+    "floors_group"
+  ],
+  "params": {
+    "max_depth": 5,
+    "learning_rate": 0.023317362515184126,
+    "min_child_weight": 1.7788595776996814,
+    "subsample": 0.7068795727345085,
+    "colsample_bytree": 0.9572280610514623,
+    "reg_lambda": 0.7250755751235837,
+    "reg_alpha": 0.2544604079807218,
+    "gamma": 0.018001669138601215
+  },
+  "n_rounds": 170,
+  "encoder": {
+    "features": [
+      "flood_zone_group",
+      "construction_band",
+      "building_coverage_band",
+      "occupancy_group",
+      "elevated",
+      "post_firm",
+      "primary_residence",
+      "floors_group"
+    ],
+    "onehot_levels": {
+      "occupancy_group": [
+        "multi-unit residential",
+        "non-residential",
+        "single-unit residential"
+      ]
+    }
+  },
+  "monotone": null,
+  "year_log": {
+    "2010": -6.013361221753244,
+    "2011": -3.5730798245783033,
+    "2012": -4.446423223254516,
+    "2013": -6.128172077676685,
+    "2014": -5.810894688708029,
+    "2015": -5.620304847958175,
+    "2016": -3.6801608677072957,
+    "2017": -7.048406968357241,
+    "2018": -5.056845340566571,
+    "2019": -5.834519086480218,
+    "2020": -5.401748655592057
+  },
+  "avg_year_log": -4.785827807619487,
+  "load": 1.0,
+  "cap": null,
+  "off_balance": 1.0,
+  "train_years": [
+    2010,
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+  ],
+  "train_rate": 0.008256032052005957,
+  "xgboost_version": "3.4.1",
+  "tweedie_power": null
+}

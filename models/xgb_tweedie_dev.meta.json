@@ -1,0 +1,123 @@
+{
+  "kind": "tweedie",
+  "features": [
+    "flood_zone_group",
+    "construction_band",
+    "building_coverage_band",
+    "occupancy_group",
+    "elevated",
+    "post_firm",
+    "primary_residence",
+    "floors_group",
+    "coastal_tidal",
+    "county_group"
+  ],
+  "params": {
+    "max_depth": 5,
+    "learning_rate": 0.020617601023137363,
+    "min_child_weight": 5025.1528369373655,
+    "subsample": 0.7666283849260119,
+    "colsample_bytree": 0.8871060788154375,
+    "reg_lambda": 38.62483777798662,
+    "reg_alpha": 1.1348820578606313,
+    "gamma": 0.0
+  },
+  "n_rounds": 120,
+  "encoder": {
+    "features": [
+      "flood_zone_group",
+      "construction_band",
+      "building_coverage_band",
+      "occupancy_group",
+      "elevated",
+      "post_firm",
+      "primary_residence",
+      "floors_group",
+      "coastal_tidal",
+      "county_group"
+    ],
+    "onehot_levels": {
+      "occupancy_group": [
+        "multi-unit residential",
+        "non-residential",
+        "single-unit residential"
+      ],
+      "county_group": [
+        "51001",
+        "51013",
+        "51041",
+        "51059",
+        "51073",
+        "51087",
+        "51093",
+        "51095",
+        "51103",
+        "51107",
+        "51115",
+        "51119",
+        "51131",
+        "51133",
+        "51153",
+        "51161",
+        "51165",
+        "51179",
+        "51193",
+        "51199",
+        "51510",
+        "51550",
+        "51650",
+        "51700",
+        "51710",
+        "51735",
+        "51740",
+        "51760",
+        "51770",
+        "51775",
+        "51800",
+        "51810",
+        "Other non-tidal (small)",
+        "Other tidal (small)",
+        "Other/unknown county"
+      ]
+    }
+  },
+  "monotone": {
+    "flood_zone_group": -1,
+    "elevated": -1,
+    "post_firm": -1,
+    "building_coverage_band": 1
+  },
+  "year_log": {
+    "2010": 3.5679073456198833,
+    "2011": 6.401271823782269,
+    "2012": 5.8235590358442195,
+    "2013": 3.854910948961598,
+    "2014": 4.50614143122448,
+    "2015": 4.265918413290865,
+    "2016": 7.019804765969376,
+    "2017": 3.105863638945753,
+    "2018": 5.450463472260218,
+    "2019": 4.719128970782178,
+    "2020": 4.827564671354938
+  },
+  "avg_year_log": 5.787124521787067,
+  "load": 1.0,
+  "cap": null,
+  "off_balance": 1.011926980796724,
+  "train_years": [
+    2010,
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+  ],
+  "train_rate": 254.66527781650464,
+  "xgboost_version": "3.4.1",
+  "tweedie_power": 1.7
+}

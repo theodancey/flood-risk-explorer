@@ -78,7 +78,18 @@
     "dev_loyo_score": 6.751894034668962,
     "dev_loyo_non_cat": 5.22981451710121,
     "dev_loyo_cat": 10.81077274818297,
-    "dev_loyo_gini": 0.3407723205148041
+    "dev_loyo_gini": 0.3407723205148041,
+    "heldout": {
+      "dev_loyo_mean_pct": 6.751894034668964,
+      "dev_loyo_gini": 0.3407734689227482,
+      "holdout_2021_2025_pct": 4.3441204728944305,
+      "holdout_gini": 0.32609794467659103,
+      "holdout_raw_ae": 0.19575527719652078
+    },
+    "saved_models": {
+      "dev": "models/xgb_frequency_dev.ubj (trained 2010-2020; for the holdout)",
+      "all": "models/xgb_frequency_all.ubj (trained 2010-2025; like the saved GLMs)"
+    }
   },
   "severity": {
     "objective": "reg:gamma",
@@ -160,7 +171,18 @@
     "dev_loyo_score": 25.43490679783317,
     "dev_loyo_non_cat": 28.40626019668764,
     "dev_loyo_cat": 17.511297734221262,
-    "dev_loyo_gini": 0.36042717960514054
+    "dev_loyo_gini": 0.36042717960514054,
+    "heldout": {
+      "dev_loyo_mean_pct": 25.434906797833165,
+      "dev_loyo_gini": 0.36042717960514054,
+      "holdout_2021_2025_pct": 23.655633262148644,
+      "holdout_gini": 0.34922084488339356,
+      "holdout_raw_ae": 1.0172198634605427
+    },
+    "saved_models": {
+      "dev": "models/xgb_severity_dev.ubj (trained 2010-2020; for the holdout)",
+      "all": "models/xgb_severity_all.ubj (trained 2010-2025; like the saved GLMs)"
+    }
   },
   "tweedie": {
     "objective": "reg:tweedie",
@@ -249,6 +271,24 @@
     "dev_loyo_score": 17.441362931754494,
     "dev_loyo_non_cat": 20.012935744054197,
     "dev_loyo_cat": 10.583835432288595,
-    "dev_loyo_gini": 0.5610606648902752
+    "dev_loyo_gini": 0.5610606648902752,
+    "heldout": {
+      "dev_loyo_mean_pct": 17.441362931754487,
+      "dev_loyo_gini": 0.5610491692902206,
+      "holdout_2021_2025_pct": 20.845110949097446,
+      "holdout_gini": 0.6453194400747226,
+      "holdout_raw_ae": 0.20050202986075635
+    },
+    "saved_models": {
+      "dev": "models/xgb_tweedie_dev.ubj (trained 2010-2020; for the holdout)",
+      "all": "models/xgb_tweedie_all.ubj (trained 2010-2025; like the saved GLMs)"
+    }
+  },
+  "notes": {
+    "created_by": "notebooks/08_xgboost.ipynb (Milestone 10)",
+    "load": "xgb_models.XGBModel.load_model('models/xgb_<kind>_<dev|all>')",
+    "rebuild_boosters": ".venv\\Scripts\\python.exe src\\models\\xgb_models.py fit-final",
+    "xgboost_version": "3.4.1",
+    "area_level_only": "Predictions describe groups of similar insured buildings, never one property."
   }
 }

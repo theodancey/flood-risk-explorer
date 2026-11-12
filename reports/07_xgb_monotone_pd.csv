@@ -1,0 +1,57 @@
+model,feature,level,variant,relativity
+frequency,flood_zone_group,A/V high risk,unconstrained,1.0
+frequency,flood_zone_group,B/C/X moderate-low risk,unconstrained,0.527103095945926
+frequency,flood_zone_group,A/V high risk,constrained,1.0
+frequency,flood_zone_group,B/C/X moderate-low risk,constrained,0.5030294534413543
+frequency,elevated,False,unconstrained,1.0
+frequency,elevated,True,unconstrained,1.013862960247707
+frequency,elevated,False,constrained,1.0
+frequency,elevated,True,constrained,0.9698107830161757
+frequency,construction_band,before 1960,unconstrained,1.0
+frequency,construction_band,1960-1979,unconstrained,0.9578050199375852
+frequency,construction_band,1980-1999,unconstrained,0.47812950114202946
+frequency,construction_band,2000 or later,unconstrained,0.38717436725559334
+frequency,construction_band,before 1960,constrained,1.0
+frequency,construction_band,1960-1979,constrained,0.9480508815700052
+frequency,construction_band,1980-1999,constrained,0.45541654323254294
+frequency,construction_band,2000 or later,constrained,0.37024472362430483
+frequency,post_firm,False,unconstrained,1.0
+frequency,post_firm,True,unconstrained,0.8393624617023483
+frequency,post_firm,False,constrained,1.0
+frequency,post_firm,True,constrained,0.8297954574458236
+severity,building_coverage_band,$0 (contents only),unconstrained,1.0
+severity,building_coverage_band,under $100K,unconstrained,1.57690157362586
+severity,building_coverage_band,$100K-$249K,unconstrained,1.9799281634282957
+severity,building_coverage_band,$250K or more,unconstrained,2.6568980250636054
+severity,building_coverage_band,$0 (contents only),constrained,1.0
+severity,building_coverage_band,under $100K,constrained,1.7458414531919781
+severity,building_coverage_band,$100K-$249K,constrained,2.302630608148684
+severity,building_coverage_band,$250K or more,constrained,3.0910035344290208
+severity,elevated,False,unconstrained,1.0
+severity,elevated,True,unconstrained,0.7889680165333662
+severity,elevated,False,constrained,1.0
+severity,elevated,True,constrained,0.748141105636746
+severity,flood_zone_group,A/V high risk,unconstrained,1.0
+severity,flood_zone_group,B/C/X moderate-low risk,unconstrained,0.7743755013362317
+severity,flood_zone_group,A/V high risk,constrained,1.0
+severity,flood_zone_group,B/C/X moderate-low risk,constrained,0.7320630693030205
+tweedie,flood_zone_group,A/V high risk,unconstrained,1.0
+tweedie,flood_zone_group,B/C/X moderate-low risk,unconstrained,0.546259764150691
+tweedie,flood_zone_group,A/V high risk,constrained,1.0
+tweedie,flood_zone_group,B/C/X moderate-low risk,constrained,0.5173833077798221
+tweedie,elevated,False,unconstrained,1.0
+tweedie,elevated,True,unconstrained,0.9556495256711586
+tweedie,elevated,False,constrained,1.0
+tweedie,elevated,True,constrained,0.9313757780883148
+tweedie,post_firm,False,unconstrained,1.0
+tweedie,post_firm,True,unconstrained,0.598308583699293
+tweedie,post_firm,False,constrained,1.0
+tweedie,post_firm,True,constrained,0.625992094174507
+tweedie,building_coverage_band,$0 (contents only),unconstrained,1.0
+tweedie,building_coverage_band,under $100K,unconstrained,1.0243414061865452
+tweedie,building_coverage_band,$100K-$249K,unconstrained,1.0622554174274448
+tweedie,building_coverage_band,$250K or more,unconstrained,1.1523429003278494
+tweedie,building_coverage_band,$0 (contents only),constrained,1.0
+tweedie,building_coverage_band,under $100K,constrained,1.0280965794557464
+tweedie,building_coverage_band,$100K-$249K,constrained,1.0869280361546472
+tweedie,building_coverage_band,$250K or more,constrained,1.2346712597575291

@@ -1,0 +1,5 @@
+model,variant,dev-LOYO mean %,avg load
+severity,"uncapped (chosen, as the GLM)",25.434906797833165,1.0
+severity,cap at P99 + load,25.15600710301626,1.0325375231712537
+frequency,year levels from the year-only model (chosen),6.751894034668964,
+frequency,+ one back-fitting round,6.764663674665061,

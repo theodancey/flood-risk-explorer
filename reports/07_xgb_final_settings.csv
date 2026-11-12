@@ -1,0 +1,15 @@
+,frequency,severity,tweedie
+objective,count:poisson,reg:gamma,reg:tweedie
+geography,no geography,+ Tidewater + county group,+ Tidewater + county group
+features,8,10,10
+monotone constraints,no,no,yes
+max_depth,5,5,5
+learning_rate,0.0233,0.016,0.0206
+min_child_weight,1.7789,88.3764,5025.1528
+subsample,0.7069,0.8278,0.7666
+colsample_bytree,0.9572,0.7438,0.8871
+reg_lambda,0.7251,0.9894,38.6248
+reg_alpha,0.2545,0.0,1.1349
+gamma,0.018,0.0539,0.0
+n_estimators (trees),170,940,120
+dev-LOYO improvement %,6.75,25.43,17.44

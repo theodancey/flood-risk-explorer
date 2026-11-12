@@ -1,0 +1,25 @@
+,,pct_of_split_gain
+frequency,construction_band x flood_zone_group,19.029346541238635
+frequency,building_coverage_band x flood_zone_group,4.251243779081564
+frequency,building_coverage_band x floors_group,2.698002315897225
+frequency,flood_zone_group x post_firm,2.5827100356602433
+frequency,building_coverage_band x occupancy_group,2.3747078078149144
+frequency,floors_group x occupancy_group,2.2299066657635533
+frequency,flood_zone_group x occupancy_group,1.8633937822377502
+frequency,construction_band x occupancy_group,1.8372330774953833
+severity,county_group x occupancy_group,7.583736776730594
+severity,building_coverage_band x occupancy_group,6.709807389673408
+severity,county_group x flood_zone_group,4.664906728747432
+severity,building_coverage_band x county_group,3.925171627321689
+severity,county_group x elevated,3.561436076121038
+severity,construction_band x county_group,3.1304681102197014
+severity,county_group x post_firm,2.849111598005984
+severity,elevated x floors_group,2.445147231005721
+tweedie,construction_band x occupancy_group,9.199131526885388
+tweedie,construction_band x county_group,7.044118770952812
+tweedie,county_group x occupancy_group,6.696136279771433
+tweedie,county_group x flood_zone_group,6.173158047758038
+tweedie,coastal_tidal x construction_band,5.961149422862348
+tweedie,occupancy_group x post_firm,4.790633673145521
+tweedie,coastal_tidal x county_group,3.883293550620713
+tweedie,flood_zone_group x occupancy_group,2.8000909099067037
