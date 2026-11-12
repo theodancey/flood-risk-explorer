@@ -80,7 +80,7 @@ Plain-English guide to the most important fields in the two FEMA datasets this p
 
 ---
 
-## Policies dataset (`NfipPolicies` v3), Virginia, 37 columns
+## Policies dataset (`NfipPolicies` v3), Virginia, North Carolina and Maryland, 37 columns
 
 Policies are how we measure **exposure**: how much insurance is in force, in how many places, for how long. Without exposure, a county with 10,000 claims might look risky only because it has 500,000 policies.
 
@@ -98,7 +98,7 @@ Policies are how we measure **exposure**: how much insurance is in force, in how
 | `totalInsurancePremiumOfThePolicy` | **Premium**: price paid for the insurance | whole dollars | Negative = a refund. Excludes fees. |
 | `policyCost` | Premium plus fees and surcharges | whole dollars | What the customer actually paid. |
 | `buildingReplacementCost` | Estimated cost to rebuild | whole dollars | Mostly reported after Risk Rating 2.0 (Oct 2021). |
-| `propertyState` | State | `VA` | |
+| `propertyState` | State | `VA`, `NC`, `MD` | One file per state: `NfipPoliciesV3_VA/NC/MD.parquet`. |
 | `reportedZipCode` | ZIP code | 5-digit text | |
 | `reportedCity` | City | text | Often `"NA"`, which FEMA uses for "unavailable." |
 | `censusGeoid` | Census block group | 12-digit text | **Policies have no county field.** Use the first 5 digits as the county FIPS code. |
@@ -112,6 +112,38 @@ Policies are how we measure **exposure**: how much insurance is in force, in how
 | `occupancyType`, `numberOfFloorsInInsuredBuilding`, `basementEnclosureCrawlspaceType`, `condominiumCoverageTypeCode` | Building use and shape | codes as in claims | |
 | `foundationType` | Foundation | `1` slab, `2` basement, `3` crawlspace, `4`–`6` elevated; `0` / blank = not reported | Mostly reported only after Risk Rating 2.0. |
 | `originalConstructionDate` | Year built | date | |
+
+## Differences by state (Milestone 13)
+
+The same 37 policy columns were downloaded for each state with the same API filter
+(`propertyState eq 'XX'`). Every field has the same meaning and coding in all three states. The
+differences are in how often fields are filled in, and in the building mix:
+
+| | Virginia | North Carolina | Maryland |
+|---|---|---|---|
+| Policy rows (all years downloaded) | 1,668,793 | 2,207,699 | 764,268 |
+| Paid claims 2010-2025 | 9,557 | 37,825 | 4,512 |
+| Rows with a **V zone** (coastal wave zone) | 0.8% | **4.9%** | 1.1% |
+| `crsClassCode` blank | 17.5% | 23.4% | **54.4%** |
+| `elevationDifference` blank | 66.8% | 53.4% | 64.5% |
+| `basementEnclosureCrawlspaceType` blank | 58.7% | 66.2% | 48.5% |
+| Claims with a negative payment (refund/correction) | 0 | 2 | 1 |
+
+- **Fields the model uses** (flood zone, year built, floors, occupancy, elevated, primary
+  residence, coverage, post-FIRM, county) are more than 99.9% complete in every state. The
+  differences above are all in fields we don't model, so no state-specific cleaning was needed.
+- **V zones** are about six times more common in NC (the Outer Banks). We still merge V into the
+  "A/V high risk" group in every state, so all three states use the same features. The 1% rule can
+  only force merges, never splits.
+- **Negative payments:** three NC/MD claims have a negative total paid. Each total is floored at
+  $0, so the claim counts as "not paid" (see `actuarial.total_paid`).
+- **Census geocoding errors:** a few policies in one state's file carry a county code from
+  another state (e.g. an NC code in the Virginia file). They are pooled into that state's
+  "Other/unknown county" group, so a county code never appears under two states.
+- **Tidal ("coastal_tidal") definitions differ by state** because each state defines its own
+  tidal zone in law: Virginia uses Tidewater (46 localities), North Carolina the 20 CAMA counties,
+  and Maryland the 16 counties + Baltimore City in the Critical Area. Sources are in
+  `docs/modeling_dataset.md`.
 
 ## Official sources
 These URLs were used (and worked) for this project's downloads:

@@ -1,4 +1,4 @@
-# The Modelling Dataset: `data/processed/va_model_data.parquet`
+# The Modelling Dataset: `data/processed/va_model_data.parquet` (and the 3-state table)
 
 *Built by `src/build_dataset.py` (run: `.venv\Scripts\python.exe src\build_dataset.py`, about 20 seconds). Virginia, calendar years 2010–2025. Summary and charts: `notebooks/03_dataset_summary.ipynb`.*
 
@@ -144,6 +144,72 @@ Likely causes: (1) a feature recorded on the claim differs slightly from the pol
 4. CPI: 2025 factor = 1, factors ≥ 1 and falling over time, 2010 CPI = 218.056.
 5. Rare-category rule: every feature level ≥ 1% of exposure. 25 Virginia coastline counties loaded.
 6. A self-test of the grouping rules on made-up rows with known answers (plus `actuarial.py`'s exposure self-test).
+
+## Three states: `data/processed/model_data_3states.parquet` (Milestone 13)
+
+Built with `.venv\Scripts\python.exe src\build_dataset.py --states VA NC MD`. Running the script
+with no arguments still builds the Virginia-only table, and it is unchanged (same file hash as before).
+
+**Same recipe in every state.** Same years (2010-2025), same 8 features with the same groupings,
+same CPI-U adjustment to 2025 dollars, same 5,000 policy-year floor for `county_group`, and the
+same checks. Each state is built on its own and checked; then the three are stacked and
+checked again together. Two columns are added:
+
+| Column | Meaning |
+|---|---|
+| `state` | `VA`, `NC` or `MD` |
+| `state_year` | e.g. `NC|2018`: the model's year effect is estimated separately for each state, because storms hit different states in different years |
+
+**Totals by state** (2010-2025; losses in 2025 dollars, building + contents + ICC):
+
+| | Policy-years | Paid claims | Losses (2025 $) | Claims per 1,000 policy-years | Average paid claim | Loss cost per policy-year |
+|---|---:|---:|---:|---:|---:|---:|
+| Virginia | 1,482,413 | 9,557 | $292.7M | 6.45 | $30,625 | $197 |
+| North Carolina | 1,945,568 | 37,825 | $1,923.0M | 19.44 | $50,840 | $988 |
+| Maryland | 674,957 | 4,512 | $133.9M | 6.68 | $29,681 | $198 |
+| **All three** | **4,102,937** | **51,894** | **$2,349.6M** | **12.65** | **$45,278** | **$573** |
+
+The table has 654,284 rating cells and 104 `county_group` levels (35 VA + 46 NC + 23 MD).
+Unmatched paid claims are under 1% in every state (VA 0.99%, NC 0.88%, MD 0.71%).
+
+**Rare-category rule on the pooled table.** Every level has at least 1% of the pooled
+three-state exposure. Per-state shares are saved in the checks file, and no level falls below
+1% within any single state.
+
+**County groups are per state.** Small counties pool into e.g. `Other tidal (small, NC)`, and
+blank or out-of-state county codes into e.g. `Other/unknown county (MD)`, so no group mixes
+two states.
+
+### Tidal definitions by state
+Each state defines its own tidal zone in law. We use that list, so `coastal_tidal` means "in the
+state's legally defined tidal/coastal zone." The build checks each list's count, that every name
+matches the Census county-names file, and that every Census coastline county is in the list.
+
+| State | Definition | Source | Localities | Added beyond the Census coastline list | Exposure share (Census list → state list) |
+|---|---|---|---:|---|---|
+| VA | Tidewater Virginia | Code of Virginia § 62.1-44.15:68, <https://law.lis.virginia.gov/vacode/title62.1/chapter3.1/section62.1-44.15:68/> | 46 | 21 (see above) | 74.0% → 89.2% |
+| NC | The 20 coastal counties under the Coastal Area Management Act (CAMA) | N.C. Gen. Stat. § 113A-103(2), <https://www.ncleg.gov/EnactedLegislation/Statutes/HTML/BySection/Chapter_113A/GS_113A-103.html> | 20 | Gates, Hertford | 73.7% → 73.9% |
+| MD | Chesapeake and Atlantic Coastal Bays Critical Area jurisdictions (16 counties + Baltimore City) | Md. Code, Natural Resources § 8-1807, <https://mgaleg.maryland.gov/mgawebsite/Laws/StatuteText?article=gnr&section=8-1807>; jurisdiction list from the Critical Area Commission, <https://dnr.maryland.gov/criticalarea/Pages/property-owner-resources.aspx> (checked 2026-11-12) | 17 | Caroline, Prince George's | 81.9% → 88.7% |
+
+NC list: Beaufort, Bertie, Brunswick, Camden, Carteret, Chowan, Craven, Currituck, Dare, Gates,
+Hertford, Hyde, New Hanover, Onslow, Pamlico, Pasquotank, Pender, Perquimans, Tyrrell, Washington.
+MD list: Anne Arundel, Baltimore County, Baltimore City, Calvert, Caroline, Cecil, Charles,
+Dorchester, Harford, Kent, Prince George's, Queen Anne's, Somerset, St. Mary's, Talbot, Wicomico,
+Worcester.
+
+**Caveat:** the three definitions aren't identical in spirit. Tidewater is broad (it includes
+the tidal fall-line cities such as Richmond). CAMA is about the same as the Census list. So a "tidal
+county" effect may differ by state partly because the definitions differ. Milestone 13 tests
+this (`reports/10_multistate.md`).
+
+### Extra checks for the 3-state table
+- Each state passes every single-state check, and Virginia's totals still equal the notebook 02
+  reference.
+- The Virginia rows equal `va_model_data.parquet` cell for cell. The only difference is the
+  state suffix on pooled `county_group` names.
+- No duplicate cells; every `county_group` lies within one state; the 1% rule holds on the pooled table.
+- **Negative payments:** 3 claims (2 NC, 1 MD) have a negative total paid (a refund or correction).
+  Each is floored at $0 and counts as not paid. Virginia has none, so its numbers don't change.
 
 ## Known limitations
 - **Condo one-per-policy-term simplification.** Exposure counts each policy term as 1, even a condo association master policy (RCBAP) covering dozens of units. Claims are counted the same way (one claim record per policy), so frequency is consistent. But a cell containing a big condo building looks like one "policy-year." Weighting by `policyCount` would add about 13% to exposure (notebook 02).

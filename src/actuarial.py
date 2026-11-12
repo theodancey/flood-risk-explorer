@@ -94,8 +94,12 @@ def load_va_claims(path=CLAIMS_FILE, first_year=2009, extra_cols=()):
 
 
 def total_paid(claims):
-    """Building + contents + ICC payments. A blank means nothing was paid, so it counts as $0."""
-    return claims[PAID_COLS].fillna(0).sum(axis=1)
+    """Building + contents + ICC payments. A blank means nothing was paid, so it counts as $0.
+
+    A few claims (none in Virginia; 2 in NC, 1 in MD) have a NEGATIVE total: a refund or
+    correction recorded against the claim. We floor the total at $0, so such a claim counts as
+    "not paid" rather than subtracting money from its rating cell (Milestone 13 decision)."""
+    return claims[PAID_COLS].fillna(0).sum(axis=1).clip(lower=0)
 
 
 def load_county_names(path=COUNTY_NAMES_FILE):
