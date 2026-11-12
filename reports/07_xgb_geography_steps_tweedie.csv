@@ -1,0 +1,3 @@
+from,to,mean_diff_pts,folds_better,folds,kept
+no geography,+ Tidewater,0.3553636021872497,6,11,True
++ Tidewater,+ Tidewater + county group,0.3483752680270723,7,11,True

@@ -1,0 +1,254 @@
+{
+  "frequency": {
+    "objective": "count:poisson",
+    "tuning": {
+      "configs_per_variant": 40,
+      "folds": "LOYO 2010-2020 (11 folds)",
+      "metric": "mean re-based deviance improvement vs the no-features model, % (each year once)",
+      "early_stopping": "lockstep folds, 10-tree chunks, stop after 150 trees without improvement, max 1500",
+      "tie_rule": "within 0.1 pts of the best: shallowest, then fewest trees"
+    },
+    "geography_test": {
+      "steps": [
+        {
+          "from": "no geography",
+          "to": "+ Tidewater",
+          "mean_diff_pts": -0.30690000500917375,
+          "folds_better": 5,
+          "folds": 11,
+          "kept": false
+        },
+        {
+          "from": "no geography",
+          "to": "+ Tidewater + county group",
+          "mean_diff_pts": -1.6470610753800217,
+          "folds_better": 1,
+          "folds": 11,
+          "kept": false
+        }
+      ],
+      "chosen": "no geography",
+      "rule": "keep a geography step if mean dev-LOYO improves and >= 6 of 11 folds are better",
+      "scores": {
+        "no geography": 6.751894034668962,
+        "+ Tidewater": 6.444994029659788,
+        "+ Tidewater + county group": 5.104832959288941
+      }
+    },
+    "monotone_test": {
+      "constraints": {
+        "flood_zone_group": -1,
+        "elevated": -1,
+        "construction_band": -1,
+        "post_firm": -1
+      },
+      "configs_compared": 5,
+      "chosen_config_pair": {
+        "mean_diff_pts": 0.10323831733157274,
+        "folds_better": 2,
+        "folds": 11
+      },
+      "avg_diff_pts_top_configs": 0.23655927269536825,
+      "rule": "use constraints unless > 0.25 pts worse or worse in >= 8 of 11 folds",
+      "use_constraints": false
+    },
+    "features": [
+      "flood_zone_group",
+      "construction_band",
+      "building_coverage_band",
+      "occupancy_group",
+      "elevated",
+      "post_firm",
+      "primary_residence",
+      "floors_group"
+    ],
+    "monotone": null,
+    "config": 17,
+    "params": {
+      "max_depth": 5,
+      "learning_rate": 0.023317362515184126,
+      "min_child_weight": 1.7788595776996814,
+      "subsample": 0.7068795727345085,
+      "colsample_bytree": 0.9572280610514623,
+      "reg_lambda": 0.7250755751235837,
+      "reg_alpha": 0.2544604079807218,
+      "gamma": 0.018001669138601215
+    },
+    "n_rounds": 170,
+    "dev_loyo_score": 6.751894034668962,
+    "dev_loyo_non_cat": 5.22981451710121,
+    "dev_loyo_cat": 10.81077274818297,
+    "dev_loyo_gini": 0.3407723205148041
+  },
+  "severity": {
+    "objective": "reg:gamma",
+    "tuning": {
+      "configs_per_variant": 40,
+      "folds": "LOYO 2010-2020 (11 folds)",
+      "metric": "mean re-based deviance improvement vs the no-features model, % (each year once)",
+      "early_stopping": "lockstep folds, 20-tree chunks, stop after 150 trees without improvement, max 4000",
+      "tie_rule": "within 0.1 pts of the best: shallowest, then fewest trees"
+    },
+    "geography_test": {
+      "steps": [
+        {
+          "from": "no geography",
+          "to": "+ Tidewater",
+          "mean_diff_pts": 0.4749090294222438,
+          "folds_better": 7,
+          "folds": 11,
+          "kept": true
+        },
+        {
+          "from": "+ Tidewater",
+          "to": "+ Tidewater + county group",
+          "mean_diff_pts": 1.5448824442446112,
+          "folds_better": 8,
+          "folds": 11,
+          "kept": true
+        }
+      ],
+      "chosen": "+ Tidewater + county group",
+      "rule": "keep a geography step if mean dev-LOYO improves and >= 6 of 11 folds are better",
+      "scores": {
+        "no geography": 23.41511532416632,
+        "+ Tidewater": 23.89002435358856,
+        "+ Tidewater + county group": 25.43490679783317
+      }
+    },
+    "monotone_test": {
+      "constraints": {
+        "building_coverage_band": 1,
+        "elevated": -1,
+        "flood_zone_group": -1
+      },
+      "configs_compared": 5,
+      "chosen_config_pair": {
+        "mean_diff_pts": -0.5394669184639272,
+        "folds_better": 3,
+        "folds": 11
+      },
+      "avg_diff_pts_top_configs": -0.6065547555603061,
+      "rule": "use constraints unless > 0.25 pts worse or worse in >= 8 of 11 folds",
+      "use_constraints": false
+    },
+    "features": [
+      "flood_zone_group",
+      "construction_band",
+      "building_coverage_band",
+      "occupancy_group",
+      "elevated",
+      "post_firm",
+      "primary_residence",
+      "floors_group",
+      "coastal_tidal",
+      "county_group"
+    ],
+    "monotone": null,
+    "config": 27,
+    "params": {
+      "max_depth": 5,
+      "learning_rate": 0.01596237108420085,
+      "min_child_weight": 88.37636044821731,
+      "subsample": 0.8277891587979077,
+      "colsample_bytree": 0.7437790393185193,
+      "reg_lambda": 0.9894451239677834,
+      "reg_alpha": 0.0,
+      "gamma": 0.0538852759389463
+    },
+    "n_rounds": 940,
+    "dev_loyo_score": 25.43490679783317,
+    "dev_loyo_non_cat": 28.40626019668764,
+    "dev_loyo_cat": 17.511297734221262,
+    "dev_loyo_gini": 0.36042717960514054
+  },
+  "tweedie": {
+    "objective": "reg:tweedie",
+    "tweedie_variance_power": 1.7,
+    "tuning": {
+      "configs_per_variant": 20,
+      "folds": "LOYO 2010-2020 (11 folds)",
+      "metric": "mean re-based deviance improvement vs the no-features model, % (each year once)",
+      "early_stopping": "lockstep folds, 10-tree chunks, stop after 150 trees without improvement, max 1500",
+      "tie_rule": "within 0.1 pts of the best: shallowest, then fewest trees"
+    },
+    "geography_test": {
+      "steps": [
+        {
+          "from": "no geography",
+          "to": "+ Tidewater",
+          "mean_diff_pts": 0.3553636021872497,
+          "folds_better": 6,
+          "folds": 11,
+          "kept": true
+        },
+        {
+          "from": "+ Tidewater",
+          "to": "+ Tidewater + county group",
+          "mean_diff_pts": 0.3483752680270723,
+          "folds_better": 7,
+          "folds": 11,
+          "kept": true
+        }
+      ],
+      "chosen": "+ Tidewater + county group",
+      "rule": "keep a geography step if mean dev-LOYO improves and >= 6 of 11 folds are better",
+      "scores": {
+        "no geography": 16.683555012261937,
+        "+ Tidewater": 17.038918614449187,
+        "+ Tidewater + county group": 17.387293882476257
+      }
+    },
+    "monotone_test": {
+      "constraints": {
+        "flood_zone_group": -1,
+        "elevated": -1,
+        "post_firm": -1,
+        "building_coverage_band": 1
+      },
+      "configs_compared": 5,
+      "chosen_config_pair": {
+        "mean_diff_pts": 0.05406904927823057,
+        "folds_better": 5,
+        "folds": 11
+      },
+      "avg_diff_pts_top_configs": 0.05577087762459456,
+      "rule": "use constraints unless > 0.25 pts worse or worse in >= 8 of 11 folds",
+      "use_constraints": true
+    },
+    "features": [
+      "flood_zone_group",
+      "construction_band",
+      "building_coverage_band",
+      "occupancy_group",
+      "elevated",
+      "post_firm",
+      "primary_residence",
+      "floors_group",
+      "coastal_tidal",
+      "county_group"
+    ],
+    "monotone": {
+      "flood_zone_group": -1,
+      "elevated": -1,
+      "post_firm": -1,
+      "building_coverage_band": 1
+    },
+    "config": 8,
+    "params": {
+      "max_depth": 5,
+      "learning_rate": 0.020617601023137363,
+      "min_child_weight": 5025.1528369373655,
+      "subsample": 0.7666283849260119,
+      "colsample_bytree": 0.8871060788154375,
+      "reg_lambda": 38.62483777798662,
+      "reg_alpha": 1.1348820578606313,
+      "gamma": 0.0
+    },
+    "n_rounds": 120,
+    "dev_loyo_score": 17.441362931754494,
+    "dev_loyo_non_cat": 20.012935744054197,
+    "dev_loyo_cat": 10.583835432288595,
+    "dev_loyo_gini": 0.5610606648902752
+  }
+}
