@@ -29,7 +29,13 @@ I'm building a flood insurance risk model using FEMA's public data on 2.7 millio
 
   Frequency XGBoost is still worse in hurricane years. Geography again doesn't help predict claim *frequency* (county group was worse in 10 of 11 unseen years), but it does help predict claim *size*. That matches the credibility result. The XGBoost Tweedie scores best overall but fails the double-lift check, like the GLM Tweedie, so frequency × severity stays the pricing structure ([`reports/07_xgboost.md`](reports/07_xgboost.md)).
 
-Details: [`reports/01_data_overview.md`](reports/01_data_overview.md) · [`reports/02_actuarial_basics.md`](reports/02_actuarial_basics.md) · [`reports/03_one_way_findings.md`](reports/03_one_way_findings.md) · [`reports/04_frequency_glm.md`](reports/04_frequency_glm.md) · [`reports/05_severity_glm.md`](reports/05_severity_glm.md) · [`reports/06_pure_premium.md`](reports/06_pure_premium.md) · [`reports/07_xgboost.md`](reports/07_xgboost.md)
+- **GLM vs XGBoost, head to head** (identical folds, loss treatment and yardstick; bootstrap confidence intervals):
+  - **XGBoost is genuinely more accurate** on unseen years: pure-premium deviance improvement 15.0% vs 10.7%, better in 15 of 16 years (95% CI for the gap: 2.9–5.7 points). Most of the gain is in claim *size*.
+  - **The app still uses a GLM**, by a rule written before the results. XGBoost over-predicted newer buildings by about 30% and mis-sized two county groups. Its predictions moved the wrong way for elevation in 78% of cells and changed with the random seed. And it can't produce a rating worksheet.
+  - The **production model is a hybrid GLM** that adds the interactions XGBoost found: coverage × occupancy (highly significant), year built × zone, and elevated × zone. It keeps a relativity table and closes about a third of the gap on the 2021–2025 holdout (10.3% vs 8.9%); its 16-year gain (+0.4 points) is small.
+  - See [`reports/08_model_comparison.md`](reports/08_model_comparison.md) and [`docs/production_model.md`](docs/production_model.md).
+
+Details: [`reports/01_data_overview.md`](reports/01_data_overview.md) · [`reports/02_actuarial_basics.md`](reports/02_actuarial_basics.md) · [`reports/03_one_way_findings.md`](reports/03_one_way_findings.md) · [`reports/04_frequency_glm.md`](reports/04_frequency_glm.md) · [`reports/05_severity_glm.md`](reports/05_severity_glm.md) · [`reports/06_pure_premium.md`](reports/06_pure_premium.md) · [`reports/07_xgboost.md`](reports/07_xgboost.md) · [`reports/08_model_comparison.md`](reports/08_model_comparison.md)
 
 ![Frequency, severity, and pure premium by year](reports/figures/02_measures_by_year.png)
 
@@ -43,6 +49,9 @@ src/validation.py           year-based train/test splits (leave-one-year-out, ti
 src/models/frequency_glm.py claim-frequency GLM: fitting, forward selection, over-dispersion, LOYO scoring
 src/models/severity_glm.py  claim-severity Gamma GLM: claim table, capping/loads, lognormal check, LOYO scoring
 src/models/pure_premium.py  pure premium: freq x sev, off-balance, county credibility, Tweedie, lift/double lift/Gini, loss ratios
+src/models/xgb_models.py    XGBoost challengers: encoding, base_margin offset, leakage-free tuning, monotone constraints
+src/models/compare.py       GLM vs XGBoost on identical folds: bootstrap CIs, stability, hybrid interaction tests
+src/models/production.py    loads the production model (models/production_model.json): predict + rating worksheet
 notebooks/01_first_look     data exploration
 notebooks/02_actuarial_basics   Virginia actuarial measures by year and county
 notebooks/03_dataset_summary    the modelling table: cell sizes, zero-claim cells, one-way views
@@ -51,7 +60,8 @@ notebooks/05_frequency_glm      frequency GLM: model build, relativities, over-d
 notebooks/06_severity_glm       severity GLM: distribution, large losses, model build, freq vs sev, held-out evaluation
 notebooks/07_pure_premium       pure premium, county credibility, Tweedie comparison, loss ratios, rating worksheets
 notebooks/08_xgboost            XGBoost challengers: leakage-free tuning, geography, monotone constraints, preview vs GLMs
-models/                     saved models (frequency_glm.json, severity_glm.json, pure_premium.json, xgb_settings.json; XGBoost .ubj files rebuilt with xgb_models.py fit-final)
+notebooks/09_model_comparison   GLM vs XGBoost head to head, significance, stability, explainability, hybrid GLM, production model
+models/                     saved models (production_model.json = what the app loads; frequency_glm.json, severity_glm.json, pure_premium.json, xgb_settings.json; XGBoost .ubj files rebuilt with xgb_models.py fit-final)
 reports/                    written findings + figures
 docs/                       data dictionary, modelling dataset, project plan, validation plan
 app/                        Streamlit app (coming)
