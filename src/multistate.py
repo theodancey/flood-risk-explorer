@@ -730,6 +730,74 @@ def cmd_refit():
     print(f"refit done in {(time.time() - t0) / 60:.1f} min")
 
 
+def cmd_production():
+    """Refit the 3-state production model on all years and save models/production_model.json
+    (run only after the XGBoost check confirms the GLM recommendation; see PROGRESS.md)."""
+    import hashlib
+    cells, claims = load_data()
+    spec = production_spec()
+    m, tbl, par = fit3(cells, claims, spec)
+    names = cells.drop_duplicates("county").set_index("county")["county_name"].to_dict()
+    names.update({k: v for k, v in {"51515": "Bedford city (former; part of Bedford County since 2013)"}.items()})
+    tbl = tbl.copy()
+    tbl["name"] = [names.get(c, "Unknown county") for c in tbl.index.astype(str)]
+    tbl.index = tbl.index.astype(str).rename("county")
+    summ = pd.read_csv(REPORTS / "10_refit_summary.csv")
+    sc = pd.read_csv(REPORTS / "10_refit_scores.csv")
+    main = "3-state GLM + county"
+    loyo = summ[summ["model"] == main].set_index("state")
+    ho = sc[(sc["design"] == "holdout") & (sc["model"] == main)].set_index("state")
+    sha = hashlib.sha256(Path(B.OUT_FILE_3).read_bytes()).hexdigest()[:16]
+    sf = {st: {"frequency": float(np.exp(m.freq.params.get(f"state[{st}]", 0.0))),
+               "severity": float(np.exp(m.sev.params.get(f"state[{st}]", 0.0))),
+               "off_balance_ratio": float(m.off_balance_by[st] / m.off_balance_by["VA"])} for st in STATES}
+    for v in sf.values():
+        v["pure_premium"] = v["frequency"] * v["severity"] * v["off_balance_ratio"]
+    card = {
+        "name": "Flood loss cost model: Hybrid GLM fxs + state factor + county (VA, NC, MD)",
+        "version": "2.0", "milestone": 13, "created": time.strftime("%Y-%m-%d"),
+        "states": list(STATES),
+        "structure": "frequency GLM (Poisson, log link, exposure offset) x severity GLM (Gamma, log link), "
+                     "both with state x year effects absorbed into a state factor, x large-loss load x ICC "
+                     "bridge x off-balance (per state) x Buhlmann-Straub county factor (pooled over the three "
+                     "states' counties, re-centred within each state)",
+        "frequency_features": spec["freq_features"], "frequency_interactions": spec["freq_interactions"],
+        "severity_features": spec["sev_features"], "severity_interactions": spec["sev_interactions"],
+        "state_factor_vs_virginia": sf,
+        "fitted_on_years": [2010, 2025], "dollars": "2025 (CPI-U)", "level": "average year",
+        "data_file": "data/processed/model_data_3states.parquet", "data_file_sha256_16": sha,
+        "validation": {
+            "loyo16_mean_improvement_pct_by_state": loyo["mean_improvement"].to_dict(),
+            "loyo16_gini_by_state": loyo["mean_gini"].to_dict(),
+            "holdout_2021_2025_improvement_pct_by_state": ho["improvement_rebased_pct"].to_dict(),
+            "holdout_gini_by_state": ho["gini"].to_dict(),
+            "yardstick": "re-based Tweedie (p = 1.5) deviance improvement vs no-features model; each unseen "
+                         "year once, scored within each state"},
+        "county_method": "buhlmann_straub", "county_parameters": par,
+        "why_not_xgboost": "Milestone 11's decision rule re-applied on three states in Milestone 13 "
+                           "(reports/10_multistate.md).",
+        "report": "reports/10_multistate.md",
+        "previous_virginia_model": "models/production_model_va.json",
+    }
+    row = {"flood_zone_group": "A/V high risk", "construction_band": "1960-1979", "floors_group": "1",
+           "occupancy_group": spec["sev_bases"]["occupancy_group"],
+           "building_coverage_band": spec["sev_bases"]["building_coverage_band"],
+           "elevated": spec["sev_bases"]["elevated"], "primary_residence": spec["sev_bases"]["primary_residence"],
+           "post_firm": "False"}
+    checks = {}
+    for st, county in (("VA", "51810"), ("NC", "37055"), ("MD", "24047")):
+        r = pd.DataFrame([{**row, "county": county, "state": st}])
+        checks[f"{st} {names.get(county)} 1960s house"] = {"county": county,
+                                                           "pure_premium": float(m.rate(r)[0])}
+    card["check_virginia_beach_worksheet"] = checks["VA Virginia Beach city 1960s house"]["pure_premium"]
+    card["check_worksheets"] = checks
+    production.save(m, card, tbl, production.PATH, production.DISCLAIMER_3)
+    print("saved models/production_model.json")
+    for k, v in checks.items():
+        print(f"  {k}: ${v['pure_premium']:,.2f}")
+    print("  state factors vs Virginia:", json.dumps(sf, indent=1))
+
+
 def cmd_xgb():
     t0 = time.time()
     cells, claims = load_data()
@@ -807,6 +875,8 @@ if __name__ == "__main__":
         cmd_refit()
     elif cmd == "xgb":
         cmd_xgb()
+    elif cmd == "production":
+        cmd_production()
     else:
         print(__doc__)
         sys.exit(1)

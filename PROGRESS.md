@@ -326,7 +326,7 @@ The data is downloaded and explored. Everything except the data files is committ
   - VA: Tidewater, unchanged.
   - **NC:** the 20 CAMA coastal-area counties, N.C. Gen. Stat. § 113A-103(2) (ncleg.gov, fetched 2026-11-12; the statute's illustrative list as of July 1, 2012).
   - **MD:** the 16 counties + Baltimore City that administer the Chesapeake and Atlantic Coastal Bays Critical Area (land within 1,000 ft of tidal waters, Md. Code, Natural Resources § 8-1807). The jurisdictions are named on the Critical Area Commission's page (dnr.maryland.gov/criticalarea/Pages/property-owner-resources.aspx, fetched 2026-11-12). The statute defines the area, not the list, and the Coastal Zone Management page returned 404, so this is the best official list found.
-- **Cat years:** per state, the top-3 paid-claim years in that state's data (`validation.cat_years` on its rows). Pooled summaries use the pooled top 3.
+- **Cat years:** per state, the top-3 years by 2025-dollar losses in that state's data (`validation.cat_years` on its rows, the same definition as Virginia's). Pooled summaries use the pooled top 3.
 - **Relativity consistency rule** (each factor level, from same-spec per-state fits with cluster-robust CIs):
   - *consistent*: same side of 1 in all three states, and the feature × state cluster Wald test has p ≥ 0.05;
   - *differs in size*: same direction, p < 0.05;

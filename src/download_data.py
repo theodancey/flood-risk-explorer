@@ -108,7 +108,7 @@ def get_with_retry(url, params=None, stream=False):
     """
     GET a URL, retrying on temporary problems.
 
-    Temporary problems = connection errors, timeouts, HTTP 429 (too many
+    Temporary problems = connection errors (incl. a page cut off half-way), timeouts, HTTP 429 (too many
     requests) and 5xx (server errors). Between attempts we wait 2, 4, 8, 16
     seconds ("exponential backoff"), which gives the server time to recover.
     Other errors like 403/404 won't fix themselves, so we stop right away.
@@ -123,7 +123,9 @@ def get_with_retry(url, params=None, stream=False):
                 problem = f"HTTP {response.status_code}"
             else:
                 raise FatalHTTPError(f"HTTP {response.status_code} for {response.url}")
-        except (requests.ConnectionError, requests.Timeout) as err:
+        # ChunkedEncodingError = the server dropped the connection half-way through a page
+        # (seen on the North Carolina download, Milestone 13): also temporary, so retry.
+        except (requests.ConnectionError, requests.Timeout, requests.exceptions.ChunkedEncodingError) as err:
             problem = type(err).__name__
 
         if attempt == MAX_ATTEMPTS:
