@@ -1,6 +1,7 @@
 # ---- Project-specific ----
-# Data files never go into Git (see CLAUDE.md). This also covers data/raw and data/processed.
-data/
+# Data files never go into Git (see CLAUDE.md). This covers data/raw and data/processed.
+# Anchored with "/" so the small, committed app/data/ files (Milestone 12) are not caught by it.
+/data/
 
 # Fitted-model pickles: version-fragile and rebuilt by running notebooks/05_frequency_glm.ipynb.
 # The small, readable models/*.json files ARE committed (the app reads them).

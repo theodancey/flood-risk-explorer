@@ -1,0 +1,34 @@
+{
+ "basis": "Exposure-weighted average of the production model's average-year expected values over all insured Virginia buildings, 2010-2025 mix (state FIPS 51). 2025 dollars.",
+ "expected_frequency_per_policy_year": 0.006380459814833942,
+ "expected_severity_per_claim": 31107.223885319225,
+ "expected_pure_premium_per_policy_year": 197.20580253938536,
+ "expected_pure_premium_2025_mix": 209.05291004278112,
+ "actual_loss_cost_2010_2025": 198.1250455213425,
+ "policy_years_2010_2025": 1475629.0546522944,
+ "paid_claims_2010_2025": 9549,
+ "losses_2025_dollars_2010_2025": 292359073.6256015,
+ "mix_pct": {
+  "pct_av_zone": 50.95291327343045,
+  "pct_elevated": 41.32765306389832,
+  "pct_pre_firm": 50.963494148289556,
+  "pct_built_pre_1980": 50.07145093191321,
+  "pct_multi_or_nonres": 10.694646484942611,
+  "pct_not_primary": 27.65989046696834,
+  "pct_cover_250k_plus": 60.863006853016806,
+  "pct_cover_under_100k": 10.71605733362093,
+  "pct_one_floor": 32.581945489270254
+ },
+ "mean_relativity": {
+  "flood_zone_group": 0.6868524876565143,
+  "construction_band": 2.125908406784041,
+  "occupancy_group": 1.278060442985141,
+  "building_coverage_band": 0.9473316353564463,
+  "elevated": 0.8839943937222734,
+  "floors_group": 1.0033035069651564,
+  "primary_residence": 1.019483020272878
+ },
+ "average_county_factor": 0.9996030395209021,
+ "certainty_rule": "High: Z >= 0.8; Medium: 0.5 <= Z < 0.8; Low: Z < 0.5 or no claims (Z = severity credibility)",
+ "disclaimer": "Area-level estimate from aggregated public NFIP data (Virginia, 2010-2025). It describes the average insured building with these characteristics in this county in an average year. It is NOT a quote, a premium, or a prediction for any individual property."
+}

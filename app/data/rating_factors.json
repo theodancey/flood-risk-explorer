@@ -1,0 +1,1506 @@
+{
+ "description": "Production model (hybrid GLM) as lookup tables. pure premium per policy-year = base_per_policy_year x base_claim_size x exp(sum of frequency and severity log relativities, incl. interactions) x icc_bridge x off_balance x county factor. 2025 dollars, average year. Area-level only.",
+ "levels": {
+  "flood_zone_group": [
+   "A/V high risk",
+   "B/C/X moderate-low risk"
+  ],
+  "construction_band": [
+   "1980-1999",
+   "before 1960",
+   "1960-1979",
+   "2000 or later"
+  ],
+  "occupancy_group": [
+   "single-unit residential",
+   "multi-unit residential",
+   "non-residential"
+  ],
+  "building_coverage_band": [
+   "$250K or more",
+   "$0 (contents only)",
+   "under $100K",
+   "$100K-$249K"
+  ],
+  "elevated": [
+   "False",
+   "True"
+  ],
+  "floors_group": [
+   "2",
+   "1",
+   "3+"
+  ],
+  "primary_residence": [
+   "True",
+   "False"
+  ]
+ },
+ "bases": {
+  "flood_zone_group": "A/V high risk",
+  "construction_band": "1980-1999",
+  "occupancy_group": "single-unit residential",
+  "building_coverage_band": "$250K or more",
+  "elevated": "False",
+  "floors_group": "2",
+  "primary_residence": "True"
+ },
+ "frequency": {
+  "base_per_policy_year": 0.004644453044352486,
+  "features": [
+   "flood_zone_group",
+   "construction_band",
+   "floors_group"
+  ],
+  "log_relativity": {
+   "flood_zone_group": [
+    0.0,
+    -0.677904104047286
+   ],
+   "construction_band": [
+    0.0,
+    1.0052395418893834,
+    1.1006945882064052,
+    -0.5123375853570145
+   ],
+   "occupancy_group": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "building_coverage_band": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "elevated": [
+    0.0,
+    0.0
+   ],
+   "floors_group": [
+    0.0,
+    -0.11635685899696313,
+    0.12607751392115535
+   ],
+   "primary_residence": [
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "severity": {
+  "base_claim_size": 27462.60610608697,
+  "large_loss_load_included": 1.0,
+  "features": [
+   "occupancy_group",
+   "construction_band",
+   "building_coverage_band",
+   "flood_zone_group",
+   "floors_group",
+   "primary_residence",
+   "elevated"
+  ],
+  "log_relativity": {
+   "flood_zone_group": [
+    0.0,
+    -0.33948684938580764
+   ],
+   "construction_band": [
+    0.0,
+    0.03256980237960309,
+    0.2499602263009948,
+    -0.09860267705136673
+   ],
+   "occupancy_group": [
+    0.0,
+    1.0434974536796213,
+    1.5241688693507676
+   ],
+   "building_coverage_band": [
+    0.0,
+    -1.016263384241221,
+    -0.23303813576560164,
+    -0.09033335087868209
+   ],
+   "elevated": [
+    0.0,
+    -0.32947300837901655
+   ],
+   "floors_group": [
+    0.0,
+    0.12369322551775078,
+    -0.12074187202626196
+   ],
+   "primary_residence": [
+    0.0,
+    0.06806773024058907
+   ]
+  }
+ },
+ "interactions": [
+  {
+   "part": "frequency",
+   "a": "construction_band",
+   "b": "flood_zone_group",
+   "log_relativity": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.03783828211964951
+    ],
+    [
+     0.0,
+     -0.30541520644387865
+    ],
+    [
+     0.0,
+     0.16998008822994923
+    ]
+   ]
+  },
+  {
+   "part": "severity",
+   "a": "building_coverage_band",
+   "b": "occupancy_group",
+   "log_relativity": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     -1.0923033684809518,
+     -0.21160683904298735
+    ],
+    [
+     0.0,
+     -0.7033746151743677,
+     -1.095602822728455
+    ],
+    [
+     0.0,
+     -0.4374760372355789,
+     -0.8509198922505724
+    ]
+   ]
+  },
+  {
+   "part": "severity",
+   "a": "elevated",
+   "b": "flood_zone_group",
+   "log_relativity": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.21395301963673302
+    ]
+   ]
+  }
+ ],
+ "loads": {
+  "large_loss_load": 1.0,
+  "icc_bridge": 1.0092453559345234,
+  "off_balance": 0.9848773029460881
+ },
+ "county_factors": {
+  "19021": 1.061943893358014,
+  "25019": 1.061943893358014,
+  "28071": 1.061943893358014,
+  "36061": 1.061943893358014,
+  "37011": 1.061943893358014,
+  "37143": 1.061943893358014,
+  "51001": 1.2371243705357424,
+  "51003": 0.9422859902014497,
+  "51005": 1.0818426423546035,
+  "51007": 1.110600695599028,
+  "51009": 1.0330774316496976,
+  "51011": 1.0394698479124633,
+  "51013": 1.0762114411055907,
+  "51015": 1.054447807914794,
+  "51017": 1.061943893358014,
+  "51019": 1.0579123838765778,
+  "51021": 1.3222066334808926,
+  "51023": 0.9343604227287183,
+  "51025": 0.9696624747959428,
+  "51027": 1.5203720926428987,
+  "51029": 1.061943893358014,
+  "51031": 0.9742846194566985,
+  "51033": 1.0673287076415676,
+  "51035": 1.138690303018425,
+  "51036": 1.0616201638913372,
+  "51037": 1.061943893358014,
+  "51041": 1.0938830070743806,
+  "51043": 1.0586362788077452,
+  "51045": 1.0973791121973913,
+  "51047": 1.1974699737337933,
+  "51049": 1.148899237213325,
+  "51051": 1.0196073215797985,
+  "51053": 1.0370125127314598,
+  "51057": 0.9089568302875416,
+  "51059": 1.0168417885886805,
+  "51061": 0.9869046452057851,
+  "51063": 1.7143773935902902,
+  "51065": 1.0717553560211572,
+  "51067": 0.9626144682491097,
+  "51069": 0.9373021674945589,
+  "51071": 1.5718124049979911,
+  "51073": 0.9743981910078813,
+  "51075": 1.0291470505361373,
+  "51077": 1.0420983695211137,
+  "51079": 1.1189088394068443,
+  "51081": 0.9946760538635131,
+  "51083": 1.4893975097911365,
+  "51085": 0.9257668459922725,
+  "51087": 1.0055917390041396,
+  "51089": 1.3695345834638295,
+  "51091": 1.0711765175532364,
+  "51093": 1.0991425250629239,
+  "51095": 1.0026575860012283,
+  "51097": 1.2543892058267008,
+  "51099": 0.9789588936178653,
+  "51101": 1.0472867336492042,
+  "51103": 0.8226175323662707,
+  "51105": 1.025163082357082,
+  "51107": 1.3097854904755504,
+  "51109": 1.0490209783997082,
+  "51111": 1.061943893358014,
+  "51113": 1.0449102456933694,
+  "51115": 1.15808330163253,
+  "51117": 1.0422716655106103,
+  "51119": 0.9712218921036524,
+  "51121": 1.5159660219579896,
+  "51125": 1.0973006234618115,
+  "51127": 1.0856306477769198,
+  "51131": 0.8650422224037754,
+  "51133": 1.0120240416124797,
+  "51135": 1.0387374123854791,
+  "51137": 1.0742747694264703,
+  "51139": 0.9625254359341383,
+  "51141": 1.246062815347567,
+  "51143": 1.2777165819219942,
+  "51145": 1.046874575050284,
+  "51147": 0.9997376465281967,
+  "51149": 1.0389436545172341,
+  "51153": 0.9274911262789826,
+  "51155": 1.5419311181653954,
+  "51157": 1.0323723294044702,
+  "51159": 1.0452186757327702,
+  "51161": 1.0003568377064953,
+  "51163": 1.0586906655008428,
+  "51165": 1.388574086623422,
+  "51167": 1.0734521511679254,
+  "51169": 0.9333555653186292,
+  "51171": 1.087212897183164,
+  "51173": 0.8593263955044403,
+  "51175": 0.9657235667110188,
+  "51177": 0.9160727456292318,
+  "51179": 0.8885001468721756,
+  "51181": 1.2104616521586806,
+  "51183": 1.061943893358014,
+  "51185": 1.3534291138026013,
+  "51187": 0.8026090773786545,
+  "51191": 1.3639604355575718,
+  "51193": 1.0888742090298422,
+  "51195": 1.1385420596008549,
+  "51197": 1.0124506080038786,
+  "51199": 0.7284912203508879,
+  "51510": 1.1484419389841658,
+  "51515": 1.061943893358014,
+  "51520": 1.0338708785969448,
+  "51530": 1.0438805343545448,
+  "51540": 0.9464639555267038,
+  "51550": 0.8643050471582271,
+  "51570": 1.151753025143654,
+  "51580": 0.856529982237545,
+  "51590": 1.1969380758684787,
+  "51595": 0.919659512201439,
+  "51600": 1.1101439264243942,
+  "51610": 0.8344935880995259,
+  "51620": 0.9628604643806418,
+  "51630": 1.0800852278600257,
+  "51650": 0.7724314300721559,
+  "51660": 0.9882204291768177,
+  "51670": 1.022247909371832,
+  "51678": 1.061943893358014,
+  "51680": 1.0588491074430133,
+  "51683": 0.9956484125399713,
+  "51685": 1.0391899505328643,
+  "51690": 1.061943893358014,
+  "51700": 1.6934003023411202,
+  "51710": 0.8329408766445625,
+  "51720": 0.8778187623273023,
+  "51730": 1.01199782969066,
+  "51735": 0.8702534928108872,
+  "51740": 0.8757140968842102,
+  "51750": 1.0653907423056426,
+  "51760": 0.9263462429224025,
+  "51770": 0.9800410942855992,
+  "51775": 1.091768769542883,
+  "51790": 1.0339271159842562,
+  "51800": 1.170572716165929,
+  "51810": 1.2131901388362418,
+  "51820": 0.8756368065916458,
+  "51830": 1.0340269215112168,
+  "51840": 0.9429859197079157,
+  "72057": 1.061943893358014,
+  "72127": 1.061943893358014,
+  "UNKNOWN": 1.0738775357380883
+ },
+ "county_factor_default": 1.0,
+ "county_credibility": {
+  "19021": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "Buena Vista County"
+  },
+  "25019": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "Nantucket County"
+  },
+  "28071": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "Lafayette County"
+  },
+  "36061": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "New York County"
+  },
+  "37011": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "Avery County"
+  },
+  "37143": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "Perquimans County"
+  },
+  "51001": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.9080704089,
+   "claims": 327.0,
+   "freq_ae": 0.8073520715,
+   "sev_ae": 1.1816622168,
+   "name": "Accomack County"
+  },
+  "51003": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.3392926759,
+   "claims": 17.0,
+   "freq_ae": 1.0249811873,
+   "sev_ae": 0.6679027102,
+   "name": "Albemarle County"
+  },
+  "51005": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.4492195925,
+   "claims": 27.0,
+   "freq_ae": 1.0704565922,
+   "sev_ae": 1.0417124321,
+   "name": "Alleghany County"
+  },
+  "51007": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.083092745,
+   "claims": 3.0,
+   "freq_ae": 9.204180945,
+   "sev_ae": 1.5514153928,
+   "name": "Amelia County"
+  },
+  "51009": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.083092745,
+   "claims": 3.0,
+   "freq_ae": 0.5680196848,
+   "sev_ae": 0.6728635959,
+   "name": "Amherst County"
+  },
+  "51011": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 1.0317768256,
+   "sev_ae": 0.2782479994,
+   "name": "Appomattox County"
+  },
+  "51013": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.7148748702,
+   "claims": 83.0,
+   "freq_ae": 1.4268848248,
+   "sev_ae": 1.0187939355,
+   "name": "Arlington County"
+  },
+  "51015": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.4669568823,
+   "claims": 29.0,
+   "freq_ae": 0.9261756195,
+   "sev_ae": 0.9848833285,
+   "name": "Augusta County"
+  },
+  "51017": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "Bath County"
+  },
+  "51019": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2137552191,
+   "claims": 9.0,
+   "freq_ae": 0.9639956124,
+   "sev_ae": 0.9822397373,
+   "name": "Bedford County"
+  },
+  "51021": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.3646536594,
+   "claims": 19.0,
+   "freq_ae": 2.6014907193,
+   "sev_ae": 1.6720937391,
+   "name": "Bland County"
+  },
+  "51023": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2972131905,
+   "claims": 14.0,
+   "freq_ae": 0.4453224563,
+   "sev_ae": 0.5957735195,
+   "name": "Botetourt County"
+  },
+  "51025": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1078044053,
+   "claims": 4.0,
+   "freq_ae": 2.8072649547,
+   "sev_ae": 0.1939236453,
+   "name": "Brunswick County"
+  },
+  "51027": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.5968023445,
+   "claims": 49.0,
+   "freq_ae": 1.7729309604,
+   "sev_ae": 1.7233345874,
+   "name": "Buchanan County"
+  },
+  "51029": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "Buckingham County"
+  },
+  "51031": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2319957651,
+   "claims": 10.0,
+   "freq_ae": 2.4601872205,
+   "sev_ae": 0.6441915647,
+   "name": "Campbell County"
+  },
+  "51033": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.172932839,
+   "name": "Caroline County"
+  },
+  "51035": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1946271468,
+   "claims": 8.0,
+   "freq_ae": 5.4512329371,
+   "sev_ae": 1.3713240508,
+   "name": "Carroll County"
+  },
+  "51036": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 0.6416012891,
+   "sev_ae": 0.9896034565,
+   "name": "Charles City County"
+  },
+  "51037": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "Charlotte County"
+  },
+  "51041": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.5277855175,
+   "claims": 37.0,
+   "freq_ae": 0.642978171,
+   "sev_ae": 1.0569854287,
+   "name": "Chesterfield County"
+  },
+  "51043": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.083092745,
+   "claims": 3.0,
+   "freq_ae": 0.2421828935,
+   "sev_ae": 0.96251563,
+   "name": "Clarke County"
+  },
+  "51045": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1078044053,
+   "claims": 4.0,
+   "freq_ae": 0.5853408932,
+   "sev_ae": 1.3095259314,
+   "name": "Craig County"
+  },
+  "51047": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.3258374755,
+   "claims": 16.0,
+   "freq_ae": 2.5008674512,
+   "sev_ae": 1.3916699692,
+   "name": "Culpeper County"
+  },
+  "51049": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.083092745,
+   "claims": 3.0,
+   "freq_ae": 0.5929708639,
+   "sev_ae": 1.9854432038,
+   "name": "Cumberland County"
+  },
+  "51051": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1946271468,
+   "claims": 8.0,
+   "freq_ae": 1.0742067085,
+   "sev_ae": 0.7951619183,
+   "name": "Dickenson County"
+  },
+  "51053": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 0.3747909503,
+   "sev_ae": 0.1993308954,
+   "name": "Dinwiddie County"
+  },
+  "51057": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1745451567,
+   "claims": 7.0,
+   "freq_ae": 0.2748672436,
+   "sev_ae": 0.1746363595,
+   "name": "Essex County"
+  },
+  "51059": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.939931082,
+   "claims": 518.0,
+   "freq_ae": 1.3469154785,
+   "sev_ae": 0.9548144861,
+   "name": "Fairfax County"
+  },
+  "51061": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1745451567,
+   "claims": 7.0,
+   "freq_ae": 0.452276753,
+   "sev_ae": 0.5951640237,
+   "name": "Fauquier County"
+  },
+  "51063": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2137552191,
+   "claims": 9.0,
+   "freq_ae": 3.8080021201,
+   "sev_ae": 3.8742064071,
+   "name": "Floyd County"
+  },
+  "51065": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 0.4754867042,
+   "sev_ae": 1.3150942639,
+   "name": "Fluvanna County"
+  },
+  "51067": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1745451567,
+   "claims": 7.0,
+   "freq_ae": 0.8472736697,
+   "sev_ae": 0.4641187675,
+   "name": "Franklin County"
+  },
+  "51069": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.3766177964,
+   "claims": 20.0,
+   "freq_ae": 1.5860433898,
+   "sev_ae": 0.6883543681,
+   "name": "Frederick County"
+  },
+  "51071": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.4835873941,
+   "claims": 31.0,
+   "freq_ae": 1.8095121217,
+   "sev_ae": 1.9928454469,
+   "name": "Giles County"
+  },
+  "51073": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.7794583539,
+   "claims": 117.0,
+   "freq_ae": 0.7047371636,
+   "sev_ae": 0.894235397,
+   "name": "Gloucester County"
+  },
+  "51075": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0569731827,
+   "claims": 2.0,
+   "freq_ae": 0.8802984435,
+   "sev_ae": 0.4579242425,
+   "name": "Goochland County"
+  },
+  "51077": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 0.3723873999,
+   "sev_ae": 0.3626627406,
+   "name": "Grayson County"
+  },
+  "51079": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2494091548,
+   "claims": 11.0,
+   "freq_ae": 6.8384899267,
+   "sev_ae": 1.21507688,
+   "name": "Greene County"
+  },
+  "51081": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.083092745,
+   "claims": 3.0,
+   "freq_ae": 1.9036202008,
+   "sev_ae": 0.2376703682,
+   "name": "Greensville County"
+  },
+  "51083": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2319957651,
+   "claims": 10.0,
+   "freq_ae": 2.704889871,
+   "sev_ae": 2.7350315108,
+   "name": "Halifax County"
+  },
+  "51085": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2319957651,
+   "claims": 10.0,
+   "freq_ae": 0.7355324293,
+   "sev_ae": 0.4472582307,
+   "name": "Hanover County"
+  },
+  "51087": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.5968023445,
+   "claims": 49.0,
+   "freq_ae": 0.6178886831,
+   "sev_ae": 0.9110843042,
+   "name": "Henrico County"
+  },
+  "51089": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.458233377,
+   "claims": 28.0,
+   "freq_ae": 2.5940209245,
+   "sev_ae": 1.6320986972,
+   "name": "Henry County"
+  },
+  "51091": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.2965049172,
+   "name": "Highland County"
+  },
+  "51093": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.5277855175,
+   "claims": 37.0,
+   "freq_ae": 1.3602315781,
+   "sev_ae": 1.066369405,
+   "name": "Isle of Wight County"
+  },
+  "51095": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.4492195925,
+   "claims": 27.0,
+   "freq_ae": 0.4516791556,
+   "sev_ae": 0.8757220331,
+   "name": "James City County"
+  },
+  "51097": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0569731827,
+   "claims": 2.0,
+   "freq_ae": 0.2673404086,
+   "sev_ae": 4.1807920997,
+   "name": "King and Queen County"
+  },
+  "51099": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1078044053,
+   "claims": 4.0,
+   "freq_ae": 1.1008095266,
+   "sev_ae": 0.2751276787,
+   "name": "King George County"
+  },
+  "51101": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.083092745,
+   "claims": 3.0,
+   "freq_ae": 0.2496067171,
+   "sev_ae": 0.8338940681,
+   "name": "King William County"
+  },
+  "51103": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.4915194834,
+   "claims": 32.0,
+   "freq_ae": 0.5348344768,
+   "sev_ae": 0.5414906166,
+   "name": "Lancaster County"
+  },
+  "51105": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0569731827,
+   "claims": 2.0,
+   "freq_ae": 0.2244779108,
+   "sev_ae": 0.3920760576,
+   "name": "Lee County"
+  },
+  "51107": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.4835873941,
+   "claims": 31.0,
+   "freq_ae": 0.7375139932,
+   "sev_ae": 1.4826114883,
+   "name": "Loudoun County"
+  },
+  "51109": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 0.4211575797,
+   "sev_ae": 0.5849817183,
+   "name": "Louisa County"
+  },
+  "51111": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "Lunenburg County"
+  },
+  "51113": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 0.2613451568,
+   "sev_ae": 0.4529658976,
+   "name": "Madison County"
+  },
+  "51115": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.717309668,
+   "claims": 84.0,
+   "freq_ae": 0.5076102219,
+   "sev_ae": 1.126209832,
+   "name": "Mathews County"
+  },
+  "51117": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 0.3039417564,
+   "sev_ae": 0.3682281261,
+   "name": "Mecklenburg County"
+  },
+  "51119": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2494091548,
+   "claims": 11.0,
+   "freq_ae": 0.2091323042,
+   "sev_ae": 0.6574699647,
+   "name": "Middlesex County"
+  },
+  "51121": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.5761531362,
+   "claims": 45.0,
+   "freq_ae": 1.9687696352,
+   "sev_ae": 1.7420574308,
+   "name": "Montgomery County"
+  },
+  "51125": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1078044053,
+   "claims": 4.0,
+   "freq_ae": 0.4521042342,
+   "sev_ae": 1.3088403338,
+   "name": "Nelson County"
+  },
+  "51127": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1312190098,
+   "claims": 5.0,
+   "freq_ae": 0.7521795198,
+   "sev_ae": 1.1699836808,
+   "name": "New Kent County"
+  },
+  "51131": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.3992433605,
+   "claims": 22.0,
+   "freq_ae": 0.3936246657,
+   "sev_ae": 0.5355808414,
+   "name": "Northampton County"
+  },
+  "51133": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.5139181132,
+   "claims": 35.0,
+   "freq_ae": 0.6523373395,
+   "sev_ae": 0.9085301872,
+   "name": "Northumberland County"
+  },
+  "51135": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 6.495223814,
+   "sev_ae": 0.2547258967,
+   "name": "Nottoway County"
+  },
+  "51137": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2137552191,
+   "claims": 9.0,
+   "freq_ae": 3.228562893,
+   "sev_ae": 1.0543219853,
+   "name": "Orange County"
+  },
+  "51139": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1745451567,
+   "claims": 7.0,
+   "freq_ae": 0.3718598138,
+   "sev_ae": 0.4636384391,
+   "name": "Page County"
+  },
+  "51141": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1078044053,
+   "claims": 4.0,
+   "freq_ae": 1.2507082547,
+   "sev_ae": 2.6082751194,
+   "name": "Patrick County"
+  },
+  "51143": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1312190098,
+   "claims": 5.0,
+   "freq_ae": 2.1450092317,
+   "sev_ae": 2.5484534173,
+   "name": "Pittsylvania County"
+  },
+  "51145": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 0.7262760531,
+   "sev_ae": 0.5160501628,
+   "name": "Powhatan County"
+  },
+  "51147": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1534360661,
+   "claims": 6.0,
+   "freq_ae": 1.2968100584,
+   "sev_ae": 0.6182272096,
+   "name": "Prince Edward County"
+  },
+  "51149": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1946271468,
+   "claims": 8.0,
+   "freq_ae": 1.5852323006,
+   "sev_ae": 0.8887173759,
+   "name": "Prince George County"
+  },
+  "51153": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.8053885309,
+   "claims": 137.0,
+   "freq_ae": 1.5611421454,
+   "sev_ae": 0.8427963114,
+   "name": "Prince William County"
+  },
+  "51155": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.5968023445,
+   "claims": 49.0,
+   "freq_ae": 3.1264169657,
+   "sev_ae": 1.7573516676,
+   "name": "Pulaski County"
+  },
+  "51157": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 0.2415585576,
+   "sev_ae": 0.0503118144,
+   "name": "Rappahannock County"
+  },
+  "51159": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1745451567,
+   "claims": 7.0,
+   "freq_ae": 0.8338057694,
+   "sev_ae": 0.909767622,
+   "name": "Richmond County"
+  },
+  "51161": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.7531454911,
+   "claims": 101.0,
+   "freq_ae": 1.7165688039,
+   "sev_ae": 0.9229967617,
+   "name": "Roanoke County"
+  },
+  "51163": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.3258374755,
+   "claims": 16.0,
+   "freq_ae": 0.6073813023,
+   "sev_ae": 0.9905981812,
+   "name": "Rockbridge County"
+  },
+  "51165": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2819697577,
+   "claims": 13.0,
+   "freq_ae": 0.2250627162,
+   "sev_ae": 2.0908178218,
+   "name": "Rockingham County"
+  },
+  "51167": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1745451567,
+   "claims": 7.0,
+   "freq_ae": 0.676594483,
+   "sev_ae": 1.0620869332,
+   "name": "Russell County"
+  },
+  "51169": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1745451567,
+   "claims": 7.0,
+   "freq_ae": 0.8043080711,
+   "sev_ae": 0.3062672855,
+   "name": "Scott County"
+  },
+  "51171": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.3118228565,
+   "claims": 15.0,
+   "freq_ae": 0.5999041584,
+   "sev_ae": 1.0763094992,
+   "name": "Shenandoah County"
+  },
+  "51173": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.4992115853,
+   "claims": 33.0,
+   "freq_ae": 1.2975176859,
+   "sev_ae": 0.6177999668,
+   "name": "Smyth County"
+  },
+  "51175": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1534360661,
+   "claims": 6.0,
+   "freq_ae": 0.4296621389,
+   "sev_ae": 0.4094756641,
+   "name": "Southampton County"
+  },
+  "51177": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2819697577,
+   "claims": 13.0,
+   "freq_ae": 1.0486842607,
+   "sev_ae": 0.5128470946,
+   "name": "Spotsylvania County"
+  },
+  "51179": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.5209521522,
+   "claims": 36.0,
+   "freq_ae": 0.9896987067,
+   "sev_ae": 0.6864843407,
+   "name": "Stafford County"
+  },
+  "51181": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1745451567,
+   "claims": 7.0,
+   "freq_ae": 1.8188550541,
+   "sev_ae": 1.8012517896,
+   "name": "Surry County"
+  },
+  "51183": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "Sussex County"
+  },
+  "51185": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.7353867751,
+   "claims": 92.0,
+   "freq_ae": 2.0626122122,
+   "sev_ae": 1.3732494288,
+   "name": "Tazewell County"
+  },
+  "51187": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.5650145481,
+   "claims": 43.0,
+   "freq_ae": 1.0390255125,
+   "sev_ae": 0.5677852109,
+   "name": "Warren County"
+  },
+  "51191": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.3992433605,
+   "claims": 22.0,
+   "freq_ae": 1.2622624539,
+   "sev_ae": 1.7123467654,
+   "name": "Washington County"
+  },
+  "51193": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.3766177964,
+   "claims": 20.0,
+   "freq_ae": 0.5175669625,
+   "sev_ae": 1.0673347163,
+   "name": "Westmoreland County"
+  },
+  "51195": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.5918309931,
+   "claims": 48.0,
+   "freq_ae": 0.9567661483,
+   "sev_ae": 1.1218762537,
+   "name": "Wise County"
+  },
+  "51197": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2494091548,
+   "claims": 11.0,
+   "freq_ae": 1.0204198255,
+   "sev_ae": 0.813133126,
+   "name": "Wythe County"
+  },
+  "51199": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.6937748547,
+   "claims": 75.0,
+   "freq_ae": 0.272630906,
+   "sev_ae": 0.5474004935,
+   "name": "York County"
+  },
+  "51510": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.8378072112,
+   "claims": 171.0,
+   "freq_ae": 1.4696004948,
+   "sev_ae": 1.097221122,
+   "name": "Alexandria city"
+  },
+  "51515": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "Unknown county"
+  },
+  "51520": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.083092745,
+   "claims": 3.0,
+   "freq_ae": 0.109943472,
+   "sev_ae": 0.681855532,
+   "name": "Bristol city"
+  },
+  "51530": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 0.2055599907,
+   "sev_ae": 0.4198968081,
+   "name": "Buena Vista city"
+  },
+  "51540": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2494091548,
+   "claims": 11.0,
+   "freq_ae": 0.8229719005,
+   "sev_ae": 0.5639938864,
+   "name": "Charlottesville city"
+  },
+  "51550": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.9494672247,
+   "claims": 622.0,
+   "freq_ae": 0.9712306561,
+   "sev_ae": 0.803984344,
+   "name": "Chesapeake city"
+  },
+  "51570": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1534360661,
+   "claims": 6.0,
+   "freq_ae": 0.4296164938,
+   "sev_ae": 1.5511774877,
+   "name": "Colonial Heights city"
+  },
+  "51580": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.6242605697,
+   "claims": 55.0,
+   "freq_ae": 2.6707976106,
+   "sev_ae": 0.6901422411,
+   "name": "Covington city"
+  },
+  "51590": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.7098772445,
+   "claims": 81.0,
+   "freq_ae": 6.5005402134,
+   "sev_ae": 1.1790730483,
+   "name": "Danville city"
+  },
+  "51595": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1745451567,
+   "claims": 7.0,
+   "freq_ae": 1.3355726116,
+   "sev_ae": 0.232377219,
+   "name": "Emporia city"
+  },
+  "51600": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.3522212976,
+   "claims": 18.0,
+   "freq_ae": 0.9242126849,
+   "sev_ae": 1.1288635679,
+   "name": "Fairfax city"
+  },
+  "51610": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.5408836242,
+   "claims": 39.0,
+   "freq_ae": 1.8066104532,
+   "sev_ae": 0.6040128261,
+   "name": "Falls Church city"
+  },
+  "51620": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1078044053,
+   "claims": 4.0,
+   "freq_ae": 0.2228697646,
+   "sev_ae": 0.1345082197,
+   "name": "Franklin city"
+  },
+  "51630": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1745451567,
+   "claims": 7.0,
+   "freq_ae": 0.2638450594,
+   "sev_ae": 1.0978723141,
+   "name": "Fredericksburg city"
+  },
+  "51650": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.9618220812,
+   "claims": 834.0,
+   "freq_ae": 0.6324610044,
+   "sev_ae": 0.7165535974,
+   "name": "Hampton city"
+  },
+  "51660": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.3118228565,
+   "claims": 15.0,
+   "freq_ae": 1.0566315046,
+   "sev_ae": 0.7773635766,
+   "name": "Harrisonburg city"
+  },
+  "51670": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1078044053,
+   "claims": 4.0,
+   "freq_ae": 1.0107178505,
+   "sev_ae": 0.6532563699,
+   "name": "Hopewell city"
+  },
+  "51678": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "Lexington city"
+  },
+  "51680": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.3118228565,
+   "claims": 15.0,
+   "freq_ae": 1.2166260063,
+   "sev_ae": 0.9906541008,
+   "name": "Lynchburg city"
+  },
+  "51683": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2137552191,
+   "claims": 9.0,
+   "freq_ae": 1.3456079219,
+   "sev_ae": 0.7079443412,
+   "name": "Manassas city"
+  },
+  "51685": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 0.7938363229,
+   "sev_ae": 0.2692591196,
+   "name": "Manassas Park city"
+  },
+  "51690": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "Martinsville city"
+  },
+  "51700": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.9110350488,
+   "claims": 339.0,
+   "freq_ae": 1.519204616,
+   "sev_ae": 1.6526896386,
+   "name": "Newport News city"
+  },
+  "51710": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.9757674164,
+   "claims": 1333.0,
+   "freq_ae": 1.1357951838,
+   "sev_ae": 0.7789994676,
+   "name": "Norfolk city"
+  },
+  "51720": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2660504047,
+   "claims": 12.0,
+   "freq_ae": 1.8585394562,
+   "sev_ae": 0.3483002218,
+   "name": "Norton city"
+  },
+  "51730": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.5408836242,
+   "claims": 39.0,
+   "freq_ae": 1.9709105244,
+   "sev_ae": 0.9130447393,
+   "name": "Petersburg city"
+  },
+  "51735": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.9251211989,
+   "claims": 409.0,
+   "freq_ae": 1.0489546649,
+   "sev_ae": 0.804880731,
+   "name": "Poquoson city"
+  },
+  "51740": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.927736457,
+   "claims": 425.0,
+   "freq_ae": 1.0178076317,
+   "sev_ae": 0.8109733779,
+   "name": "Portsmouth city"
+  },
+  "51750": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.083092745,
+   "claims": 3.0,
+   "freq_ae": 1.3199642136,
+   "sev_ae": 1.0390622786,
+   "name": "Radford city"
+  },
+  "51760": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.5344266758,
+   "claims": 38.0,
+   "freq_ae": 0.7372870056,
+   "sev_ae": 0.7610745213,
+   "name": "Richmond city"
+  },
+  "51770": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.7906176575,
+   "claims": 125.0,
+   "freq_ae": 1.3042912304,
+   "sev_ae": 0.9024492388,
+   "name": "Roanoke city"
+  },
+  "51775": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.7148748702,
+   "claims": 83.0,
+   "freq_ae": 1.1704074922,
+   "sev_ae": 1.0392868354,
+   "name": "Salem city"
+  },
+  "51790": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2660504047,
+   "claims": 12.0,
+   "freq_ae": 0.4790838933,
+   "sev_ae": 0.900836309,
+   "name": "Staunton city"
+  },
+  "51800": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.7020434453,
+   "claims": 78.0,
+   "freq_ae": 1.5066025722,
+   "sev_ae": 1.1457066967,
+   "name": "Suffolk city"
+  },
+  "51810": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.9842743012,
+   "claims": 2072.0,
+   "freq_ae": 1.2916492786,
+   "sev_ae": 1.1446994514,
+   "name": "Virginia Beach city"
+  },
+  "51820": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.2319957651,
+   "claims": 10.0,
+   "freq_ae": 0.3659871874,
+   "sev_ae": 0.2437807196,
+   "name": "Waynesboro city"
+  },
+  "51830": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0293218715,
+   "claims": 1.0,
+   "freq_ae": 0.5658400243,
+   "sev_ae": 0.1034488949,
+   "name": "Williamsburg city"
+  },
+  "51840": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1745451567,
+   "claims": 7.0,
+   "freq_ae": 0.2425522774,
+   "sev_ae": 0.3582229489,
+   "name": "Winchester city"
+  },
+  "72057": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "Guayama Municipio"
+  },
+  "72127": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.0,
+   "claims": 0.0,
+   "freq_ae": 0.0,
+   "sev_ae": 1.0,
+   "name": "San Juan Municipio"
+  },
+  "UNKNOWN": {
+   "Z_freq": 0.0,
+   "Z_sev": 0.1946271468,
+   "claims": 8.0,
+   "freq_ae": 0.1185897703,
+   "sev_ae": 1.0577388369,
+   "name": "Unknown county"
+  }
+ },
+ "labels": {
+  "flood_zone_group": "Flood zone",
+  "construction_band": "Year built",
+  "occupancy_group": "Occupancy",
+  "building_coverage_band": "Building coverage",
+  "elevated": "Elevated building",
+  "floors_group": "Floors",
+  "primary_residence": "Primary residence"
+ },
+ "disclaimer": "Area-level estimate from aggregated public NFIP data (Virginia, 2010-2025). It describes the average insured building with these characteristics in this county in an average year. It is NOT a quote, a premium, or a prediction for any individual property."
+}
