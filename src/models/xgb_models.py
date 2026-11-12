@@ -90,7 +90,7 @@ BINARY = {                                    # the value coded as 1
     "flood_zone_group": "B/C/X moderate-low risk",
     "elevated": "True", "post_firm": "True", "primary_residence": "True", "coastal_tidal": "True",
 }
-ONEHOT = ["occupancy_group", "county_group"]
+ONEHOT = ["occupancy_group", "county_group", "state"]     # "state": Milestone 13 (three states)
 
 # Monotonic constraints (-1 = the prediction may only go DOWN as the code goes up; +1 = only up).
 # They hold for every combination of the other features. Chosen on actuarial grounds:
@@ -365,7 +365,8 @@ def fit_xgb(train, kind, params, n_rounds, features=ALL_FEATURES, monotone=None,
         m.avg_year_log = float(np.log(train[LOSS].sum() / (train["exposure"].to_numpy() * tm).sum()))
         m.off_balance = float((train[LOSS].sum() + unmatched_losses) / train[LOSS].sum())
         m.train_rate = float((train[LOSS].sum() + unmatched_losses) / train["exposure"].sum())
-    m.train_years = sorted(int(y) for y in train["year"].unique())
+    # "year" may hold state-year keys such as "NC|2018" (Milestone 13), which stay as text.
+    m.train_years = sorted(int(y) if str(y).isdigit() else str(y) for y in train["year"].unique())
     return m
 
 
