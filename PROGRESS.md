@@ -258,6 +258,7 @@ The data is downloaded and explored. Everything except the data files is committ
 **What you need to do:** nothing required. To get the data on another computer, run `.venv\Scripts\python.exe src\download_data.py all` (about 35 minutes). Optionally, confirm you're happy with the v2 → v3 switch (Question 3).
 
 ## Questions for Theo
+8. *(Milestone 13, 2026-11-12, needs your go-ahead)* **The 3-state refit was stopped for low memory.** The background job `multistate.py refit` (then `xgb`) was killed by Claude Code because the computer ran critically low on memory. It had got as far as the interaction keep-rule checks. I haven't restarted it on my own. Done and committed: NC/MD downloads, the 3-state table (all checks pass), and the transfer test. To continue, close other memory-heavy programs and tell me to resume, or run it yourself: `.venv\Scripts\python.exe src\multistate.py refit`, then `... xgb`, `... production`, then `src\explain.py build`. If memory stays tight, I can make the refit lighter (e.g. fewer leave-one-year-out fits held in memory at once).
 5. *(Week 8, decided)* **Hosting the app.** The plan puts the Streamlit app on a free host (Streamlit Community Cloud), which needs an account linked to your GitHub. **Decision: you'll create the Streamlit Community Cloud account yourself in week 8.** I won't sign up for anything.
 
 ### Earlier (resolved)
