@@ -123,12 +123,15 @@ def off_balance_factor(model, cells):
     return float(cells[LOSS].sum() / pred.sum())
 
 
-def fit_combined(cells, claims, freq_features, sev_features, freq_bases=None, sev_bases=None):
+def fit_combined(cells, claims, freq_features, sev_features, freq_bases=None, sev_bases=None,
+                 freq_interactions=(), sev_interactions=()):
     """Refit both GLMs on the given years (cells and claims for the same years), then the ICC
-    bridge and the off-balance on those same years."""
+    bridge and the off-balance on those same years.
+    freq_interactions / sev_interactions: optional [[feature_a, feature_b], ...] interaction
+    terms (Milestone 11's "GLM + interactions" hybrid); both features must be in the model."""
     fc = fg.aggregate(cells[cells["exposure"] > 0], freq_features)
-    freq = fg.fit_glm(fc, freq_features, bases=freq_bases)
-    sev = sv.fit_gamma(sv.severity_rows(claims), sev_features, bases=sev_bases)
+    freq = fg.fit_glm(fc, freq_features, freq_interactions, bases=freq_bases)
+    sev = sv.fit_gamma(sv.severity_rows(claims), sev_features, sev_interactions, bases=sev_bases)
     m = CombinedModel(freq, sev, sv.icc_bridge_factor(claims))
     m.off_balance = off_balance_factor(m, cells)
     return m

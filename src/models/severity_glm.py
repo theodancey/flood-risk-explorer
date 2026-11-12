@@ -421,17 +421,18 @@ def loyo_scores(df, fit_fn, years=None, keep_cols=(), target=TARGET):
 # ---------------------------------------------------------------------------
 # Step-by-step model building (same keep rule as the frequency model)
 # ---------------------------------------------------------------------------
-def _loyo_cached(df, features, years, cache, fit_kw):
-    key = tuple(features)
+def _loyo_cached(df, features, years, cache, fit_kw, interactions=()):
+    key = (tuple(features), tuple(tuple(p) for p in interactions))
     if key not in cache:
-        sc, _ = loyo_scores(df, lambda tr: fit_gamma(tr, features, **fit_kw), years)
+        sc, _ = loyo_scores(df, lambda tr: fit_gamma(tr, features, interactions, **fit_kw), years)
         cache[key] = sc.set_index("test_year")
     return cache[key]
 
 
 def compare_models(df, cur_features, new_features, loyo_years=None, cluster_by=("county_group", "year"),
-                   cache=None, fit_kw=None):
-    """Compare a candidate Gamma model (new_features) with the current one, both on `df`.
+                   cache=None, fit_kw=None, cur_inter=(), new_inter=()):
+    """Compare a candidate Gamma model (new_features + new_inter) with the current one, both on `df`.
+    cur_inter / new_inter: optional interaction terms [[a, b], ...] (added in Milestone 11).
 
     In-sample: deviance; AIC (ML Gamma likelihood); F-test = deviance drop per added parameter
     / phi (the standard GLM test when the dispersion is estimated); plain "LRT" = deviance drop
@@ -440,7 +441,7 @@ def compare_models(df, cur_features, new_features, loyo_years=None, cluster_by=(
     model (each year counts once), its change vs the current model, folds better."""
     cache = {} if cache is None else cache
     fit_kw = dict(fit_kw or {})
-    m0, m1 = fit_gamma(df, cur_features, **fit_kw), fit_gamma(df, new_features, **fit_kw)
+    m0, m1 = fit_gamma(df, cur_features, cur_inter, **fit_kw), fit_gamma(df, new_features, new_inter, **fit_kw)
     r0, r1 = m0.result, m1.result
     ddev, ddf = r0.deviance - r1.deviance, len(m1.params) - len(m0.params)
     phi = m1.phi
@@ -451,17 +452,17 @@ def compare_models(df, cur_features, new_features, loyo_years=None, cluster_by=(
     row["d_AIC"] = row["AIC"] - aic_gamma(m0, df)
     new_cols = [c for c in m1.params.index if c not in m0.params.index]
     if set(m0.params.index) <= set(m1.params.index) and new_cols:
-        rc = fit_gamma(df, new_features, cov="cluster", cluster_by=cluster_by, **fit_kw).result
+        rc = fit_gamma(df, new_features, new_inter, cov="cluster", cluster_by=cluster_by, **fit_kw).result
         R = np.zeros((len(new_cols), len(m1.params)))
         for i, c in enumerate(new_cols):
             R[i, list(m1.params.index).index(c)] = 1.0
         row["cluster_Wald_p"] = float(rc.wald_test(R, scalar=True).pvalue)
     if loyo_years is not None:
-        s1 = _loyo_cached(df, new_features, loyo_years, cache, fit_kw)
+        s1 = _loyo_cached(df, new_features, loyo_years, cache, fit_kw, new_inter)
         row["devLOYO_improvement_pct"] = s1["improvement_rebased_pct"].mean()
         row["devLOYO_improvement_noncat_pct"] = s1.loc[~s1["cat_year"], "improvement_rebased_pct"].mean()
         if cur_features:
-            s0 = _loyo_cached(df, cur_features, loyo_years, cache, fit_kw)
+            s0 = _loyo_cached(df, cur_features, loyo_years, cache, fit_kw, cur_inter)
             row["d_devLOYO_pct"] = row["devLOYO_improvement_pct"] - s0["improvement_rebased_pct"].mean()
             row["devLOYO_folds_better"] = f"{int((s1['deviance_rebased'] < s0['deviance_rebased']).sum())}/{len(s1)}"
         else:   # versus the year-only model, whose re-based predictions equal the null's
