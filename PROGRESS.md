@@ -230,6 +230,17 @@ The data is downloaded and explored. Everything except the data files is committ
 - **Checks are assertions inside the script** (rather than a pytest suite), so they run on every build without a new package.
 - Project-plan week-2 file names updated to the real ones (`build_dataset.py`, `va_model_data.parquet`).
 
+### Milestone 11 decisions (2026-11-11)
+- **Decision rule, written before any Milestone 11 result was computed.** The app uses an XGBoost pure-premium structure only if **all** of these hold against the champion (GLM frequency × severity + Bühlmann–Straub county factor):
+  1. better on the 16-year LOYO mean re-based Tweedie (p = 1.5) improvement, with the year-bootstrap 95% CI of the difference excluding 0;
+  2. better on the 2021–2025 holdout;
+  3. not worse on the catastrophe-year mean;
+  4. double-lift end-decile error no bigger than the champion's;
+  5. no key segment (zone, elevated, coverage, occupancy, year built, county group) with out-of-fold A/E outside 0.8–1.25 where the champion's is inside;
+  6. its explanation gap can be closed for the app now. Without SHAP (Milestone 12) it can't, so an XGBoost win on 1–5 means "XGBoost production deferred to Milestone 12; the GLM ships now".
+- **Hybrid rule:** a GLM + interaction (or second-pass feature) replaces the plain GLM if each added term passes the existing keep rule on dev LOYO (cluster Wald p < 0.05 **and** better dev-LOYO), and the resulting pure premium isn't worse on the 16-year LOYO or the holdout.
+- **No re-tuning.** XGBoost hyperparameters and tree counts are frozen from `models/xgb_settings.json`; only refits inside folds.
+
 ### Milestone 10 decisions (2026-11-11)
 - **Year handling = the GLMs' year factor.**
   - `base_margin` = log(exposure) (frequency only) + log(year level). The year level comes from a year-only model on the training years: a rate ratio for frequency, a mean ratio for severity, a loss-cost ratio for the Tweedie.
