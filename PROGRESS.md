@@ -312,6 +312,29 @@ The data is downloaded and explored. Everything except the data files is committ
 - **Checks are assertions inside the script** (rather than a pytest suite), so they run on every build without a new package.
 - Project-plan week-2 file names updated to the real ones (`build_dataset.py`, `va_model_data.parquet`).
 
+### Milestone 13 decisions (2026-11-12, multi-state: VA + NC + MD)
+**Written before any NC/MD result was computed:**
+- **Same features and groupings as Virginia** (`make_features` unchanged), so the Virginia model can be applied unchanged in the transfer test. The ≥1% rare-level rule is checked on pooled 3-state exposure, and per-state shares are reported. The rule only forces merges, so V zones stay merged with A even if they exceed 1% in NC.
+- **State × year fixed effects** replace the single year factor. Storms hit states in different years (Florence 2018 is an NC year), so a shared year factor would push storm levels into the building relativities. Each state gets its own average-year level; **state factor** = that level ÷ Virginia's. Sensitivity: shared year + state main effect.
+- **Loads:**
+  - off-balance per state, so every state's total balances;
+  - ICC bridge pooled (per-state values reported; switch to per-state if they differ by more than 1%);
+  - large-loss load stays 1.000.
+- **County factor:** Bühlmann–Straub with EPV/VHM/k estimated on all counties of the three states pooled, then re-centred **within each state**. County factors only move money between counties of the same state.
+- **county_group:** same 5,000 policy-year floor. Small/unknown pools are per state (× tidal).
+- **Tidal flags:**
+  - VA: Tidewater, unchanged.
+  - **NC:** the 20 CAMA coastal-area counties, N.C. Gen. Stat. § 113A-103(2) (ncleg.gov, fetched 2026-11-12; the statute's illustrative list as of July 1, 2012).
+  - **MD:** the 16 counties + Baltimore City that administer the Chesapeake and Atlantic Coastal Bays Critical Area (land within 1,000 ft of tidal waters, Md. Code, Natural Resources § 8-1807). The jurisdictions are named on the Critical Area Commission's page (dnr.maryland.gov/criticalarea/Pages/property-owner-resources.aspx, fetched 2026-11-12). The statute defines the area, not the list, and the Coastal Zone Management page returned 404, so this is the best official list found.
+- **Cat years:** per state, the top-3 paid-claim years in that state's data (`validation.cat_years` on its rows). Pooled summaries use the pooled top 3.
+- **Relativity consistency rule** (each factor level, from same-spec per-state fits with cluster-robust CIs):
+  - *consistent*: same side of 1 in all three states, and the feature × state cluster Wald test has p ≥ 0.05;
+  - *differs in size*: same direction, p < 0.05;
+  - *inconsistent*: at least one state's CI lies entirely on the opposite side of 1.
+- **Feature × state interactions** are adopted only if they pass the existing keep rule (cluster Wald p < 0.05 and better dev-LOYO). Otherwise they're only flagged.
+- **XGBoost:** the Milestone 11 decision rule (criteria 1–6) is applied unchanged, with frozen Milestone 10 settings (no re-tuning). Frequency stays no-geography; `state` joins the severity/Tweedie one-hot geography.
+- **Model files:** the Virginia model is copied to `models/production_model_va.json` (the transfer-test model, kept as the record). `va_model_data.parquet` is still built by the default (VA-only) run.
+
 ### Milestone 12 decisions (2026-11-12)
 - **The production model is a GLM**, so step 1a is a relativity breakdown plus a portfolio importance ranking. SHAP is used for XGBoost and, in closed form, for the GLM, so both are compared on one yardstick (exposure-weighted mean |SHAP|, log scale, same rows).
 - **GLM SHAP = exact interventional Shapley** with the exposure-weighted portfolio as background.

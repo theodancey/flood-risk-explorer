@@ -5,6 +5,8 @@ Usage (from the project folder, in PowerShell):
     .venv\\Scripts\\python.exe src\\download_data.py fields        # field lists (small)
     .venv\\Scripts\\python.exe src\\download_data.py claims        # all NFIP claims
     .venv\\Scripts\\python.exe src\\download_data.py policies-va   # Virginia policies
+    .venv\\Scripts\\python.exe src\\download_data.py policies-nc   # North Carolina policies (Milestone 13)
+    .venv\\Scripts\\python.exe src\\download_data.py policies-md   # Maryland policies (Milestone 13)
     .venv\\Scripts\\python.exe src\\download_data.py counties      # county names (Census, small)
     .venv\\Scripts\\python.exe src\\download_data.py cpi           # CPI-U inflation index (BLS, small)
     .venv\\Scripts\\python.exe src\\download_data.py coastal       # coastline county list (Census, small)
@@ -340,10 +342,21 @@ def download_claims():
         return download_api("NfipClaims", 3, dest)
 
 
+POLICY_STATES = ("VA", "NC", "MD")     # states this project models (Milestone 13 added NC, MD)
+
+
+def download_policies(state):
+    """NFIP policies for one state (2-letter postal code), with only the columns we need.
+    Every state uses the same column list, so the files line up exactly."""
+    state = state.upper()
+    assert state in POLICY_STATES, state
+    return download_api("NfipPolicies", 3, RAW_DIR / f"NfipPoliciesV3_{state}.parquet",
+                        filter=f"propertyState eq '{state}'", select=POLICY_COLUMNS)
+
+
 def download_policies_va():
-    """NFIP policies for Virginia only, with only the columns we need."""
-    return download_api("NfipPolicies", 3, RAW_DIR / "NfipPoliciesV3_VA.parquet",
-                        filter="propertyState eq 'VA'", select=POLICY_COLUMNS)
+    """NFIP policies for Virginia only (kept for the original command)."""
+    return download_policies("VA")
 
 
 def download_county_names():
@@ -404,7 +417,8 @@ def download_coastline_counties():
 def main():
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     what = sys.argv[1] if len(sys.argv) > 1 else "all"
-    if what not in ("fields", "claims", "policies-va", "counties", "cpi", "coastal", "all"):
+    policy_opts = {f"policies-{st.lower()}": st for st in POLICY_STATES}
+    if what not in ("fields", "claims", *policy_opts, "counties", "cpi", "coastal", "all"):
         print(__doc__)
         sys.exit(1)
 
@@ -413,8 +427,9 @@ def main():
         get_field_list("NfipPolicies", 3)
     if what in ("claims", "all"):
         download_claims()
-    if what in ("policies-va", "all"):
-        download_policies_va()
+    for opt, st in policy_opts.items():
+        if what in (opt, "all"):
+            download_policies(st)
     if what in ("counties", "all"):
         download_county_names()
     if what in ("cpi", "all"):
