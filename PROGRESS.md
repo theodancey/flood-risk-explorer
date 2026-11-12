@@ -1,6 +1,57 @@
 # Progress Log
 
-## Summary (latest: 2026-11-11, Milestone 9: pure premium)
+## Summary (latest: 2026-11-11, Milestone 10: XGBoost challengers)
+All eight parts are done, committed and pushed. No data or model tree files are in Git.
+
+- **Three XGBoost challengers.** Code: **`src/models/xgb_models.py`** (with self-test). Notebook: `notebooks/08_xgboost.ipynb`. Write-up: **`reports/07_xgboost.md`**.
+  - **Frequency:** `count:poisson`, with log(exposure) + log(year level) in `base_margin`, the GLM offset.
+  - **Severity:** `reg:gamma`, on individual claims, uncapped like the GLM.
+  - **Pure premium:** `reg:tweedie`, p = 1.7.
+  - The year is handled like the GLMs' year factor: an average-year prediction, never a tree feature. All 10 candidate features were offered.
+- **Tuning without leakage:**
+  - randomized search, 300 settings × 11 folds (about 3.5 h);
+  - scored by leave-one-year-out on **2010–2020 only**;
+  - early stopping on the cross-validation mean;
+  - **a separate search per geography variant**;
+  - pre-stated tie, geography and monotone rules.
+  - 2021–2025 was used once, at the end.
+- **Final settings:**
+  - frequency: depth 5, lr 0.023, **170 trees**, no geography, unconstrained;
+  - severity: depth 5, lr 0.016, **940 trees**, Tidewater + county group, unconstrained;
+  - Tweedie: depth 5, lr 0.021, **120 trees**, Tidewater + county group, **monotone constraints**.
+  - Saved in `models/xgb_settings.json`; the tree files are gitignored and rebuilt with `fit-final`.
+- **Preview vs GLMs** (unseen development years / 2021–25 holdout):
+
+  | | XGBoost | GLM | XGBoost wins |
+  |---|---|---|---|
+  | Frequency | **6.75% / 4.34%** | 5.58% / 2.21% | 9 of 11 years |
+  | Severity | **25.43% / 23.66%** | 19.16% / 16.65% | 11 of 11 |
+  | Tweedie | **17.44% / 20.85%** | 13.54% / 10.42% | 8 of 11 |
+
+  - **But** frequency XGBoost is **worse in hurricane years** (10.8% vs 14.1%) and has a flatter top/bottom lift.
+- **Your Q7 (geography):**
+  - **Frequency: no.** Tidewater −0.31 points (5 of 11 years); county group −1.65 (1 of 11).
+  - **Severity: yes.** Tidewater +0.47 (7 of 11), county group +1.54 (8 of 11), and the holdout confirms (21.1% → 23.7%).
+  - This is the same split as Milestone 9's credibility result.
+- **Monotonic constraints:**
+  - Tweedie: kept (no cost).
+  - Severity: not used (cost 0.54 points).
+  - Frequency: not used. They're +0.10 on average but worse in 9 of 11 years; the gain is all Hurricane Matthew.
+- **Pure premium:** the XGBoost Tweedie scores best but **fails the double lift** (end-decile error 0.78 vs 0.24) and segment balance (multi-unit A/E 1.49, under-$100K 0.59), like the GLM Tweedie. **Frequency × severity stays the recommended structure.**
+- **Inside the trees:**
+  - Gain shares: frequency is year built 45% + zone 21%; severity is occupancy 34% + county 20% + coverage 12%.
+  - Strongest interactions: year built × zone (frequency), coverage × occupancy (severity).
+  - Elevated × zone is small (1.08).
+
+**Judgment calls worth a look** (details under Milestone 10 decisions):
+1. **One search per geography variant**, added after a dry run showed county group drags frequency down. A single search would have tuned around it.
+2. **Frequency left unconstrained** by the pre-stated rule, even though constraints improve the average. Cost: its average elevated effect is 1.01 (not defensible). Revisit in Milestone 11.
+3. **Severity XGBoost uses county group**, unlike the severity GLM. In the app, county severity still enters through the credibility factor. Milestone 11 must compare the full structures like for like.
+4. XGBoost freq × sev **over-predicts buildings from 2000 or later** (A/E 0.70), likely because early stopping shrinks extreme effects. It's on Milestone 11's list.
+
+**What you need to do:** nothing required. Read `reports/07_xgboost.md` (about 12 minutes) and the Milestone 10 learning notes. No new questions.
+
+## Summary (previous: 2026-11-11, Milestone 9: pure premium)
 All eight parts are done, committed, and pushed (no data files in Git).
 
 - **Pure premium** (`notebooks/07_pure_premium.ipynb`, write-up **`reports/06_pure_premium.md`**, code **`src/models/pure_premium.py`** with self-test):
@@ -179,6 +230,44 @@ The data is downloaded and explored. Everything except the data files is committ
 - **Checks are assertions inside the script** (rather than a pytest suite), so they run on every build without a new package.
 - Project-plan week-2 file names updated to the real ones (`build_dataset.py`, `va_model_data.parquet`).
 
+### Milestone 10 decisions (2026-11-11)
+- **Year handling = the GLMs' year factor.**
+  - `base_margin` = log(exposure) (frequency only) + log(year level). The year level comes from a year-only model on the training years: a rate ratio for frequency, a mean ratio for severity, a loss-cost ratio for the Tweedie.
+  - Unseen years use an average-year level that balances training totals.
+  - `base_score` is never used: training always supplies a base_margin.
+  - Year is not a tree feature. One round of back-fitting the year levels changed the score by +0.01 points, so it's off.
+- **Features:** all 8 building features + Tidewater + county group. Census coastal is left out (Task 5 recommended Tidewater).
+  - Integer codes for ordered bands (needed for monotone constraints); 0/1 binaries; one-hot occupancy and county group.
+  - Encoder levels come from the training data; an unseen level gets all zeros.
+- **Modelling units = the GLMs'.**
+  - Frequency and Tweedie: cells aggregated over the 10 features + year (170,806 rows), excluding the 111 zero-exposure cells.
+  - Severity: 9,553 individual claims, uncapped (P99 shown as a sensitivity).
+  - The Tweedie gets an off-balance factor for unmatched losses, as in Milestone 9.
+- **Tuning metric:** mean re-based deviance improvement over 11 development folds, each year once, using `fg.score_fold` / `sv.score_fold` / `pp.score_cells` (Tweedie at p = 1.5) so the numbers match the GLM reports.
+- **Lockstep early stopping on the fold mean:**
+  - chunks of 10 trees (20 for severity), patience 150;
+  - caps: frequency 1,500, severity 4,000, Tweedie 1,500;
+  - severity needed the higher cap (1,150+ trees at lr 0.03 in the dry run).
+- **Search space changes after the dry run** (before the real search):
+  - lr range 0.03–0.15 → 0.01–0.1;
+  - Tweedie min_child_weight 100–100,000 (its hessian scale: mcw 20 and 500 gave identical fits);
+  - **one search per geography variant.** The dry run had county group cutting frequency from 6.4% to 4.6%, so a single all-features search would have been unfair to the geography test.
+  - Same random draws (seed 2026) for each variant.
+- **Pre-stated rules:**
+  - **Tie rule:** within 0.1 points of the best, take the shallowest, then fewest trees. This picked frequency setting 17 over 5.
+  - **Geography:** keep a step if the mean improves and it's better in ≥ 6 of 11 years.
+  - **Monotone:** use the constraints unless they cost > 0.25 points or are worse in ≥ 8 of 11 years, judged on the tuned setting's pair (top 5 shown).
+  - Geography is decided first, then constraints on the winning variant.
+- **Monotone directions:**
+  - frequency: zone, elevated, year built, post-FIRM −1;
+  - severity: coverage +1, elevated −1, zone −1;
+  - Tweedie: zone, elevated, post-FIRM −1, coverage +1. Year built is left free for severity and the Tweedie because the GLMs show a 1960–79 peak.
+- **Frequency left unconstrained** by the rule. The mean gain (+0.10) comes from 2016 alone, and it's worse in 9 of 11 years. Disclosed, with the elevated 1.01 consequence.
+- **Saved models:** `_dev` (2010–2020, used for the holdout) and `_all` (2010–2025, like the saved GLMs). `.ubj` files are gitignored (0.3–1.5 MB each, rebuildable); `.meta.json` and `xgb_settings.json` are committed.
+- **GLMs in the preview** are refitted inside the same folds through `xgb_models.evaluate(fit_fn=...)`, so both methods are scored by identical code on identical rows. GLM freq × sev is shown without the county factor; Milestone 11 adds it.
+- **Numbering:** report 07 = XGBoost; tables `reports/07_*`; figures `08_*`. Model comparison → report 08 / notebook 09; SHAP → notebook 10 (`docs/PROJECT_PLAN.md` updated).
+- No new packages (xgboost 3.4.1 was already pinned). The notebook generator lives outside the repo, as before.
+
 ### Milestone 9 decisions (2026-11-11)
 - **Refit vs load.** `fit_combined` refits both GLMs (needed for the LOYO folds). On all years it reproduces the saved JSON parameters exactly (asserted in the notebook).
 - **Large-loss load kept as a multiplier (1.000)**, read from the severity model, so a future cap needs no code change. P99 shown as a sensitivity.
@@ -233,6 +322,13 @@ The data is downloaded and explored. Everything except the data files is committ
 - No new packages.
 
 ## Log
+### 2026-11-11: Milestone 10, XGBoost challengers
+1. Read the plan docs and reports 04–06. Wrote `src/models/xgb_models.py` with a 9-check simulated-data self-test (passes). Gitignored `models/*.ubj`. Committed.
+2. Ran a dry run. It changed the design before tuning: one search per geography variant, wider tree caps for severity, a Tweedie min_child_weight range in hessian units, and a lower learning-rate range. Added `XGBFreqSev` and a GLM `fit_fn` hook. Committed.
+3. Tuning: 300 settings × 11 folds, about 3.5 h in the background. Then the geography and monotone comparisons by the pre-stated rules. Committed the tables and settings.
+4. Built notebook 08 from a generator and ran it with nbconvert. The first run failed on a missing raw-deviance key for the Tweedie (fixed). Chart checks found: a legend over the "best trees" label, "cat" labels over bars, clipped coverage axes, unreadable text on dark heatmap cells, a title wider than the double-lift chart, and an exploding top/bottom ratio (284×) from a near-empty decile. All fixed. Wrote the result text and re-ran. Committed.
+5. Wrote report 07 (numbers checked against the notebook output), README, LEARNING_NOTES and this file. Committed and pushed.
+
 ### 2026-11-11: Milestone 9, pure premium
 1. Read the plan docs, Q7 and reports 04–05. Moved the county factor into this milestone in `docs/PROJECT_PLAN.md`. Committed.
 2. Wrote `src/models/pure_premium.py` with a simulated-data self-test. First-run fix: the relativity test used a randomly chosen base level, so I pinned the bases and compared with the data's raw ratio. Committed.

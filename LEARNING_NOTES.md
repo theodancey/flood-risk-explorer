@@ -477,3 +477,87 @@ A: I tried it, and it scored slightly better on overall deviance. But a double-l
 
 **Q: Virginia's NFIP loss ratio is 19%. Is flood insurance overpriced there?**
 A: Not necessarily. NFIP premiums also pay for expenses, catastrophe and reserve loadings, debt, and national cross-subsidies, and one bad year (107% in 2016) can wipe out many quiet ones. The useful part is relative. After dividing out the statewide ratio, pre-1980 buildings pay less than their modelled share and newer buildings more. That fits Risk Rating 2.0's glide path still phasing in full-risk rates.
+
+## Milestone 10: XGBoost challenger models (2026-11-11)
+
+### What I did
+I built three **gradient-boosted tree models (XGBoost)** to challenge the GLMs: claim frequency (Poisson), claim severity (Gamma) and pure premium (Tweedie). They use the same data, all the candidate features and the same validation design. I tuned their settings with a randomized search scored only on the 11 development years (2010–2020), one held-out year at a time, with early stopping. Then I applied rules written in advance to decide whether geography helps and whether to force sensible directions (monotonic constraints). Finally, I checked them once on the 2021–2025 holdout and against the GLMs. XGBoost was better on unseen years for all three, but its Tweedie failed the same double-lift check as the GLM Tweedie, so frequency × severity stays the pricing structure. Files: `src/models/xgb_models.py`, `notebooks/08_xgboost.ipynb`, `reports/07_xgboost.md`, `models/xgb_settings.json`.
+
+### Why I did it that way
+
+**Decision trees.**
+- *Intuition:* a decision tree is a flowchart of yes/no questions. "Is the building in an A/V zone? If yes, was it built before 1980?" Each final box (a **leaf**) holds a prediction: the average outcome of the training rows that ended up there.
+- *Example:* a depth-2 tree splits on zone first, then on year built inside each zone. That gives 4 leaves, e.g. A/V & old → 9 claims per 1,000 policy-years, B/C/X & new → 1.5.
+- *How it chooses a question:* it tries every feature and every cut point, and picks the split that improves the fit the most (for us, the drop in Poisson, Gamma or Tweedie deviance). **Depth** = how many questions in a row. Deeper trees can describe very specific groups, but each leaf then holds fewer rows, so its average is noisier.
+
+**Gradient boosting.**
+- *Intuition:* one tree is crude. **Boosting** builds trees one after another, and each new tree tries to fix the mistakes left by all the earlier ones. It's like a team of weak forecasters where each one only studies what the previous ones got wrong.
+- *Example:* tree 1 learns "A/V zones claim more". Tree 2 looks at what's still off and learns "and old buildings in A/V zones even more". Tree 3 nudges multi-unit buildings, and so on for hundreds of trees.
+- *Formula (log scale):* prediction = exp(base_margin + η × tree₁ + η × tree₂ + … + η × tree_M). η is the **learning rate**. "Gradient" means each tree is fitted to the slope of the loss: the direction that most reduces the deviance.
+- *Link to GLMs:* a GLM adds one fixed number per factor level on the log scale. Boosting adds many small tree outputs on the same log scale. With depth-1 trees (one question each) it's very close to a GLM. Deeper trees allow **interactions** (an effect that depends on another feature).
+
+**XGBoost objectives.**
+- *Intuition:* the **objective** tells XGBoost what kind of outcome it's predicting, so it uses the right deviance. It's the same choice as a GLM's distribution.
+- `count:poisson` for claim counts (frequency), like the Poisson GLM. `reg:gamma` for positive, right-skewed amounts (severity), like the Gamma GLM. `reg:tweedie` (with `tweedie_variance_power` = 1.7) for loss cost that's often exactly $0, like the Tweedie GLM.
+- All three use a **log link**: trees are added on the log scale, so effects multiply, just as in the GLMs.
+
+**base_margin = the offset.**
+- *Intuition:* in a GLM, the **offset** is a known piece of the log prediction that isn't estimated, e.g. log(exposure): twice the policy-years → twice the expected claims. XGBoost's version is `base_margin`: a starting value per row that the trees add to.
+- *Example:* a cell with 200 policy-years in 2018 gets base_margin = log(200) + log(2018's year level). If the trees add log(0.004), the prediction is 200 × 2018 level × 0.004 claims.
+- *What I put in it:* log(earned exposure) for frequency (so trees learn a *rate*), plus the **log of the calendar year's level** from a year-only model on the training years (so a hurricane year isn't blamed on whichever building types happened to be flooded). An unseen year gets the **average-year level**, the same idea as the GLMs' average-year prediction. Year is never a tree feature, because a tree can't learn anything useful about a year it has never seen.
+
+**Hyperparameters.**
+- *Intuition:* **parameters** are learned from the data (the leaf values). **Hyperparameters** are settings we choose that control *how* the model learns.
+- `max_depth` (how specific the groups can get); `learning_rate` (how much of each tree to add: small is cautious and needs more trees); `n_estimators` (number of trees); `min_child_weight` (a leaf needs at least this much evidence; for Poisson that's roughly "expected claims in the leaf"); `subsample` and `colsample_bytree` (each tree sees a random share of rows and features, which adds healthy randomness); `reg_lambda`, `reg_alpha` (shrink leaf values toward zero); `gamma` (a split must improve the fit by at least this much).
+- *Analogy:* they're like a GLM analyst deciding which features and how many levels to allow, but turned into numbers you can search over.
+
+**Early stopping and over-fitting.**
+- *Intuition:* **over-fitting** means memorizing the training data's noise instead of the real pattern. Here, that means learning *which cells happened to be flooded in 2016* instead of *which kinds of buildings flood more*. More trees always fit the training years better, but past some point they do worse on unseen years.
+- *Early stopping:* keep adding trees, score the held-out years after every few, and stop when the held-out score hasn't improved for a while (150 trees here). Use the tree count at the best score.
+- *Example:* with the chosen frequency settings, the held-out score rises for the first few dozen trees, peaks, then slowly falls as later trees chase storm noise (see `reports/figures/08_early_stopping.png`).
+
+**Tuning leakage.**
+- *Intuition:* **leakage** means information from the test data sneaks into the choices you made, so the test score looks better than the model really is. If you try 40 settings and pick the one that does best on 2021–2025, then 2021–2025 is no longer an honest test. You've tuned to it.
+- *What I did:* every tuning choice (settings, tree count, geography, constraints) used leave-one-year-out on **2010–2020 only**. The 2021–2025 holdout was scored once, after everything was frozen. A milder form remains: picking the best of 40 settings on the same 11 folds is slightly optimistic (**selection optimism**), which is why the holdout matters.
+
+**Monotonic constraints.**
+- *Intuition:* a **monotonic constraint** forces the prediction to move in only one direction as a feature increases, holding everything else fixed. Without it, trees can produce patterns no one can defend, such as a higher coverage limit giving a *smaller* expected claim in some small corner of the data.
+- *Example:* "elevated buildings never claim *more often* than the same building not elevated." XGBoost enforces this inside every split, so it holds for every combination of the other features.
+- *How:* in XGBoost, `monotone_constraints` = −1 (non-increasing), +1 (non-decreasing) or 0 (free) per feature. This needs ordered codes (year built 0 = before 1960 … 3 = 2000+), which is why bands were coded as numbers rather than one-hot.
+- *Trade-off:* constraints can cost a little accuracy if the true pattern isn't monotone, so only directions with a clear physical or actuarial reason were constrained. Year built stays free for severity and pure premium because the GLMs show a real 1960–79 peak.
+
+**Feature importance (gain).**
+- *Intuition:* **gain** adds up how much each feature's splits improved the training fit, across all trees. A feature that gets used for many big improvements has high gain.
+- *Caveats:* it measures *training* fit, not value on unseen years. It favours features with many possible split points or many one-hot columns. And it says nothing about direction (does the feature raise or lower risk?). A feature can have high gain and still fail the held-out test, which is exactly what county group did for frequency.
+- *Better tool (Milestone 12):* **SHAP values** split each individual prediction into per-feature contributions with a sign, and add up exactly to the prediction.
+
+**What the comparison found, and why it isn't the final word.**
+- *Results on unseen years:*
+  - **Frequency:** XGBoost 6.75% vs GLM 5.58% (holdout 4.3% vs 2.2%).
+  - **Severity:** 25.4% vs 19.2% (holdout 23.7% vs 16.7%).
+  - **Pure premium (Tweedie):** 17.4% vs 13.5%.
+- *Why the trees win:* they find interactions (e.g. old buildings are much worse in A/V zones than in B/C/X), and they use county for claim size, which the GLM rejected.
+- *Why it isn't decisive yet:*
+  - Frequency XGBoost is worse in the three hurricane years.
+  - The severity comparison isn't like for like (the GLM pricing structure adds county severity through credibility).
+  - A model with 940 trees is much harder to explain and defend than a relativity table.
+- Milestone 11 does the full comparison; Milestone 12 explains the trees with SHAP.
+
+**Geography (your Question 7).**
+- *Frequency:* even a flexible model couldn't use county or Tidewater to predict *how often* claims happen in an unseen year. County group was worse in 10 of 11 years.
+- *Severity:* county and Tidewater help claim *size*, by +2 points, confirmed on the holdout.
+- This matches the Bühlmann–Straub result from Milestone 9: county frequency differences are storm noise, but county severity differences are real.
+
+### Interview questions
+
+**Q: How did you tune XGBoost without overfitting to your test data?**
+A: Every choice (hyperparameters, number of trees, geography, constraints) was made with leave-one-year-out cross-validation on 2010–2020 only. Each setting was scored by its average improvement over 11 unseen years, and early stopping watched that same average. The 2021–2025 holdout was scored once, after everything was frozen. It confirmed the gains, which suggests the selection optimism was small.
+
+**Q: How do you handle exposure in XGBoost?**
+A: The same way a GLM does, with an offset. XGBoost calls it `base_margin`: a starting value on the log scale that the trees add to. I put log(earned exposure) there, so the trees model claims per policy-year, plus the log of the calendar year's level from the training years, so a hurricane year isn't blamed on building features. Prediction uses an average-year level.
+
+**Q: Your XGBoost Tweedie had the best deviance. Why didn't you pick it?**
+A: Because a double-lift chart showed that where it and frequency × severity disagreed, frequency × severity matched actual losses: end-decile error 0.24 vs 0.78. The Tweedie also under-predicted multi-unit buildings by about a third and over-predicted low-coverage policies. That's the same pattern I'd seen in the GLM Tweedie, so it's the structure, not the algorithm. One overall metric can hide segment errors that matter for pricing.
+
+**Q: What are monotonic constraints, and did they cost accuracy?**
+A: They force the model's prediction to move only one way as a feature increases, for example that elevation never increases claim frequency. For the Tweedie they cost nothing, so I used them. For severity they cost about half a point, more than my pre-set allowance. For frequency they helped on average, but only because of Hurricane Matthew; they were worse in 9 of 11 years. So my rule left it unconstrained, and I flagged the slightly odd elevation effect for the comparison milestone.
