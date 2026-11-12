@@ -561,3 +561,71 @@ A: Because a double-lift chart showed that where it and frequency × severity di
 
 **Q: What are monotonic constraints, and did they cost accuracy?**
 A: They force the model's prediction to move only one way as a feature increases, for example that elevation never increases claim frequency. For the Tweedie they cost nothing, so I used them. For severity they cost about half a point, more than my pre-set allowance. For frequency they helped on average, but only because of Hurricane Matthew; they were worse in 9 of 11 years. So my rule left it unconstrained, and I flagged the slightly odd elevation effect for the comparison milestone.
+
+
+## Milestone 11: GLM vs XGBoost head to head, and the production model (2026-11-11)
+
+### What I did
+I compared the GLM champion (frequency × severity + county credibility factor) with the XGBoost models from Milestone 10. Every model was refitted on exactly the same training years and scored on exactly the same unseen rows, with the same loss treatment and the same yardstick. XGBoost turned out to be genuinely more accurate: about 4 points better on pure premium, in 15 of 16 unseen years, and two kinds of bootstrap put the gap clearly above zero. I then checked things accuracy doesn't show: stability, hurricane years, and whether each model's effects point in sensible directions. Finally, I took the interactions XGBoost found and added them to the GLM, creating a "hybrid" that became the production model the app will load.
+
+### Why I did it that way
+
+**Fair comparisons.**
+- *Intuition:* comparing two models is like comparing two students. It's only fair if they sit the same exam, under the same rules, marked with the same answer key. If one model saw an easier test year, or had its losses capped differently, the "winner" could just be the luckier setup.
+- *Example:* in Milestone 10, the GLM pure premium was scored *without* its county factor, while XGBoost had county inside its severity trees. That's not like for like. This time, both frequency × severity structures were built by literally the same code, and I added a variant (XGBoost without geography + the same credibility county factor) so the county handling matches too.
+- *Checklist I used:* same data file, same rows, same folds, same test rows (asserted in code), same dollars and loads, same metric, and the same tuning budget (both chosen on 2010–2020 only). Any differences are written down, not hidden.
+
+**The Gini coefficient.**
+- *Intuition:* it measures how well a model **ranks** risks, ignoring whether its overall level is right. Sort all cells from lowest to highest predicted risk, then ask: do the actual losses pile up at the high end?
+- *Example:* if the safest 50% of exposure (by the model's ranking) produced only 10% of losses, the model ranks well. If it produced 50%, it ranks no better than random.
+- *Formula:* plot the cumulative share of exposure (x) against the cumulative share of actual losses (y), sorted by predicted risk. A random model gives the diagonal. Gini = 1 − 2 × (area under that curve), so 0 = random and higher = better ranking.
+- *Our numbers:* pure premium 0.47 (GLM champion) vs 0.53 (XGBoost frequency × severity).
+
+**Double-lift charts.**
+- *Intuition:* when two models mostly agree, comparing them on average hides where they differ. A double lift zooms in on the **disagreements** and asks who's right there.
+- *How:* for each cell, compute the ratio model A ÷ model B. Sort cells by that ratio and cut them into 10 equal-exposure groups. In the left group, A is low relative to B; in the right group, A is high relative to B. Plot actual losses and both models' predictions in each group. Whichever line tracks the actual bars at the ends is right where they disagree.
+- *Our result:* in the group where the GLM was relatively highest, it predicted 2.18× average, XGBoost 0.93×, and actual was 0.83×. End-decile error: GLM 1.12, XGBoost 0.08. That's why I went looking for what XGBoost knew that the GLM didn't.
+
+**Bootstrap confidence intervals.**
+- *Intuition:* we only have one history (16 years). The **bootstrap** asks: "if history had come out slightly differently, how much would my answer change?" It builds many alternative datasets by **resampling with replacement** from what we have, and recomputes the answer on each.
+- *Example (year bootstrap):* XGBoost beat the GLM by different amounts each year (+9.5 in 2011, −0.5 in 2013, and so on). Draw 16 years at random *with replacement* (some years twice, some not at all), average the differences, and repeat 10,000 times. The middle 95% of those 10,000 averages is the **95% confidence interval**: 2.9 to 5.7 points. It doesn't include 0, so the gap isn't luck.
+- *Cluster bootstrap:* within each year, resample whole **county groups** (not single cells), because cells in the same storm and place move together. Resampling single cells would pretend we have far more independent evidence than we do (the same over-dispersion lesson as Milestone 7).
+- *Sign test:* the simplest check. If two models were equal, winning 15 of 16 years would be like getting 15 heads in 16 coin flips, which has probability about 0.0005.
+
+**Model stability.**
+- *Intuition:* a rate that jumps every time you add a year of data is hard to trust and hard to file with a regulator. A good model's predictions for the same kind of building should move a little, not a lot, when the training data changes slightly.
+- *How I measured it:* fix a grid (all 2025 rating cells). Predict it with the all-years model and with each model that left out one year. Divide each set of predictions by its own average, so a change in overall *level* doesn't count. The measure is the average % change in a cell's *relative* prediction.
+- *Results:*
+  - For frequency and severity, the GLMs move about 2–3% and XGBoost about 4%.
+  - XGBoost also moves 2–4% when **only the random seed** changes. Its row and column sampling makes each run slightly different.
+  - Surprise: the least stable piece of my own model is the **county credibility factor**. Dropping 2011 moves the champion's pure premium by 42% on average, vs 17.5% without the county factor.
+
+**Why insurers value explainability.**
+- *Regulators:* in the US, rates are filed with state regulators, who expect a rating plan: a table of factors, each with a sensible direction and supporting data. "The model says so" isn't an acceptable reason.
+- *Customers:* a policyholder can ask why their price is what it is. With a GLM the answer is a worksheet: base × 3.0 for a 1960s building × 0.89 for one floor × 1.21 for Virginia Beach.
+- *Checking for mistakes:* a GLM's few numbers can be checked against common sense. I flipped one feature at a time on every cell. XGBoost made elevation *raise* expected claim frequency for 78% of exposure, and made higher coverage *lower* expected claim size for 22%. Neither can be defended. The GLMs can't do that, because each factor has one multiplier.
+- *Trade-off:* explainability can cost accuracy, which is why the honest answer here is "XGBoost is more accurate, and here's why we still don't use it yet."
+
+**Hybrid GLM + interactions.**
+- *Intuition:* an **interaction** means one factor's effect depends on another. A plain GLM multiplies effects, assuming each works the same everywhere. Trees find interactions automatically, so you can use XGBoost as a *detective* and the GLM as the *courtroom*: add only the interactions XGBoost points to, and keep them only if they pass the same statistical tests as any other term.
+- *Example:* low coverage limits mean smaller claims (0.69×), and multi-unit buildings mean bigger ones (2.10×). The plain GLM multiplies these: 1.45×. But a multi-unit building with under $100K of cover hits its limit, so its claims can't be that big. The hybrid's two-way table says 1.11×.
+- *Formula:* log(severity) = base + coverage effect + occupancy effect + **(coverage × occupancy) effect** + … The extra term is one coefficient per combination of non-base levels (6 here), so the result is still a small table of multipliers.
+- *Result:* coverage × occupancy was overwhelmingly significant (better in all 11 development years). The hybrid closed about a third of the XGBoost gap on the 2021–2025 holdout. But its 16-year gain is small (+0.4 points) and not consistent across years (9 of 16), which I disclosed.
+
+**Why the GLM still won the decision.** I wrote the decision rule in PROGRESS.md *before* computing anything, so I couldn't bend it to a result I liked.
+- XGBoost passed the accuracy, holdout, catastrophe-year and double-lift tests.
+- It failed the segment test: it over-predicted buildings from 2000 or later by about 30%, and mis-sized Alexandria and Chesapeake, where the GLM was balanced.
+- It also can't produce a rating worksheet yet.
+
+So the app uses the hybrid GLM, and XGBoost stays as the benchmark that tells us how much signal is still on the table.
+
+### Interview questions
+
+**Q: XGBoost was more accurate. Why didn't you use it?**
+A: The accuracy gap was real (about 4 points, 15 of 16 years, bootstrap CI 2.9 to 5.7), but accuracy wasn't my only pre-stated test. XGBoost over-predicted newer buildings by about 30% and mis-sized two county groups. It moved the wrong way on elevation for 78% of cells, and its rates changed when only the random seed changed. For a rating plan that has to be explained to customers and regulators, that's disqualifying for now. Instead, I moved its best interactions into the GLM.
+
+**Q: How did you decide whether the difference between the models was real?**
+A: Three ways. Per-year wins with a sign test: 15 of 16 years, p ≈ 0.0005. A year bootstrap, resampling the 16 per-year differences, which asks whether the gap survives a different draw of weather. And a cluster bootstrap, resampling county groups within each year, which asks whether it survives within-year noise. XGBoost's gap was clear of zero in all three. My hybrid GLM's gain was clear within years but not across years, so I described it as small.
+
+**Q: What's a double-lift chart, and what did it show?**
+A: Sort cells by the ratio of two models' predictions and compare actual losses with each model in the extreme groups, where they disagree most. Where my GLM thought cells were much riskier than XGBoost did, actual losses were close to XGBoost's prediction (0.83× average vs the GLM's 2.18×). That told me XGBoost knew something the GLM didn't. I traced it to interactions like coverage × occupancy and added those to the GLM.

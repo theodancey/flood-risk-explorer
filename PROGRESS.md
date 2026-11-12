@@ -1,6 +1,52 @@
 # Progress Log
 
-## Summary (latest: 2026-11-11, Milestone 10: XGBoost challengers)
+## Summary (latest: 2026-11-11, Milestone 11: GLM vs XGBoost head to head)
+All seven parts are done, committed and pushed. No data or model tree files are in Git.
+
+- **Files:**
+  - code **`src/models/compare.py`** (every model refitted on identical folds, bootstraps, stability, hybrid tests; self-test), run with `compare.py run` (6.8 minutes);
+  - notebook `notebooks/09_model_comparison.ipynb`;
+  - decision memo **`reports/08_model_comparison.md`** (about 2 pages);
+  - **production model `models/production_model.json`** + loader `src/models/production.py` (see `docs/production_model.md`).
+- **Fair setup:** same data hash, rows, folds and test rows (asserted), same loss treatment and yardstick. XGBoost freq × sev now goes through the same `CombinedModel` code as the GLM. Milestone 9's and 10's scores reproduce exactly. No re-tuning.
+- **Accuracy (16-year LOYO, pure premium):**
+
+  | Model | Improvement | Holdout |
+  |---|---|---|
+  | GLM champion | 10.7% | 8.9% |
+  | Hybrid GLM | 11.2% | 10.3% |
+  | **XGB freq × sev** | **15.0%** | **12.6%** |
+  | XGB Tweedie | 18.3% | 19.6% |
+
+- **Is it real? XGBoost vs the champion: yes.**
+  - +4.3 points, better in 15 of 16 years (sign test p = 0.0005);
+  - year-bootstrap CI 2.9 to 5.7; cluster-bootstrap CI 3.0 to 5.5 (LOYO) and 1.9 to 6.4 (holdout);
+  - Gini +0.06;
+  - by component: severity +7.2 (16 of 16 years), frequency +1.8 (CI 0.1 to 3.2).
+- **Other comparisons:**
+  - **NB vs Poisson:** +0.5 (CI −0.4 to 1.3), not significant, so Poisson stays.
+  - **Double lift:** where XGBoost and the champion disagree, XGBoost is right (end-decile error 0.08 vs 1.12).
+- **Beyond accuracy:**
+  - **Stability:** the GLMs move 2–3% when a year is dropped, XGBoost about 4%. XGBoost also moves 2–4% with **only a new random seed**. The county factor is the champion's least stable part (dropping 2011 moves it 42%, vs 17.5% without it).
+  - **Catastrophe years:** XGBoost freq × sev places storm losses best (15.8% vs 8.3%), but the GLM wins storm *frequency*. The county factor points the wrong way in held-out storms.
+  - **Explainability:** XGBoost moves the wrong way for elevation (frequency up for 78% of exposure) and coverage (severity down for 22%). The GLMs can't.
+- **Hybrid** (keep rule, dev years only):
+  - **Kept:** severity **coverage × occupancy** (p < 10⁻²⁰, 11 of 11 years), frequency **year built × zone** (narrow), severity **elevated × zone** (narrow).
+  - The frequency **second pass** adds nothing.
+  - **Result:** better on LOYO (+0.4) and the holdout (+1.4). Not consistent across years (9 of 16; year-bootstrap CI −0.3 to 1.1).
+- **Decision (rule pre-stated in Milestone 11 decisions): the app uses the hybrid GLM.**
+  - XGBoost fails the **segment** check (built 2000+ A/E 0.69; Alexandria 1.39, Chesapeake 0.78) as well as explainability.
+  - Worksheets move: Arlington commercial **$516 → $269**, Newport News condo $579 → $656, Virginia Beach $585 → $598.
+
+**Judgment calls worth a look** (details under Milestone 11 decisions):
+1. **The GLM ships even though XGBoost is clearly more accurate.** The memo says so plainly; XGBoost stays the benchmark for Milestone 12 (SHAP).
+2. **The hybrid was adopted on a small gain** that's real within years but not consistent across them. Two of its three terms passed the keep rule narrowly.
+3. **Arlington commercial halves** under the hybrid. That's the coverage × occupancy interaction: non-residential buildings with mid-range cover have smaller claims than the plain multiplication assumed.
+4. **The county factor** is the least stable piece and hurts in storm years. It's kept, as you asked in Q7, still labelled less certain, but worth revisiting (e.g. capping how far it can move).
+
+**What you need to do:** nothing required. Read `reports/08_model_comparison.md` (about 10 minutes) and the Milestone 11 learning notes. No new questions.
+
+## Summary (previous: 2026-11-11, Milestone 10: XGBoost challengers)
 All eight parts are done, committed and pushed. No data or model tree files are in Git.
 
 - **Three XGBoost challengers.** Code: **`src/models/xgb_models.py`** (with self-test). Notebook: `notebooks/08_xgboost.ipynb`. Write-up: **`reports/07_xgboost.md`**.
@@ -240,6 +286,25 @@ The data is downloaded and explored. Everything except the data files is committ
   6. its explanation gap can be closed for the app now. Without SHAP (Milestone 12) it can't, so an XGBoost win on 1–5 means "XGBoost production deferred to Milestone 12; the GLM ships now".
 - **Hybrid rule:** a GLM + interaction (or second-pass feature) replaces the plain GLM if each added term passes the existing keep rule on dev LOYO (cluster Wald p < 0.05 **and** better dev-LOYO), and the resulting pure premium isn't worse on the 16-year LOYO or the holdout.
 - **No re-tuning.** XGBoost hyperparameters and tree counts are frozen from `models/xgb_settings.json`; only refits inside folds.
+- **One fold runner for every model** (`compare.fit_split` / `score_split`).
+  - Frequency is scored on XGBoost's 10-feature table, severity on individual claims, and pure premium on the raw county-level cells (so the county factor applies). That reproduces Milestone 10 and Milestone 9 exactly.
+  - XGBoost freq × sev uses `pp.CombinedModel`, which only needs `.predict(df, "average"/"fitted")`. So the ICC bridge, off-balance and Bühlmann–Straub factor are computed by identical code.
+- **Like-for-like county variant:** XGBoost severity *without* geography, using the no-geography tuning table's choice by the same tie rule (no new search), plus the same credibility county factor.
+- **Two bootstraps.**
+  - **Year bootstrap** (resample the 16 per-year differences, B = 10,000).
+  - **Cluster bootstrap** (resample county groups within each year, B = 1,000). Deviances come from per-cluster sums, which works because re-basing has a closed form; this is checked in the self-test.
+  - Holdout clusters = county group × year.
+  - Predictions are held fixed (no refitting per replicate), the standard shortcut. It reflects test-set noise, not training noise.
+- **Stability** is measured level-free on the 2025 in-force grid: each prediction is divided by its exposure-weighted mean. Comparisons: 16 drop-one-year models, the 2010–2020 model, and 3 extra XGBoost seeds.
+- **Explainability check:** flip one feature on every 2025 cell and record the share of exposure moving against the actuarial direction.
+- **Hybrid candidates came from Milestone 10's interaction table:**
+  - year built × zone (frequency top), coverage × occupancy (severity top), elevated × zone (Milestone 8's flag).
+  - Each was tested in that order against the model as it stood. Interactions use non-base × non-base dummy products, so the main effects keep their meaning at the base levels.
+  - The frequency second pass ran after the interaction.
+- **Production model = hybrid GLM + Bühlmann–Straub county factor, refitted on all 16 years**, saved as one self-contained JSON (GLM specs + coefficients, loads, county table with names, model card). `pure_premium.json` is kept unchanged as the Milestone 9 record. The app milestone now points to `production_model.json` (`docs/PROJECT_PLAN.md`).
+- **`production.predict` supplies a placeholder `year`** when the input has none. The GLM design matrix reads the column, but the average-year prediction zeroes it.
+- Small backward-compatible library changes: `pure_premium.fit_combined` gained `freq_interactions` / `sev_interactions`, and `severity_glm.compare_models` gained `cur_inter` / `new_inter`. All six self-tests pass.
+- Charts use slots 1–3 of the dataviz skill's validated reference palette (the same blue/orange/aqua as before) plus neutral inks. Node.js isn't installed, so the palette validator script wasn't run; these slots are the ones the skill documents as validated. The notebook generator lives outside the repo, as before. No new packages.
 
 ### Milestone 10 decisions (2026-11-11)
 - **Year handling = the GLMs' year factor.**
@@ -333,6 +398,18 @@ The data is downloaded and explored. Everything except the data files is committ
 - No new packages.
 
 ## Log
+### 2026-11-11: Milestone 11, GLM vs XGBoost
+1. Read the plan docs and reports 04–07. Wrote the decision rule into PROGRESS.md before computing anything. Committed.
+2. Added the interaction passthroughs (self-tests still pass). Wrote `src/models/compare.py` with a self-test (cluster-sum deviances = direct formulas, replicate Gini, bootstrap sanity, stability metric).
+3. Ran a dry run. It looked like it hung, but that was a stray `cat >` in my shell command waiting for input, not the code. Profiling showed every fit takes about 1 s. The dry-run folds matched Milestone 9's per-fold scores exactly.
+4. Ran `compare.py run` (6.8 minutes: hybrid tests, 16 + 11 + 1 splits, seed refits). Committed the module.
+5. Built notebook 09 from a generator and ran it with nbconvert.
+   - The first run failed in the production loader (missing `year` column); fixed.
+   - Chart checks found legends covering data (scorecard, lift, per-year, stability, cat years, segment), county groups shown as FIPS codes, and interaction tables in exposure order instead of natural order. All fixed. Added the no-county GLM to the stability table after seeing how much the county factor moves.
+   - Wrote the result text from the outputs and re-ran. Committed the notebook, figures, tables and production model.
+6. Wrote report 08 and `docs/production_model.md`, checking every number against the notebook. Verified the doc's code example ($598). Updated README and PROJECT_PLAN. Committed.
+7. Updated LEARNING_NOTES and this file. Committed and pushed.
+
 ### 2026-11-11: Milestone 10, XGBoost challengers
 1. Read the plan docs and reports 04–06. Wrote `src/models/xgb_models.py` with a 9-check simulated-data self-test (passes). Gitignored `models/*.ubj`. Committed.
 2. Ran a dry run. It changed the design before tuning: one search per geography variant, wider tree caps for severity, a Tweedie min_child_weight range in hessian units, and a lower learning-rate range. Added `XGBFreqSev` and a GLM `fit_fn` hook. Committed.
