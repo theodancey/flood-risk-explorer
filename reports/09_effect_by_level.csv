@@ -1,0 +1,67 @@
+part,feature,level,GLM,XGB,same_direction
+frequency,Flood zone,A/V high risk,1.4275432274120377,1.2468949382840502,True
+frequency,Flood zone,B/C/X moderate-low risk,0.6908819469846914,0.6980900543402548,True
+frequency,Year built,before 1960,1.8372657311038048,1.3735325722187146,True
+frequency,Year built,1960-1979,1.7229464857351926,1.327828169279494,True
+frequency,Year built,1980-1999,0.6631077721446724,0.6427397853489386,True
+frequency,Year built,2000 or later,0.4343588762812513,0.5260453510464257,True
+frequency,Occupancy,single-unit residential,1.0,0.9922984530695507,False
+frequency,Occupancy,multi-unit residential,1.0,1.0984515860606066,False
+frequency,Occupancy,non-residential,1.0,1.037579292494191,False
+frequency,Building coverage,$0 (contents only),1.0,1.3459213986487335,False
+frequency,Building coverage,under $100K,1.0,1.1299697434085223,False
+frequency,Building coverage,$100K-$249K,1.0,1.0414860687517435,False
+frequency,Building coverage,$250K or more,1.0,0.9450802908228236,False
+frequency,Elevated building,False,1.0,0.9924074171463583,False
+frequency,Elevated building,True,1.0,1.0076197076419824,False
+frequency,Floors,1,0.9050558793561808,0.9586874149866547,True
+frequency,Floors,2,1.0167367835034882,1.0014745998113015,True
+frequency,Floors,3+,1.153355801031244,1.0525023603104828,True
+frequency,Primary residence,False,1.0,0.9491659375826051,False
+frequency,Primary residence,True,1.0,1.0234202715666525,False
+frequency,Post-FIRM,False,1.0,1.0579451209295772,False
+frequency,Post-FIRM,True,1.0,0.9031210765975445,False
+severity (per claim),Flood zone,A/V high risk,1.076119757488886,1.0717468402527248,True
+severity (per claim),Flood zone,B/C/X moderate-low risk,0.8302057453818878,0.7974954526375149,True
+severity (per claim),Year built,before 1960,0.9207796258257468,0.9390054587332302,True
+severity (per claim),Year built,1960-1979,1.1443718404472816,1.0343969926994603,True
+severity (per claim),Year built,1980-1999,0.8912731339896063,0.9799861758445896,True
+severity (per claim),Year built,2000 or later,0.8075849502656226,0.9986439773828569,True
+severity (per claim),Occupancy,single-unit residential,0.890885382237742,0.8434242638275136,True
+severity (per claim),Occupancy,multi-unit residential,1.869654398059072,1.5489226214972454,True
+severity (per claim),Occupancy,non-residential,2.5345289358485266,2.212527711148686,True
+severity (per claim),Building coverage,$0 (contents only),0.33508029515914806,0.3922426865096289,True
+severity (per claim),Building coverage,under $100K,0.8005986533254599,0.7464863076245969,True
+severity (per claim),Building coverage,$100K-$249K,0.9731869127035251,0.9336316395715683,True
+severity (per claim),Building coverage,$250K or more,1.1478390729505887,1.1282072385705593,True
+severity (per claim),Elevated building,False,1.1245315928251476,1.0515045533571283,True
+severity (per claim),Elevated building,True,0.8565809833310841,0.8947017743423934,True
+severity (per claim),Floors,1,1.1127896994034627,1.0488682188205367,True
+severity (per claim),Floors,2,0.9833175980764665,0.9693363019096892,True
+severity (per claim),Floors,3+,0.8714777087053492,0.9311066464962198,True
+severity (per claim),Primary residence,False,1.0484979285854574,1.0430513923447249,True
+severity (per claim),Primary residence,True,0.9795038270283828,0.9706683878895523,True
+severity (per claim),Post-FIRM,False,1.0,1.0552199237128594,False
+severity (per claim),Post-FIRM,True,1.0,0.8089797310095302,False
+pure premium,Flood zone,A/V high risk,1.615035493456363,1.3284980107475564,True
+pure premium,Flood zone,B/C/X moderate-low risk,0.6077550574172477,0.5702948091137787,True
+pure premium,Year built,before 1960,1.7867400293679523,1.2762088879699434,True
+pure premium,Year built,1960-1979,2.0824406979887016,1.3674350748888422,True
+pure premium,Year built,1980-1999,0.6242069867713511,0.6315586624838946,True
+pure premium,Year built,2000 or later,0.3704849832707451,0.5138247576843774,True
+pure premium,Occupancy,single-unit residential,0.9014593260460322,0.8237335307330169,True
+pure premium,Occupancy,multi-unit residential,2.0574282140842737,1.5606406589877888,True
+pure premium,Occupancy,non-residential,2.8718937791148624,2.368454670428014,True
+pure premium,Building coverage,$0 (contents only),0.33648059082200155,0.5823693572529746,True
+pure premium,Building coverage,under $100K,0.7746121255746912,0.8355900340412088,True
+pure premium,Building coverage,$100K-$249K,0.9430992073412494,0.9767951235193252,True
+pure premium,Building coverage,$250K or more,1.0951977251363776,1.0567181681363604,True
+pure premium,Elevated building,False,1.0995103204658079,1.0475618682373502,True
+pure premium,Elevated building,True,0.8739968347919802,0.8857337708182875,True
+pure premium,Floors,1,1.0040522480484995,1.004096455682985,True
+pure premium,Floors,2,0.9967131069826072,0.9679751267799774,True
+pure premium,Floors,3+,1.0020454242105066,0.9704892864048299,False
+pure premium,Primary residence,False,1.050472718144182,0.982348813657153,False
+pure premium,Primary residence,True,0.9813486699008489,0.9942350746806184,True
+pure premium,Post-FIRM,False,1.0,1.1090950779641615,False
+pure premium,Post-FIRM,True,1.0,0.7449154586527029,False
