@@ -1,0 +1,11 @@
+item,GLM,XGBoost,same?
+Data file,va_model_data.parquet (hash d554de463a01678d),same file,yes
+Training rows,"cells with exposure > 0; 9,553 claims (b+c > 0)",same rows (frequency/Tweedie summed over 10 features + year),yes
+Folds,"16-year LOYO, 11 dev folds, 2010-20 -> 2021-25 holdout","same splits, same test rows (asserted)",yes
+Year handling,"calendar-year factor, average-year prediction","year level in base_margin, average-year prediction",equivalent
+Loss treatment,"2025 $, uncapped (load 1.000), ICC bridge, off-balance per fold",same (same CombinedModel code for freq x sev),yes
+Unmatched claims (95),added back by the off-balance,same (freq x sev); Tweedie off-balance,yes
+Features offered,"frequency: zone, year built, floors; severity: 7 (selected by keep rule)",all 8 building features (+ Tidewater + county group for severity & Tweedie),DIFFERENT (by design)
+Geography,Buhlmann-Straub county factor on top (champion),county group inside the severity trees,DIFFERENT (compared both ways)
+Tuning / selection,features chosen on dev LOYO (2010-20),hyperparameters chosen on dev LOYO (2010-20),comparable optimism
+Yardstick,"re-based deviance improvement vs no-features model, each year once; Gini",same functions,yes

@@ -1,0 +1,34 @@
+model kind,change,model,average effect,min effect,max effect,% of exposure moving the wrong way
+frequency,Elevated: False -> True,GLM,1.0,1.0,1.0,0.0
+frequency,Elevated: False -> True,Hybrid GLM,1.0,1.0,1.0,0.0
+frequency,Elevated: False -> True,XGB,1.03,0.481,1.696,77.838
+frequency,Flood zone: A/V high risk -> B/C/X moderate-low risk,GLM,0.458,0.458,0.458,0.0
+frequency,Flood zone: A/V high risk -> B/C/X moderate-low risk,Hybrid GLM,0.483,0.374,0.602,0.0
+frequency,Flood zone: A/V high risk -> B/C/X moderate-low risk,XGB,0.541,0.15,4.048,2.217
+frequency,Post-FIRM: False -> True,GLM,1.0,1.0,1.0,0.0
+frequency,Post-FIRM: False -> True,Hybrid GLM,1.0,1.0,1.0,0.0
+frequency,Post-FIRM: False -> True,XGB,0.886,0.49,1.43,14.821
+severity,Elevated: False -> True,GLM,0.758,0.758,0.758,0.0
+severity,Elevated: False -> True,Hybrid GLM,0.8,0.719,0.891,0.0
+severity,Elevated: False -> True,XGB,0.808,0.361,2.365,21.765
+severity,Flood zone: A/V high risk -> B/C/X moderate-low risk,GLM,0.746,0.746,0.746,0.0
+severity,Flood zone: A/V high risk -> B/C/X moderate-low risk,Hybrid GLM,0.778,0.712,0.882,0.0
+severity,Flood zone: A/V high risk -> B/C/X moderate-low risk,XGB,0.769,0.379,1.336,12.513
+severity,Building coverage: under $100K -> $100K-$249K,GLM,1.233,1.233,1.233,0.0
+severity,Building coverage: under $100K -> $100K-$249K,Hybrid GLM,1.206,1.153,1.505,0.0
+severity,Building coverage: under $100K -> $100K-$249K,XGB,1.247,0.844,2.241,7.384
+severity,Building coverage: $100K-$249K -> $250K or more,GLM,1.172,1.172,1.172,0.0
+severity,Building coverage: $100K-$249K -> $250K or more,Hybrid GLM,1.14,1.095,2.563,0.0
+severity,Building coverage: $100K-$249K -> $250K or more,XGB,1.134,0.72,3.536,21.907
+pure_premium,Elevated: False -> True,GLM,0.758,0.758,0.758,0.0
+pure_premium,Elevated: False -> True,Hybrid GLM,0.8,0.719,0.891,0.0
+pure_premium,Elevated: False -> True,XGB fxs,0.832,0.238,2.352,29.604
+pure_premium,Elevated: False -> True,XGB Tweedie,0.956,0.674,1.0,0.0
+pure_premium,Flood zone: A/V high risk -> B/C/X moderate-low risk,GLM,0.341,0.341,0.341,0.0
+pure_premium,Flood zone: A/V high risk -> B/C/X moderate-low risk,Hybrid GLM,0.376,0.266,0.531,0.0
+pure_premium,Flood zone: A/V high risk -> B/C/X moderate-low risk,XGB fxs,0.416,0.063,4.506,1.589
+pure_premium,Flood zone: A/V high risk -> B/C/X moderate-low risk,XGB Tweedie,0.512,0.123,0.995,0.0
+pure_premium,Building coverage: $100K-$249K -> $250K or more,GLM,1.172,1.172,1.172,0.0
+pure_premium,Building coverage: $100K-$249K -> $250K or more,Hybrid GLM,1.14,1.095,2.563,0.0
+pure_premium,Building coverage: $100K-$249K -> $250K or more,XGB fxs,1.075,0.462,3.668,34.401
+pure_premium,Building coverage: $100K-$249K -> $250K or more,XGB Tweedie,1.034,1.0,3.088,0.0

@@ -1,0 +1,13 @@
+,XGB fxs,XGB Tweedie
+"1. LOYO-16 better, CI > 0",True,True
+LOYO diff (CI),+4.27 (2.86 to 5.74),+7.56 (4.83 to 10.11)
+2. holdout better,True,True
+holdout,12.59 vs 8.91,19.60 vs 8.91
+3. cat years not worse,True,True
+cat mean,15.76 vs 8.28,10.40 vs 8.28
+4. double lift no worse,True,True
+end-decile error,0.08 vs 1.12,0.36 vs 0.74
+5. no new segment failures,False,False
+segment failures,Year built: 2000 or later (0.69); County group: 51510 (1.39); County group: 51550 (0.78),Year built: 2000 or later (0.71); County group: 51059 (0.79); County group: Other non-tidal (small) (0.55); Flood zone: B/C/X moderate-low risk (0.76)
+6. explainable for the app now,False,False
+XGBoost qualifies on accuracy (1-5),False,False

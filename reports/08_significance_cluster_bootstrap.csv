@@ -1,0 +1,29 @@
+design,kind,a,b,metric,ci_low,ci_high,share_reps_positive,boot_mean
+loyo16,frequency,GLM Poisson,XGB,improvement,1.0589,2.7071,1.0,1.8613
+loyo16,frequency,GLM Poisson,XGB,gini,0.0279,0.0743,1.0,0.0506
+loyo16,frequency,GLM Poisson,Hybrid GLM,improvement,-0.0887,0.1797,0.723,0.0399
+loyo16,frequency,GLM Poisson,Hybrid GLM,gini,-0.0088,0.0023,0.115,-0.0034
+loyo16,severity,GLM Gamma,XGB,improvement,3.6586,8.7484,1.0,6.3198
+loyo16,severity,GLM Gamma,XGB,gini,0.0317,0.0682,1.0,0.0492
+loyo16,severity,GLM Gamma,Hybrid GLM,improvement,0.6103,2.3844,0.999,1.5231
+loyo16,severity,GLM Gamma,Hybrid GLM,gini,-0.0065,0.0081,0.458,-0.0001
+loyo16,pure_premium,GLM fxs + county,XGB fxs,improvement,2.9955,5.4637,1.0,4.1659
+loyo16,pure_premium,GLM fxs + county,XGB fxs,gini,0.0386,0.0811,1.0,0.0595
+loyo16,pure_premium,GLM fxs + county,XGB Tweedie,improvement,4.5728,8.6459,1.0,6.7019
+loyo16,pure_premium,GLM fxs + county,XGB Tweedie,gini,0.0754,0.14,1.0,0.1074
+loyo16,pure_premium,GLM fxs + county,Hybrid GLM fxs + county,improvement,0.0651,0.8666,0.992,0.4656
+loyo16,pure_premium,GLM fxs + county,Hybrid GLM fxs + county,gini,0.0008,0.0155,0.986,0.008
+holdout,frequency,GLM Poisson,XGB,improvement,0.9887,3.3589,1.0,2.1301
+holdout,frequency,GLM Poisson,XGB,gini,0.0234,0.1018,1.0,0.0623
+holdout,frequency,GLM Poisson,Hybrid GLM,improvement,-0.2731,0.2564,0.414,-0.0215
+holdout,frequency,GLM Poisson,Hybrid GLM,gini,-0.016,-0.0001,0.025,-0.008
+holdout,severity,GLM Gamma,XGB,improvement,4.1429,10.514,1.0,7.0197
+holdout,severity,GLM Gamma,XGB,gini,0.0274,0.0903,1.0,0.0535
+holdout,severity,GLM Gamma,Hybrid GLM,improvement,1.7453,3.7447,1.0,2.6113
+holdout,severity,GLM Gamma,Hybrid GLM,gini,-0.0006,0.015,0.964,0.0074
+holdout,pure_premium,GLM fxs + county,XGB fxs,improvement,1.8522,6.4154,1.0,3.8126
+holdout,pure_premium,GLM fxs + county,XGB fxs,gini,0.0134,0.1032,0.999,0.0499
+holdout,pure_premium,GLM fxs + county,XGB Tweedie,improvement,6.4091,13.1297,1.0,10.3758
+holdout,pure_premium,GLM fxs + county,XGB Tweedie,gini,0.1104,0.2141,1.0,0.1677
+holdout,pure_premium,GLM fxs + county,Hybrid GLM fxs + county,improvement,0.8375,2.0211,0.999,1.3859
+holdout,pure_premium,GLM fxs + county,Hybrid GLM fxs + county,gini,0.0129,0.0404,1.0,0.0238

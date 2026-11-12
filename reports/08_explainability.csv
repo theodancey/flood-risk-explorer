@@ -1,0 +1,7 @@
+question,GLM champion,Hybrid GLM,XGBoost
+Relativity table a customer can read,yes: one number per level,yes: plus a small 2-way table per interaction,no: needs SHAP or partial-dependence summaries (Milestone 12)
+Rating worksheet (show the arithmetic),"yes, exact","yes, exact",no exact worksheet; only approximate attributions
+Effect directions guaranteed,"yes: one sign per factor, inspectable","yes, after checking the interaction cells",only where monotone constraints are set (Tweedie only)
+Same effect everywhere,yes (multiplicative),"yes, except the stated interactions",no: an effect can differ in every cell
+Regulator / rate filing,standard exhibit (relativities + CIs),"standard, with interaction exhibits","possible but needs model governance docs, SHAP, stability evidence"
+Stable when retrained,deterministic,deterministic,"moves with the random seed, too"

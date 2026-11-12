@@ -1,0 +1,16 @@
+kind,model,2011,2012,2016,mean
+frequency,GLM NB,15.96,12.5,9.58,12.68
+frequency,GLM Poisson,17.76,16.28,8.44,14.16
+frequency,Hybrid GLM,16.73,16.2,8.5,13.81
+frequency,XGB,11.05,18.4,2.99,10.82
+pure_premium,GLM Tweedie,6.27,14.82,9.27,10.12
+pure_premium,GLM fxs,15.19,19.82,11.03,15.35
+pure_premium,GLM fxs + county,0.04,21.48,3.32,8.28
+pure_premium,Hybrid GLM fxs + county,-2.96,20.99,3.18,7.07
+pure_premium,XGB Tweedie,8.95,16.24,6.01,10.4
+pure_premium,XGB fxs,9.54,25.43,12.3,15.76
+pure_premium,XGB fxs no-geo + county,-0.24,24.42,3.7,9.3
+severity,GLM Gamma,0.83,16.41,12.08,9.77
+severity,Hybrid GLM,0.89,18.23,12.72,10.62
+severity,XGB,6.35,24.05,21.02,17.14
+severity,XGB no-geo,10.19,21.78,16.26,16.08
