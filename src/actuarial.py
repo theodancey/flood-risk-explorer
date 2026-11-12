@@ -47,33 +47,50 @@ LAST_FULL_YEAR = 2025
 # ---------------------------------------------------------------------------
 # Loading
 # ---------------------------------------------------------------------------
-def load_va_policies(path=POLICIES_FILE, extra_cols=()):
-    """Virginia policy terms, with the columns needed for exposure, plus a county code.
+def policies_file(state="VA"):
+    """Path of one state's policy download (data/raw/NfipPoliciesV3_<ST>.parquet)."""
+    return RAW / f"NfipPoliciesV3_{state.upper()}.parquet"
+
+
+def load_policies(state="VA", path=None, extra_cols=()):
+    """One state's policy terms, with the columns needed for exposure, plus a county code
+    and a 'state' column (2-letter postal code).
 
     extra_cols: any other policy columns to load too (e.g. building features)."""
     cols = ["id", "policyEffectiveDate", "policyTerminationDate",
             "cancellationDateOfFloodPolicy", "policyCount", "censusGeoid", "ratedFloodZone"]
     cols += [c for c in extra_cols if c not in cols]
-    pol = pd.read_parquet(path, columns=cols)
+    pol = pd.read_parquet(path or policies_file(state), columns=cols)
     # Policies have no county field. The first 5 digits of the census block group ID
     # are the county FIPS code (checked in notebook 01: true for 100% of claims).
     pol["county"] = pol["censusGeoid"].str[:5]
+    pol["state"] = state.upper()
     return pol
 
 
-def load_va_claims(path=CLAIMS_FILE, first_year=2009, extra_cols=()):
-    """Virginia claims from first_year onward, with total paid computed.
+def load_claims(state="VA", path=CLAIMS_FILE, first_year=2009, extra_cols=()):
+    """One state's claims (2-letter postal code) from first_year onward, with total paid.
 
     extra_cols: any other claim columns to load too (e.g. building features)."""
     cols = ["id", "dateOfLoss", "yearOfLoss", "state", "countyCode", "censusGeoid",
             "floodEvent", "policyCount", *PAID_COLS, *NET_COLS]
     cols += [c for c in extra_cols if c not in cols]
-    clm = pd.read_parquet(path, columns=cols, filters=[("state", "==", "VA")])
+    clm = pd.read_parquet(path, columns=cols, filters=[("state", "==", state.upper())])
     clm = clm[clm["yearOfLoss"] >= first_year].copy()
     clm["county"] = clm["countyCode"]
     clm["total_paid"] = total_paid(clm)
     clm["is_paid"] = clm["total_paid"] > 0          # a "paid claim" = paid more than $0
     return clm
+
+
+def load_va_policies(path=POLICIES_FILE, extra_cols=()):
+    """Virginia policy terms (the original Virginia-only loader, kept for older code)."""
+    return load_policies("VA", path, extra_cols)
+
+
+def load_va_claims(path=CLAIMS_FILE, first_year=2009, extra_cols=()):
+    """Virginia claims (the original Virginia-only loader, kept for older code)."""
+    return load_claims("VA", path, first_year, extra_cols)
 
 
 def total_paid(claims):

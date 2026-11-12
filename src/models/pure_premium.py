@@ -27,7 +27,7 @@ Run the self-test:  .venv\\Scripts\\python.exe src\\models\\pure_premium.py
 
 import json
 import sys
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, replace
 from pathlib import Path
 
 import numpy as np
@@ -77,6 +77,10 @@ class CombinedModel:
     icc_bridge: float = 1.0
     off_balance: float = 1.0
     county_factors: pd.Series = None   # index = county FIPS (str), value = factor (missing -> 1)
+    # Milestone 13: one off-balance per state ({"VA": 0.98, ...}); rows of a state not in the
+    # dict use `off_balance` (= the base state's value).
+    off_balance_by: dict = None
+    by_col: str = "state"
 
     @property
     def large_loss_load(self):
@@ -90,11 +94,16 @@ class CombinedModel:
         out["frequency"] = self.freq.predict(one, "average")          # claims per policy-year
         out["severity"] = self.sev.predict(df, "average")             # incl. the large-loss load
         out["pp_raw"] = out["frequency"] * out["severity"] * self.icc_bridge
-        out["pp_balanced"] = out["pp_raw"] * self.off_balance
+        out["pp_balanced"] = out["pp_raw"] * self.off_balance_rows(df)
         cf = self.county_factor(df) if county else np.ones(len(df))
         out["county_factor"] = cf
         out["pure_premium"] = out["pp_balanced"] * cf
         return out
+
+    def off_balance_rows(self, df):
+        if not self.off_balance_by:
+            return self.off_balance
+        return df[self.by_col].astype(str).map(self.off_balance_by).fillna(self.off_balance).to_numpy(float)
 
     def county_factor(self, df):
         if self.county_factors is None:
@@ -116,24 +125,50 @@ class CombinedModel:
         return float(f * s * self.icc_bridge * self.off_balance)
 
 
-def off_balance_factor(model, cells):
+def off_balance_factor(model, cells, by=None):
     """Actual total losses / predicted total losses (before this correction, no county).
-    `cells` must include the zero-exposure ("unmatched") rows so their losses count."""
-    pred = model.predict(cells.assign(), county=False) / model.off_balance
-    return float(cells[LOSS].sum() / pred.sum())
+    `cells` must include the zero-exposure ("unmatched") rows so their losses count.
+    by="state": one factor per state (dict) instead of one overall number."""
+    pred = model.predict(cells.assign(), county=False) / model.off_balance_rows(cells)
+    if by is None:
+        return float(cells[LOSS].sum() / pred.sum())
+    d = pd.DataFrame({"g": cells[by].astype(str).to_numpy(), "a": cells[LOSS].to_numpy(), "p": pred})
+    t = d.groupby("g")[["a", "p"]].sum()
+    return (t["a"] / t["p"]).to_dict()
 
 
 def fit_combined(cells, claims, freq_features, sev_features, freq_bases=None, sev_bases=None,
-                 freq_interactions=(), sev_interactions=()):
+                 freq_interactions=(), sev_interactions=(), by_state=False, base_state="VA"):
     """Refit both GLMs on the given years (cells and claims for the same years), then the ICC
     bridge and the off-balance on those same years.
     freq_interactions / sev_interactions: optional [[feature_a, feature_b], ...] interaction
-    terms (Milestone 11's "GLM + interactions" hybrid); both features must be in the model."""
-    fc = fg.aggregate(cells[cells["exposure"] > 0], freq_features)
-    freq = fg.fit_glm(fc, freq_features, freq_interactions, bases=freq_bases)
-    sev = sv.fit_gamma(sv.severity_rows(claims), sev_features, sev_interactions, bases=sev_bases)
+    terms (Milestone 11's "GLM + interactions" hybrid); both features must be in the model.
+
+    by_state=True (Milestone 13, several states): both GLMs get state x year effects
+    (year_col="state_year") and then a STATE FACTOR: each state's average-year level vs
+    base_state (fg.absorb_group_levels). The off-balance is computed per state, so every
+    state's predicted total equals its actual total. The ICC bridge stays one pooled number.
+    If the training data hold only one state, this falls back to the one-state fit."""
+    if by_state and cells["state"].nunique() < 2:
+        by_state = False
+    if not by_state:
+        fc = fg.aggregate(cells[cells["exposure"] > 0], freq_features)
+        freq = fg.fit_glm(fc, freq_features, freq_interactions, bases=freq_bases)
+        sev = sv.fit_gamma(sv.severity_rows(claims), sev_features, sev_interactions, bases=sev_bases)
+        m = CombinedModel(freq, sev, sv.icc_bridge_factor(claims))
+        m.off_balance = off_balance_factor(m, cells)
+        return m
+    fc = fg.aggregate(cells[cells["exposure"] > 0], [*freq_features, "state", "state_year"])
+    freq = fg.fit_glm(fc, freq_features, freq_interactions, bases=freq_bases, year_col="state_year")
+    freq = fg.absorb_group_levels(freq, fc, "state", base_state)
+    rows = sv.severity_rows(claims)
+    sev = sv.fit_gamma(rows, sev_features, sev_interactions, bases=sev_bases, year_col="state_year")
+    y = sv.cap_amounts(rows[sv.TARGET], sev.cap)
+    w = rows[sv.WEIGHT].to_numpy(float)
+    sev = fg.absorb_group_levels(sev, rows, "state", base_state, actual=w * y, weight=w)
     m = CombinedModel(freq, sev, sv.icc_bridge_factor(claims))
-    m.off_balance = off_balance_factor(m, cells)
+    m.off_balance_by = off_balance_factor(m, cells, by="state")
+    m.off_balance = m.off_balance_by.get(base_state, 1.0)
     return m
 
 
@@ -254,22 +289,36 @@ def credibility_factors(by, cy, method="limited_fluctuation", p=0.90, k=0.05, se
     return t, params
 
 
-def recentre(factors, model, cells):
+def recentre(factors, model, cells, by=None):
     """Scale county factors so they don't change the statewide total: the second off-balance.
-    Returns (re-centred factors as a Series, the scale applied)."""
+    Returns (re-centred factors as a Series, the scale applied).
+
+    by="state" (Milestone 13): one scale per state, so county factors only move money between
+    counties of the SAME state and every state's total is unchanged; the scale is then a dict.
+    (Each county belongs to one state, because unknown codes are "UNKNOWN-<ST>".)"""
     base = model.predict(cells, county=False)
     f = cells["county"].astype(str).map(factors).fillna(1.0).to_numpy()
-    scale = float(base.sum() / (base * f).sum())
-    return factors * scale, scale
+    if by is None:
+        scale = float(base.sum() / (base * f).sum())
+        return factors * scale, scale
+    d = pd.DataFrame({"g": cells[by].astype(str).to_numpy(), "county": cells["county"].astype(str).to_numpy(),
+                      "b": base, "bf": base * f})
+    t = d.groupby("g")[["b", "bf"]].sum()
+    scales = (t["b"] / t["bf"]).to_dict()
+    county_state = d.drop_duplicates("county").set_index("county")["g"]
+    st = factors.index.to_series().map(county_state)
+    assert st.notna().all(), "a county factor's county is not in the cells"
+    return factors * st.map(scales).to_numpy(float), {k: float(v) for k, v in scales.items()}
 
 
-def with_county_factors(model, cells, claims, method, **kw):
-    """Copy of `model` with re-centred credibility county factors estimated on (cells, claims)."""
+def with_county_factors(model, cells, claims, method, recentre_by=None, **kw):
+    """Copy of `model` with re-centred credibility county factors estimated on (cells, claims).
+    recentre_by="state": re-centre within each state (see recentre)."""
     by, cy = county_ae(model, cells, claims)
     tbl, params = credibility_factors(by, cy, method, **kw)
-    fac, scale = recentre(tbl["factor_raw"].rename(index=str), model, cells)
+    fac, scale = recentre(tbl["factor_raw"].rename(index=str), model, cells, by=recentre_by)
     tbl["factor"] = fac.to_numpy()
-    m = CombinedModel(model.freq, model.sev, model.icc_bridge, model.off_balance, fac)
+    m = replace(model, county_factors=fac)
     params["recentre_scale"] = scale
     return m, tbl, params
 

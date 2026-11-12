@@ -35,17 +35,33 @@ import pure_premium as pp                     # noqa: E402
 
 ROOT = SRC.parent
 PATH = ROOT / "models" / "production_model.json"
+VA_PATH = ROOT / "models" / "production_model_va.json"     # the Virginia-only model (Milestone 11)
 DISCLAIMER = ("Area-level estimate from aggregated public NFIP data (Virginia, 2010-2025). It describes the "
               "average insured building with these characteristics in this county in an average year. It is "
               "NOT a quote, a premium, or a prediction for any individual property.")
+DISCLAIMER_3 = ("Area-level estimate from aggregated public NFIP data (Virginia, North Carolina and Maryland, "
+                "2010-2025). It describes the average insured building with these characteristics in this "
+                "county in an average year. It is NOT a quote, a premium, or a prediction for any individual "
+                "property.")
+# First two digits of a county FIPS code -> state postal code (the states this project models).
+FIPS_STATE = {"51": "VA", "37": "NC", "24": "MD"}
 
 
-def save(model, card, county_table=None, path=PATH):
+def state_of_county(county):
+    """State postal code for each county code: "37183" -> "NC", "UNKNOWN-MD" -> "MD"."""
+    c = pd.Series(county).astype(str)
+    st = c.str[:2].map(FIPS_STATE)
+    unk = c.str.extract(r"^UNKNOWN-([A-Z]{2})$")[0]
+    return st.fillna(unk)
+
+
+def save(model, card, county_table=None, path=PATH, disclaimer=DISCLAIMER):
     """Write the production JSON from a pure_premium.CombinedModel of GLMs."""
-    d = {"model_card": card, "disclaimer": DISCLAIMER,
+    d = {"model_card": card, "disclaimer": disclaimer,
          "frequency_model": model.freq.to_json_dict(), "severity_model": model.sev.to_json_dict(),
          "large_loss_load": model.large_loss_load, "icc_bridge": model.icc_bridge,
-         "off_balance": model.off_balance, "base_pure_premium_average_year": model.base_pure_premium(),
+         "off_balance": model.off_balance, "off_balance_by_state": model.off_balance_by,
+         "base_pure_premium_average_year": model.base_pure_premium(),
          "county_factors": {} if model.county_factors is None else
          {str(k): float(v) for k, v in model.county_factors.items()}}
     if county_table is not None:
@@ -62,14 +78,29 @@ class ProductionModel:
         self.sev = sv.SevGLM(fg.Spec(**s["spec"]), pd.Series(s["params"]), s["phi"], s["avg_year_log"],
                              s["cap"], s["load"])
         cf = pd.Series(d["county_factors"], dtype=float) if d["county_factors"] else None
-        self.combined = pp.CombinedModel(self.freq, self.sev, d["icc_bridge"], d["off_balance"], cf)
+        self.combined = pp.CombinedModel(self.freq, self.sev, d["icc_bridge"], d["off_balance"], cf,
+                                         d.get("off_balance_by_state"))
         self.card, self.disclaimer = d["model_card"], d["disclaimer"]
         self.county_table = pd.DataFrame(d.get("county_table", []))
 
     @property
+    def by_state(self):
+        """True for the multi-state model (it has a state factor)."""
+        return "state" in self.freq.spec.features or "state" in self.sev.spec.features
+
+    @property
     def features(self):
-        """Columns the input table needs (plus 'county' as a 5-digit FIPS string)."""
-        return sorted(set(self.freq.spec.features) | set(self.sev.spec.features))
+        """Columns the input table needs (plus 'county' as a 5-digit FIPS string). 'state' is
+        not needed: it is derived from the county code when missing."""
+        return sorted((set(self.freq.spec.features) | set(self.sev.spec.features)) - {"state"})
+
+    def _with_state(self, df):
+        if "state" in df and df["state"].notna().all():
+            return df
+        st = state_of_county(df["county"]).to_numpy()
+        if self.by_state and pd.isna(st).any():
+            raise ValueError("county codes must be FIPS codes from VA (51), NC (37) or MD (24)")
+        return df.assign(state=st)
 
     def predict(self, cells):
         """Per row: frequency (claims per policy-year), severity ($ per claim, 2025 dollars, incl.
@@ -80,9 +111,10 @@ class ProductionModel:
             raise ValueError(f"missing columns: {sorted(missing)}")
         # The GLM design matrix reads a 'year' column, but the average-year prediction zeroes the
         # year terms, so any value gives the same answer; supply one if the caller has none.
-        df = cells.assign(exposure=1.0)
-        if "year" not in df:
-            df = df.assign(year=self.freq.spec.bases.get("year", "2025"))
+        df = self._with_state(cells.assign(exposure=1.0))
+        for col, spec in (("year", self.freq.spec), (self.freq.spec.year_col, self.freq.spec)):
+            if col not in df:
+                df = df.assign(**{col: spec.bases.get("year", "2025")})
         c = self.combined.components(df)
         return c[["frequency", "severity", "county_factor", "pure_premium"]]
 
@@ -102,16 +134,20 @@ class ProductionModel:
     def explain(self, row):
         """A rating worksheet for one row (dict or Series): every multiplier, in order."""
         row = dict(row)
+        if self.by_state and not row.get("state"):
+            row["state"] = state_of_county([row.get("county", "")]).iloc[0]
         base_f = float(np.exp(self.freq.params["const"] + self.freq.avg_year_log))
         base_s = float(np.exp(self.sev.params["const"] + self.sev.avg_year_log))
         lines = [("frequency", "base claims per policy-year (average year)", base_f)]
         lines += [("frequency", l, m) for l, m in self._steps(self.freq, row)]
         lines += [("severity", "base claim size, 2025 $ (average year)", base_s)]
         lines += [("severity", l, m) for l, m in self._steps(self.sev, row)]
-        cf = float(self.combined.county_factor(pd.DataFrame([{"county": str(row.get("county", ""))}]))[0])
+        one = pd.DataFrame([{"county": str(row.get("county", "")), "state": row.get("state")}])
+        cf = float(self.combined.county_factor(one)[0])
+        ob = float(np.atleast_1d(self.combined.off_balance_rows(one))[0])
         lines += [("loads", "large-loss load", self.combined.large_loss_load),
                   ("loads", "ICC bridge", self.combined.icc_bridge),
-                  ("loads", "off-balance", self.combined.off_balance),
+                  ("loads", "off-balance" + (f" ({row['state']})" if self.combined.off_balance_by else ""), ob),
                   ("county", "credibility county factor (less certain)", cf)]
         t = pd.DataFrame(lines, columns=["part", "term", "value"])
         f = t.loc[t.part == "frequency", "value"].prod()
@@ -147,6 +183,20 @@ def _self_test():
         ok2 = abs(w.attrs["pure_premium"] - target) < 0.01
         print(f"  matches the model card's stored check (${target:,.2f}): {ok2}")
         ok &= ok2
+    # Multi-state model: the stored check rows for the other states (same house, one county each).
+    for label, chk in m.card.get("check_worksheets", {}).items():
+        r = {**row, "county": chk["county"]}
+        got = float(m.predict(pd.DataFrame([r]))["pure_premium"].iloc[0])
+        okc = abs(got - chk["pure_premium"]) < 0.01 and np.isclose(m.explain(r).attrs["pure_premium"], got)
+        print(f"  {label}: ${got:,.2f} (stored ${chk['pure_premium']:,.2f}): {okc}")
+        ok &= okc
+    # The Virginia-only model must still load and reproduce its own stored check.
+    if VA_PATH.exists() and VA_PATH != PATH:
+        mv = load(VA_PATH)
+        got = float(mv.predict(pd.DataFrame([row]))["pure_premium"].iloc[0])
+        okv = abs(got - mv.card["check_virginia_beach_worksheet"]) < 0.01
+        print(f"  Virginia-only model (production_model_va.json): ${got:,.2f}: {okv}")
+        ok &= okv
     return bool(ok)
 
 

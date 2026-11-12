@@ -51,6 +51,8 @@ import frequency_glm as fg                    # noqa: E402  (shared design-matri
 ROOT = SRC.parent
 CELLS_PATH = ROOT / "data" / "processed" / "va_model_data.parquet"
 CLAIMS_PATH = ROOT / "data" / "processed" / "va_claims_severity.parquet"
+CELLS_PATH_3 = ROOT / "data" / "processed" / "model_data_3states.parquet"        # Milestone 13
+CLAIMS_PATH_3 = ROOT / "data" / "processed" / "claims_severity_3states.parquet"
 
 FEATURES = ["flood_zone_group", "occupancy_group", "floors_group", "elevated", "primary_residence",
             "post_firm", "construction_band", "building_coverage_band"]
@@ -63,23 +65,42 @@ TARGET = "amount_2025"         # building + contents paid, 2025 dollars
 # ---------------------------------------------------------------------------
 # Data: one row per paid claim
 # ---------------------------------------------------------------------------
-def build_claims_table(cells_path=CELLS_PATH, save_path=CLAIMS_PATH, verbose=True):
-    """Paid Virginia claims 2010-2025 with the 8 cell features, geography, payments by
-    coverage, coverage limits and 2025-dollar amounts. Reconciles to the cell table.
+def build_claims_table(cells_path=CELLS_PATH, save_path=CLAIMS_PATH, verbose=True, states=None):
+    """Paid claims 2010-2025 with the 8 cell features, geography, payments by coverage,
+    coverage limits and 2025-dollar amounts. Reconciles to the cell table.
 
-    Saved to data/processed/va_claims_severity.parquet (not in Git)."""
+    states=None: Virginia only, saved to data/processed/va_claims_severity.parquet.
+    states=("VA", "NC", "MD"): the three-state version (Milestone 13); pass
+        cells_path=CELLS_PATH_3, save_path=CLAIMS_PATH_3. Adds 'state' and 'state_year'.
+    Not in Git."""
+    if states is not None:
+        parts = [_build_claims_one(cells_path, None, verbose, st) for st in states]
+        out = pd.concat(parts, ignore_index=True)
+        if save_path:
+            out.to_parquet(save_path, index=False)
+        return out
+    return _build_claims_one(cells_path, save_path, verbose, None)
+
+
+def _build_claims_one(cells_path, save_path, verbose, state):
+    """One state's claim table. state=None is the original Virginia-only table (no state
+    column); otherwise the cell table is the multi-state one and is filtered to `state`."""
     import actuarial as A
     import build_dataset as B
 
-    clm = A.load_va_claims(first_year=A.FIRST_FULL_YEAR,
-                           extra_cols=[*B.FEATURE_SOURCE_COLS, B.CLAIM_FLOORS_COL,
-                                       "totalContentsInsuranceCoverage"])
+    clm = A.load_claims(state or "VA", first_year=A.FIRST_FULL_YEAR,
+                        extra_cols=[*B.FEATURE_SOURCE_COLS, B.CLAIM_FLOORS_COL,
+                                    "totalContentsInsuranceCoverage"])
     clm = clm[(clm["yearOfLoss"] <= A.LAST_FULL_YEAR) & clm["is_paid"]].copy()
     feat, _ = B.make_features(clm, B.CLAIM_FLOORS_COL)
     cells = pd.read_parquet(cells_path)
+    county = clm["county"].fillna(B.UNKNOWN_COUNTY)
+    if state is not None:
+        cells = cells[cells["state"] == state]
+        county = B.unknown_county_code(county, state).to_numpy()
 
     out = pd.DataFrame({"id": clm["id"], "year": clm["yearOfLoss"].astype(int),
-                        "county": clm["county"].fillna(B.UNKNOWN_COUNTY)}, index=clm.index)
+                        "county": county}, index=clm.index)
     out = pd.concat([out, feat], axis=1)
     # County-level columns: the same mapping as the cell table (every claim county is in it).
     cmap = cells.drop_duplicates("county").set_index("county")
@@ -115,6 +136,9 @@ def build_claims_table(cells_path=CELLS_PATH, save_path=CLAIMS_PATH, verbose=Tru
     assert abs(out["total_2025"].sum() - cells["losses_2025"].sum()) < 1.0
 
     out = out.reset_index(drop=True)
+    if state is not None:
+        out.insert(0, "state", state)
+        out["state_year"] = state + "|" + out["year"].astype(str)
     if verbose:
         n0 = int((out[TARGET] <= 0).sum())
         print(f"{len(out):,} paid claims, ${out['total_2025'].sum():,.0f} (2025 $) incl. ICC; "
@@ -203,7 +227,7 @@ def large_loss_load(y, cap, w=None):
 
 def fit_gamma(train, features, interactions=(), year_factor=True, cov="scale",
               cluster_by=("county_group", "year"), cap_quantile=None, cap=None,
-              target=TARGET, bases=None, spec=None):
+              target=TARGET, bases=None, spec=None, year_col="year"):
     """Fit a Gamma GLM (log link) to claim sizes.
 
     Rows are individual claims (weight 1) or cell averages with WEIGHT = claim count (as
@@ -213,7 +237,8 @@ def fit_gamma(train, features, interactions=(), year_factor=True, cov="scale",
     cov: "scale" = usual Gamma errors (dispersion from Pearson chi-square);
          "cluster" = cluster-robust errors (claims in the same county group x year, i.e. the
          same storm, may share surprises)."""
-    spec = spec or fg.make_spec(train, features, interactions, year_factor, bases, weight=WEIGHT)
+    spec = spec or fg.make_spec(train, features, interactions, year_factor, bases, weight=WEIGHT,
+                                year_col=year_col)
     X = fg.design_matrix(train, spec)
     w = train[WEIGHT].to_numpy(float)
     y_raw = train[target].to_numpy(float)

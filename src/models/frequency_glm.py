@@ -92,6 +92,14 @@ class Spec:
     year_factor: bool = True
     levels: dict = field(default_factory=dict)          # feature -> levels (str), base first
     bases: dict = field(default_factory=dict)           # feature -> base level (str)
+    # Milestone 13 (several states). year_col: the data column holding the "year" key, e.g.
+    # "state_year" for state x year effects (a storm year in one state only). absorbed:
+    # features whose level is carried by that key in fitted mode, e.g. "state": in "fitted"
+    # predictions the state-year effect already holds the state's level, so these columns are
+    # 0; in "average" predictions they hold each state's average-year level vs the base state
+    # (the STATE FACTOR). See absorb_group_levels().
+    year_col: str = "year"
+    absorbed: list = field(default_factory=list)
 
     @property
     def columns(self):
@@ -117,12 +125,15 @@ def ordered_levels(df, feature, base, weight="exposure"):
     return [base] + [l for l in lv if l != base]
 
 
-def make_spec(train, features, interactions=(), year_factor=True, bases=None, weight="exposure"):
+def make_spec(train, features, interactions=(), year_factor=True, bases=None, weight="exposure",
+              year_col="year"):
     """Base level = the level with the most exposure (as in the one-way analysis),
     unless given in `bases`. `weight` names the column that decides "most" (the severity
-    model passes its claim-count column)."""
+    model passes its claim-count column). year_col: see Spec."""
     bases = dict(bases or {})
-    spec = Spec(list(features), [list(p) for p in interactions], year_factor)
+    if year_col != "year":
+        train = train.assign(year=train[year_col])
+    spec = Spec(list(features), [list(p) for p in interactions], year_factor, year_col=year_col)
     for f in list(features) + (["year"] if year_factor else []):
         s = train[f].astype(str)
         base = str(bases.get(f, train.groupby(s, observed=True)[weight].sum().idxmax()))
@@ -138,12 +149,13 @@ def design_matrix(df, spec, include_year=True):
     cols = {"const": np.ones(len(df))}
     dummies = {}
     for f in spec.features + (["year"] if spec.year_factor else []):
-        s = df[f].astype(str).to_numpy()
+        s = df[spec.year_col if f == "year" else f].astype(str).to_numpy()
         for l in spec.levels[f][1:]:
             dummies[(f, l)] = (s == l).astype(float)
     for f in spec.features:
+        off = include_year and f in spec.absorbed     # carried by the state-year effect instead
         for l in spec.levels[f][1:]:
-            cols[f"{f}[{l}]"] = dummies[(f, l)]
+            cols[f"{f}[{l}]"] = np.zeros(len(df)) if off else dummies[(f, l)]
     for a, b in spec.interactions:
         for la in spec.levels[a][1:]:
             for lb in spec.levels[b][1:]:
@@ -206,12 +218,43 @@ def _avg_year_log(train, spec, params):
     return float(np.log(train["claims"].sum() / (train["exposure"].to_numpy() * np.exp(base_eta)).sum()))
 
 
+def absorb_group_levels(model, train, group="state", base=None, actual=None, weight=None):
+    """Turn state x year effects into an average-year level for each state (Milestone 13).
+
+    A model fitted with year_col="state_year" has one effect per state and year, and one
+    average-year level for all states together. This returns a copy whose spec has `group`
+    as an extra ABSORBED feature: its coefficient for each non-base state = log of that
+    state's average-year level minus the base state's, each level chosen so the state's
+    training predictions add up to its training actuals (claims for frequency, dollars for
+    severity). avg_year_log becomes the base state's level. Fitted-year predictions are
+    unchanged (absorbed columns are 0 there); average-year predictions now differ by state.
+
+    actual: the actual totals per training row (default: train["claims"]).
+    weight: per-row multiplier of exp(eta) (default: train["exposure"]; severity: claim count)."""
+    from dataclasses import replace
+    actual = train["claims"].to_numpy(float) if actual is None else np.asarray(actual, float)
+    weight = train["exposure"].to_numpy(float) if weight is None else np.asarray(weight, float)
+    eta0 = design_matrix(train, model.spec, include_year=False).to_numpy() @ model.params.to_numpy()
+    g = train[group].astype(str).to_numpy()
+    d = pd.DataFrame({"g": g, "a": actual, "m": weight * np.exp(eta0)}).groupby("g")[["a", "m"]].sum()
+    lv = np.log(d["a"] / d["m"])
+    base = base or lv.index[0]
+    spec = replace(model.spec, features=[*model.spec.features, group],
+                   absorbed=[*model.spec.absorbed, group],
+                   levels={**model.spec.levels, group: [base] + [l for l in lv.index if l != base]},
+                   bases={**model.spec.bases, group: base})
+    extra = pd.Series({f"{group}[{l}]": float(lv[l] - lv[base]) for l in lv.index if l != base})
+    # keep the column order of spec.columns (features before interactions and year)
+    params = pd.concat([model.params, extra]).reindex(spec.columns)
+    return replace(model, spec=spec, params=params, avg_year_log=float(lv[base]))
+
+
 def cluster_codes(df, cluster_by):
     return pd.factorize(df[list(cluster_by)].astype(str).agg("|".join, axis=1))[0]
 
 
 def fit_glm(train, features, interactions=(), year_factor=True, family="poisson", alpha=None,
-            cov="poisson", cluster_by=("county_group", "year"), bases=None, spec=None):
+            cov="poisson", cluster_by=("county_group", "year"), bases=None, spec=None, year_col="year"):
     """Fit a Poisson (or negative binomial) GLM with log link and log(exposure) offset.
 
     cov (how the standard errors / confidence intervals are computed; the coefficients are
@@ -221,7 +264,7 @@ def fit_glm(train, features, interactions=(), year_factor=True, family="poisson"
                  (all standard errors x sqrt(phi)).
       "cluster"  cluster-robust ("sandwich") errors: rows in the same cluster (default:
                  county group x year) may move together, as they do when a storm hits."""
-    spec = spec or make_spec(train, features, interactions, year_factor, bases)
+    spec = spec or make_spec(train, features, interactions, year_factor, bases, year_col=year_col)
     X = design_matrix(train, spec)
     y = train["claims"].to_numpy(float)
     off = np.log(train["exposure"].to_numpy(float))
