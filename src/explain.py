@@ -76,7 +76,7 @@ LEVEL_PHRASES = {
     ("construction_band", "1960-1979"): "it was built in 1960-1979",
     ("construction_band", "1980-1999"): "it was built in 1980-1999",
     ("construction_band", "2000 or later"): "it was built in 2000 or later",
-    ("occupancy_group", "single-unit residential"): "it is a single-unit home",
+    ("occupancy_group", "single-unit residential"): "it is a single-unit home (claims are smaller than for apartment and commercial buildings)",
     ("occupancy_group", "multi-unit residential"): "it is a multi-unit residential building",
     ("occupancy_group", "non-residential"): "it is a non-residential building",
     ("building_coverage_band", "$0 (contents only)"): "it has contents-only cover",
@@ -517,7 +517,7 @@ def uncertainty_note(res):
 def _ratio_phrase(r):
     if r >= 1.1:
         return f"about {r:.1f}x the Virginia average"
-    if r <= 0.9:
+    if r <= 1 / 1.1:
         return f"about {100 * (1 - r):.0f}% below the Virginia average"
     return "close to the Virginia average"
 
@@ -540,23 +540,29 @@ def county_sentence(res):
     head = (f"Model-based expected flood losses for insured buildings in {res['county_name']} are "
             f"{_ratio_phrase(r)} (about ${res['pure_premium']:,.0f} vs ${res['virginia_average_pure_premium']:,.0f} "
             f"per policy-year in an average year)")
-    drv = _drivers(res["waterfall"], d)
-    parts = []
-    for row in drv.itertuples():
+    def phrase(row):
         if row.player in FACTOR_MIX:
             key = FACTOR_MIX[row.player]
-            parts.append(f"{res['mix'][key]:.0f}% of insured buildings here {MIX_DEFS[key][2]} "
-                         f"(Virginia: {res['virginia_mix'][key]:.0f}%)")
-        elif row.player == "county":
-            parts.append(f"its own claims history has had {'larger' if row.multiplier > 1 else 'smaller'} claims "
-                         f"than the model expects (county factor {res['county_factor']:.2f}, "
-                         f"{res['certainty'].lower()} certainty)")
-        elif row.player == "overlap":
-            parts.append("of how its building characteristics combine")
-    if parts and abs(math.log(r)) > math.log(1.1):
-        head += ", mainly because " + _join(parts)
-    elif abs(math.log(r)) <= math.log(1.1):
-        head += "; the factors pushing up and down roughly offset"
+            return (f"{res['mix'][key]:.0f}% of insured buildings here {MIX_DEFS[key][2]} "
+                    f"(Virginia: {res['virginia_mix'][key]:.0f}%)")
+        if row.player == "county":
+            return (f"its own claims history has had {'larger' if row.multiplier > 1 else 'smaller'} claims "
+                    f"than the model expects (county factor {res['county_factor']:.2f}, "
+                    f"{res['certainty'].lower()} certainty)")
+        return "of how its building characteristics combine"          # the overlap step
+
+    if abs(math.log(r)) > math.log(1.1):
+        parts = [phrase(row) for row in _drivers(res["waterfall"], d).itertuples()]
+        if parts:
+            head += ", mainly because " + _join(parts)
+    else:                                         # near average: say what offsets what, if anything big
+        up = _drivers(res["waterfall"], 1, k=1, min_log=math.log(1.1))
+        down = _drivers(res["waterfall"], -1, k=1, min_log=math.log(1.1))
+        if len(up) and len(down):
+            head += (f": pushing it up, {phrase(next(up.itertuples()))}; pulling it down, "
+                     f"{phrase(next(down.itertuples()))}")
+        else:
+            head += "; no single factor moves it much"
     return head + ". This is an area-level estimate, not a prediction for any individual property."
 
 
