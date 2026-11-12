@@ -629,3 +629,59 @@ A: Three ways. Per-year wins with a sign test: 15 of 16 years, p ≈ 0.0005. A y
 
 **Q: What's a double-lift chart, and what did it show?**
 A: Sort cells by the ratio of two models' predictions and compare actual losses with each model in the extreme groups, where they disagree most. Where my GLM thought cells were much riskier than XGBoost did, actual losses were close to XGBoost's prediction (0.83× average vs the GLM's 2.18×). That told me XGBoost knew something the GLM didn't. I traced it to interactions like coverage × occupancy and added those to the GLM.
+
+## Milestone 12: Explainability: global and local explanations, SHAP, and the app data (2026-11-12)
+
+### What I did
+I explained what drives the production GLM and the XGBoost challenger, both for Virginia as a whole and for individual building profiles and counties. For the GLM I showed its multiplier (relativity) table and ranked factors by how much they move predictions across all insured buildings. Year built and flood zone dominate. For XGBoost I computed SHAP values and drew beeswarm and dependence plots, then compared the two models on the same yardstick: they agree on the main story but disagree on a few telling details. Finally I built reusable code (`src/explain.py`) that turns any profile or county into a step-by-step "waterfall" from the Virginia average plus a careful plain-English sentence, and precomputed everything the app needs into small files in `app/data/`.
+
+### Why I did it that way
+
+**Global vs local explanations.**
+- *Intuition:* a **global** explanation answers "what matters to this model overall?" A **local** explanation answers "why did *this* case get *this* number?" Think of a teacher's grading rubric (global: essays are 40% of the grade) vs one student's report card (local: you got a B because your essay was weak).
+- *Example:* globally, year built is the biggest driver across Virginia. Locally, the Norfolk elevated second home is cheap mainly because it was built after 2000 (×0.26 vs the Virginia average), even though it sits in a high-risk zone (×1.37).
+- The app needs both: global for "how the model works", local for "why this county".
+
+**SHAP and the game-theory idea behind it (Shapley values).**
+- *Intuition:* imagine three friends share a taxi and the fare depends on who rides. How do you split the cost fairly? Lloyd Shapley's answer (Nobel Prize, 2012): list every order in which the friends could have joined, record how much each person *added* to the fare at the moment they joined, and average that over all orders. A model's features are the "players" and the prediction is the "fare".
+- *Toy example:* a model predicts 2 × 3 = 6 (on the log scale, log 2 + log 3). Add feature A first: it moves the prediction from 1 to 2 (×2), then B moves it from 2 to 6 (×3). Add B first: B gives ×3 and A gives ×2. Averaged over both orders, A gets ×2 and B gets ×3, and together they explain the whole move from 1 to 6. With interactions the order matters, and averaging over orders shares the interaction fairly. That's why it's fair.
+- *Formula (for reference):* φ_j = Σ over sets S without j of [|S|! (n − |S| − 1)! / n!] × [v(S ∪ {j}) − v(S)], where v(S) is the prediction when only the features in S are "known". It's just the weighted average of j's added value over all orders.
+- **SHAP** (SHapley Additive exPlanations) applies this to each prediction. The values add up exactly: average prediction + sum of SHAP values = this prediction. For trees there's a fast exact algorithm (**TreeSHAP**), built into XGBoost.
+- *How I used it:* on the log scale, so each SHAP value is a multiplier (exp(φ)). Pure premium SHAP = frequency SHAP + severity SHAP, because logs add.
+- *Lighter approach:* I computed SHAP for every row (fast). Plots use 5,000 rows sampled in proportion to exposure, and interaction values use a 3,000-row sample.
+
+**Beeswarm, dependence and waterfall plots.**
+- **Beeswarm (SHAP summary plot):** one row per feature, one dot per building group. A dot's left-right position is that feature's SHAP value for that group (left = lowers the prediction, right = raises it), and its colour is the feature's value. Example: in the frequency beeswarm, "year built" splits into a right-hand cluster (old buildings, light colour) and a left-hand one (newer, dark). Wide rows matter a lot; narrow rows barely matter.
+- **Dependence plot:** zooms in on one feature. x = the feature's level, y = its SHAP value, colour = a second feature. If the colours separate vertically, the two features **interact**. Example: in severity, the coverage effect differs by occupancy (low-limit apartment buildings get pushed down hardest). That's the same coverage × occupancy interaction the hybrid GLM uses.
+- **Waterfall:** a local explanation drawn as a staircase. Start at the average (Virginia, $197), and each bar is one factor moving the number up (orange) or down (blue) until you reach the result. Example: Virginia Beach 1960s house: $197 × 1.75 (1960–79) × 1.50 (A/V) × 1.21 (county) × … = $598.
+- *My waterfalls:* each step is a multiplicative Shapley value. "Setting" a factor means giving every insured Virginia building the profile's value and re-averaging, averaged over all 256 orders. So the steps multiply **exactly** to the result, and no order was chosen by me.
+
+**Why GLMs are explainable by design.**
+- A log-link GLM predicts by multiplying: base × one multiplier per factor level. Each multiplier is the same for every building, so the whole model fits in a table a regulator or customer can read (29 numbers plus three small two-way tables).
+- *Bonus fact:* for a GLM, SHAP values have a closed form: each factor's term minus the average term. So the GLM's SHAP values and its relativity table tell the same story, just measured from a different starting point (the average vs the base building). That let me compare GLM and XGBoost explanations **like for like**.
+- *Importance vs multiplier size:* non-residential has the biggest multiplier (4.6×) but occupancy ranks only third in importance, because 89% of insured buildings are single-unit homes. Importance = big effect × how many buildings it touches.
+
+**Correlation vs causation in model explanations.**
+- *Intuition:* a model learns **patterns in data**, not cause and effect. A SHAP value says "the model's prediction is higher for groups with this feature", not "this feature causes floods". Features often stand in (are **proxies**) for things the data doesn't record.
+- *Example 1, coverage:* the GLM says claims are smaller for buildings with under $100K of cover (×0.79). It would be silly to tell someone "buy less insurance and the flood will do less damage". Low cover goes with smaller, cheaper buildings and with units inside bigger insured buildings. Only one piece is truly causal: the **limit caps what the insurer pays** (5.7% of under-$100K claims hit the limit, vs 0.8% for $250K+).
+- *Example 2, elevation:* XGBoost's frequency model *raises* predicted claims for 76% of elevated buildings. Elevation can't cause claims. Elevated buildings are concentrated in coastal high-risk areas (67% are in A/V zones), and the trees picked up that location pattern. This is **Simpson's paradox** again: within each zone, elevated buildings have much lower losses (×0.40 in A/V).
+- *Example 3, correlated features share credit:* XGBoost gives "post-FIRM" a lot of weight and the GLM gives it none, but XGBoost's year built + post-FIRM ≈ the GLM's year built. They carry the same information. SHAP splits credit among correlated features however the model happened to split it, so a feature's SHAP value isn't its "true" effect.
+- *What I did about it:* the app's sentences are descriptive and area-level ("mainly because 46% of insured buildings here are multi-unit or non-residential"). They never tell an owner what to change.
+
+**County explanations: mix vs credibility factor.**
+- A county's expected loss differs from Virginia's for two reasons, and they multiply exactly:
+  1. **Property mix:** what its insured buildings are like (zones, ages, building types).
+  2. **County factor:** its own credibility-weighted claims history.
+- *Example:* Norfolk is right at the Virginia average, but for opposite reasons that cancel. Its mix is riskier (68% of buildings built before 1980), and its claims have been smaller than expected (factor 0.83). Newport News is 1.6× almost entirely because of its factor (1.69).
+- **Certainty label:** from the credibility Z (High ≥ 0.8, Medium 0.5–0.8, Low below that or no claims). It tells the app user how much of the county factor rests on local evidence. Only 11 of 133 localities are High, but they hold 71% of insured policy-years.
+
+### Interview questions
+
+**Q: What is a SHAP value, in plain English?**
+A: It's a fair way to split one prediction into contributions from each feature, borrowed from game theory. You consider every order in which the features could be added to the model, measure how much each one changes the prediction when it's added, and average. The contributions add up exactly to the difference between this prediction and the average. I used them on the log scale, so each one reads as a multiplier, like "this building's age multiplies expected claims by 1.5".
+
+**Q: Your GLM is already interpretable. Why compute SHAP values for it?**
+A: To compare it fairly with XGBoost. A GLM's SHAP values have a closed form (each factor's term minus its average), so I could measure both models with the same yardstick, mean absolute SHAP, on the same rows. They agreed on the top three drivers and on the weight of geography. They disagreed where features overlap (post-FIRM vs year built) and on elevation, where XGBoost's frequency model goes the wrong way for 76% of elevated buildings.
+
+**Q: Can you use a model explanation to tell someone how to reduce their flood risk?**
+A: Not directly. Explanations describe the model, not causes. For example, my model gives lower claim sizes to buildings with low coverage, but that's because low coverage stands in for cheaper buildings; only the policy-limit cap is causal. Elevation is a good counter-example: the evidence within flood zones does support it, but XGBoost still got it backwards because elevated buildings cluster in risky places. So my app sticks to area-level, descriptive statements and says clearly that it isn't advice or a prediction for any property.

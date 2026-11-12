@@ -5,10 +5,10 @@ I'm building a flood insurance risk model using FEMA's public data on 2.7 millio
 
 - **Data:** OpenFEMA NFIP claims (2.7 million US claims since 1978) and policies (1.67 million Virginia policy terms since 2009).
 - **Actuarial foundations:** earned exposure (policy-years), claim **frequency**, claim **severity**, and **pure premium** (expected loss per policy-year), by year and by county.
-- **Models (in progress):** Poisson / negative binomial GLMs for frequency, a Gamma GLM for severity, compared against XGBoost, with relativities and SHAP to explain what drives risk. Models are tested on held-out years.
+- **Models (complete):** a Poisson GLM for frequency and a Gamma GLM for severity (with three interactions and a credibility-weighted county factor), compared against XGBoost, with relativities and SHAP to explain what drives risk. Models are tested on held-out years.
 - **App (planned):** a Streamlit app where you pick a county or ZIP code and see its area-level flood risk, expected claim cost, and the reasons behind it.
 
-**Status:** weeks 1–4 of 9 done (data, exploration, actuarial basics, modelling dataset, one-way factor analysis, validation design, frequency and severity GLMs, pure premium with credibility county factors). Next: XGBoost. See [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
+**Status:** modelling complete (weeks 1–6 of 9: data, exploration, actuarial basics, modelling dataset, one-way analysis, frequency and severity GLMs, pure premium with credibility county factors, XGBoost, model comparison, explainability). Everything the app needs is precomputed in `app/data/`. Next: the Streamlit app. See [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
 
 > **Disclaimer:** All results are **area-level** estimates built from aggregated public data. They are not predictions, quotes, or risk ratings for any individual property.
 
@@ -35,7 +35,14 @@ I'm building a flood insurance risk model using FEMA's public data on 2.7 millio
   - The **production model is a hybrid GLM** that adds the interactions XGBoost found: coverage × occupancy (highly significant), year built × zone, and elevated × zone. It keeps a relativity table and closes about a third of the gap on the 2021–2025 holdout (10.3% vs 8.9%); its 16-year gain (+0.4 points) is small.
   - See [`reports/08_model_comparison.md`](reports/08_model_comparison.md) and [`docs/production_model.md`](docs/production_model.md).
 
-Details: [`reports/01_data_overview.md`](reports/01_data_overview.md) · [`reports/02_actuarial_basics.md`](reports/02_actuarial_basics.md) · [`reports/03_one_way_findings.md`](reports/03_one_way_findings.md) · [`reports/04_frequency_glm.md`](reports/04_frequency_glm.md) · [`reports/05_severity_glm.md`](reports/05_severity_glm.md) · [`reports/06_pure_premium.md`](reports/06_pure_premium.md) · [`reports/07_xgboost.md`](reports/07_xgboost.md) · [`reports/08_model_comparison.md`](reports/08_model_comparison.md)
+- **Explainability** (SHAP for XGBoost; exact relativities and SHAP for the GLM):
+  - Across Virginia's insured buildings, **year built and flood zone** drive expected loss cost most (a typical building's factor moves its prediction ×1.95 and ×1.63 from average), then occupancy and the county factor. Floors barely matter.
+  - XGBoost and the GLM **agree** on the top drivers, the weight of geography and the two key interactions. XGBoost's frequency model gets **elevation backwards** for 76% of elevated exposure: it learned *where* elevated buildings are, not what elevation does.
+  - Explanations describe the **model, not the world**: coverage band stands in for building value; only the policy-limit cap is causal.
+  - **Local explanations** for the app: an exact waterfall from the Virginia average ($197 per policy-year) for any building profile or county, a plain-English sentence and a certainty label, precomputed for all 133 Virginia localities. Property mix explains most county differences; the county factor explains, for example, Newport News's 1.6×.
+  - See [`reports/09_explainability.md`](reports/09_explainability.md) and [`app/data/README.md`](app/data/README.md).
+
+Details: [`reports/01_data_overview.md`](reports/01_data_overview.md) · [`reports/02_actuarial_basics.md`](reports/02_actuarial_basics.md) · [`reports/03_one_way_findings.md`](reports/03_one_way_findings.md) · [`reports/04_frequency_glm.md`](reports/04_frequency_glm.md) · [`reports/05_severity_glm.md`](reports/05_severity_glm.md) · [`reports/06_pure_premium.md`](reports/06_pure_premium.md) · [`reports/07_xgboost.md`](reports/07_xgboost.md) · [`reports/08_model_comparison.md`](reports/08_model_comparison.md) · [`reports/09_explainability.md`](reports/09_explainability.md)
 
 ![Frequency, severity, and pure premium by year](reports/figures/02_measures_by_year.png)
 
@@ -52,6 +59,9 @@ src/models/pure_premium.py  pure premium: freq x sev, off-balance, county credib
 src/models/xgb_models.py    XGBoost challengers: encoding, base_margin offset, leakage-free tuning, monotone constraints
 src/models/compare.py       GLM vs XGBoost on identical folds: bootstrap CIs, stability, hybrid interaction tests
 src/models/production.py    loads the production model (models/production_model.json): predict + rating worksheet
+src/explain.py              local explanations for the app: explain_profile, explain_county, sentences, waterfalls; builds app/data
+src/global_explain.py       SHAP values: exact for the GLM, TreeSHAP for XGBoost (grouped to features)
+tests/test_explain.py       runs every county + random profiles from committed files only
 notebooks/01_first_look     data exploration
 notebooks/02_actuarial_basics   Virginia actuarial measures by year and county
 notebooks/03_dataset_summary    the modelling table: cell sizes, zero-claim cells, one-way views
@@ -61,12 +71,14 @@ notebooks/06_severity_glm       severity GLM: distribution, large losses, model 
 notebooks/07_pure_premium       pure premium, county credibility, Tweedie comparison, loss ratios, rating worksheets
 notebooks/08_xgboost            XGBoost challengers: leakage-free tuning, geography, monotone constraints, preview vs GLMs
 notebooks/09_model_comparison   GLM vs XGBoost head to head, significance, stability, explainability, hybrid GLM, production model
+notebooks/10_explainability     global drivers (relativities, SHAP beeswarm/dependence), GLM vs XGBoost explanations, causation caveat, waterfalls
 models/                     saved models (production_model.json = what the app loads; frequency_glm.json, severity_glm.json, pure_premium.json, xgb_settings.json; XGBoost .ubj files rebuilt with xgb_models.py fit-final)
 reports/                    written findings + figures
 docs/                       data dictionary, modelling dataset, project plan, validation plan
+app/data/                   small precomputed files the app reads (county summary, rating tables, history; committed)
 app/                        Streamlit app (coming)
 ```
-Data files live in `data/` and are never committed. Re-create them with the download script.
+Data files live in `data/` and are never committed (`app/data/` holds only small aggregates and model output). Re-create them with the download script.
 
 ## How to run (Windows, PowerShell)
 ```powershell
@@ -79,6 +91,8 @@ py -3.13 -m venv .venv
 .venv\Scripts\jupyter-nbconvert.exe --to notebook --execute --inplace notebooks\02_actuarial_basics.ipynb
 .venv\Scripts\jupyter-nbconvert.exe --to notebook --execute --inplace notebooks\03_dataset_summary.ipynb
 .venv\Scripts\jupyter-nbconvert.exe --to notebook --execute --inplace notebooks\04_one_way_analysis.ipynb
+.venv\Scripts\python.exe src\explain.py build       # rebuild app/data from the modelling table (~10 s)
+.venv\Scripts\python.exe tests\test_explain.py      # explanations for every county, committed files only (~2 min)
 ```
 
 *This product uses FEMA's OpenFEMA API but is not endorsed by FEMA. FEMA may update the data at any time.*

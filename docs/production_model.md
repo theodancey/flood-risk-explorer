@@ -37,6 +37,13 @@ m.explain(cells.iloc[0])   # factor-by-factor worksheet; .attrs holds frequency,
 - An unseen level is treated as the base level.
 - A county not in the table gets factor 1.0. Counties with no claims carry the re-centring scale (1.06).
 
+## Explanations for the app (Milestone 12)
+`src/explain.py` wraps this model for the app and reads only committed files (`app/data/*` + this JSON):
+- `explain_profile(features)`: the result above plus an exact waterfall from the Virginia average, the worksheet, a sentence and a certainty label.
+- `explain_county(county)`: county averages, property mix vs county factor, the uncertainty note and a sentence.
+
+See `app/data/README.md` and `reports/09_explainability.md`.
+
 ## Rules for the app
 - **Area level only.** Show `m.disclaimer` next to every number. A prediction is the average for insured buildings with those characteristics in that county, in an average year. It's never a quote for a property.
 - **Label the county factor "less certain"** (Theo's Question 7 decision). `m.county_table` has each county's A/E and credibility Z for display.

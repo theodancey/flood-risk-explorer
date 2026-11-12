@@ -1,6 +1,42 @@
 # Progress Log
 
-## Summary (latest: 2026-11-11, Milestone 11: GLM vs XGBoost head to head)
+## Summary (latest: 2026-11-12, Milestone 12: explainability; modelling complete)
+All five parts are done, committed and pushed. No raw data, processed data or model tree files are in Git. The new `app/data/` files are small aggregates (about 0.55 MB).
+
+- **Files:**
+  - code **`src/explain.py`** (local explanations, sentences, waterfalls, app-data builder; self-test);
+  - code **`src/global_explain.py`** (exact GLM SHAP, grouped XGBoost TreeSHAP; self-test);
+  - test **`tests/test_explain.py`** (plain Python, about 2 minutes);
+  - notebook `notebooks/10_explainability.ipynb` (runs in under 2 minutes);
+  - write-up **`reports/09_explainability.md`**;
+  - app data **`app/data/`** (+ README).
+- **Global drivers (production GLM, mean |SHAP| over the insured portfolio):**
+  - year built **×1.95** (38%), flood zone **×1.63** (28%);
+  - occupancy ×1.20, county factor ×1.19;
+  - elevated and coverage ×1.12 each, primary residence ×1.03, floors ×1.00.
+- **GLM vs XGBoost (same yardstick, same rows):**
+  - **Agree:** same top three for pure premium; geography has the same weight (0.169 each); the same two key interactions (year built × zone, coverage × occupancy). Rank correlation 0.67–0.72.
+  - **Disagree:** XGBoost gives post-FIRM real weight. It overlaps year built: XGBoost's year built + post-FIRM ≈ the GLM's year built. XGBoost also uses small frequency effects the GLM rejected, and its frequency model **raises** predictions for **76% of elevated exposure**.
+- **Causation caveat** (with data):
+  - coverage band stands in for building value and type; only the limit cap is causal (5.7% vs 0.8% of claims hit a limit);
+  - elevated is a Simpson's paradox (one-way ×0.58, within A/V ×0.40);
+  - year built stands in for pre-FIRM construction.
+- **Local explanations:**
+  - `explain_profile`: an exact multiplicative-Shapley waterfall from the **Virginia average ($197.21** per policy-year; actual $198.13), plus the worksheet, a sentence and a certainty label.
+  - `explain_county`: ratio = **property mix × county factor**, exactly, plus mix indices, an uncertainty note and a sentence.
+  - Examples: Virginia Beach 1960s house $598 (3.0×), Norfolk elevated 2000+ second home $44, Norfolk county ≈ average (risky mix offset by factor 0.83), Newport News 1.6× (factor 1.69).
+- **App data:** five files for all **133 Virginia localities**. The app needs only these plus `models/production_model.json`. The test runs every county + 60 random profiles from committed files only: all pass.
+- **Modelling is complete** (`docs/PROJECT_PLAN.md` row 6). Next: the Streamlit app (row 7).
+
+**Judgment calls worth a look** (details under Milestone 12 decisions):
+1. **The Virginia average uses the 2010–2025 insured mix** ($197), not the 2025 mix ($209). It matches the data window and actual losses.
+2. **Profile waterfalls are Shapley values** (order-free, exact), not a fixed-order worksheet. The worksheet is still returned alongside. County waterfalls use simpler mix indices plus an "overlap and interactions" step: within ×0.8–1.25 for 83% of counties and 98% of exposure.
+3. **The highest expected loss costs are small inland cities** (Bristol, Danville, Winchester), driven by commercial-heavy insured mixes. Their actual history is thin, and they're labelled Low or Medium certainty. The app should show actual history and certainty next to the estimate.
+4. **`.gitignore` changed:** `data/` → `/data/`, so the root data folder stays out of Git but `app/data/` can be committed. Checked with `git check-ignore`.
+
+**What you need to do:** nothing required. Read `reports/09_explainability.md` (about 12 minutes) and the Milestone 12 learning notes. No new questions.
+
+## Summary (previous: 2026-11-11, Milestone 11: GLM vs XGBoost head to head)
 All seven parts are done, committed and pushed. No data or model tree files are in Git.
 
 - **Files:**
@@ -276,6 +312,44 @@ The data is downloaded and explored. Everything except the data files is committ
 - **Checks are assertions inside the script** (rather than a pytest suite), so they run on every build without a new package.
 - Project-plan week-2 file names updated to the real ones (`build_dataset.py`, `va_model_data.parquet`).
 
+### Milestone 12 decisions (2026-11-12)
+- **The production model is a GLM**, so step 1a is a relativity breakdown plus a portfolio importance ranking. SHAP is used for XGBoost and, in closed form, for the GLM, so both are compared on one yardstick (exposure-weighted mean |SHAP|, log scale, same rows).
+- **GLM SHAP = exact interventional Shapley** with the exposure-weighted portfolio as background.
+  - Main term: term − average.
+  - Interaction: the two-player formula. It's not a simple half split, which would be wrong when the factors are correlated; this is checked against brute force in the self-test.
+  - County factor: its own player.
+- **XGBoost SHAP = XGBoost's native exact TreeSHAP** (`pred_contribs`, `pred_interactions`), with base_margin 0. Additivity is asserted against `tree_margin`, and one-hot columns are summed to features. shap 0.54 could parse the models, but the native route needs nothing extra and is the same algorithm. Plots are custom matplotlib, with multiplier axes.
+- **Lighter approach (pre-stated):**
+  - SHAP for all 28,631 portfolio rows and 9,545 claims;
+  - beeswarms: 5,000 rows sampled in proportion to exposure;
+  - interaction values: 3,000 rows.
+  The notebook runs in under 2 minutes, so nothing needed cutting further.
+- **Populations:** frequency and pure premium on the Virginia insured portfolio (building type × county, policy-years 2010–2025); severity on the Virginia paid claims, the severity models' own unit.
+- **Virginia average** = the exposure-weighted average of the model's average-year expected pure premium over all insured Virginia buildings, 2010–2025 (FIPS 51; "UN" and out-of-state codes excluded).
+  - Severity = expected losses ÷ expected claims, so frequency × severity × loads × factor ties out.
+  - The 2025-mix value ($209) is stored for reference.
+- **Profile waterfall:** multiplicative Shapley over the 7 model features + county (2⁸ coalitions, exact).
+  - v(S) = log of the Virginia average with the features in S set to the profile on every building.
+  - Steps are sorted by size for display (Shapley values don't depend on order). Without a county, the county is drawn from Virginia's mix.
+  - `post_firm` is accepted but not in the model; a note says so.
+- **County breakdown:** ratio = mix effect × county-factor effect (exact). Mix = the product of per-factor mix indices × an overlap step.
+  - Mix index = county mean relativity ÷ Virginia mean relativity, main effects only.
+  - I chose this over a pairwise Shapley decomposition of distributions because it's simpler to explain. The overlap step is reported (median ×0.97; mostly the coverage × occupancy interaction, correlation −0.59 with the occupancy index).
+- **Certainty label:** High if Z_sev ≥ 0.8, Medium if 0.5–0.8, Low if below 0.5 or no claims. Z_freq = 0 everywhere, and every uncertainty note says so.
+- **Sentences:**
+  - The "close to average" band is 1/1.1 to 1.1×.
+  - Drivers = the top two steps in the overall direction, each above 5%.
+  - Near-average counties name what pushes up and what pulls down, if each is above 10%.
+  - Every sentence ends with the area-level disclaimer.
+  - The first draft said "factors roughly offset" for Norfolk and used two different thresholds (0.9 vs 1/1.1); both were fixed after reading the output.
+- **Runtime independence:** `explain.load()` reads only `app/data/*` + `models/production_model.json`. `rating_factors.json` is the production model as lookup tables, tested equal to `production.predict` on all 1,152 level combinations and 500 random rows.
+- **51515 named "Bedford city (former; part of Bedford County since 2013)"**: the Census 2020 file has no name for it.
+- **`.gitignore`: `data/` → `/data/`.** The unanchored pattern also matched `app/data/`. Raw and processed data are still ignored (verified).
+- **Example choice by rule:**
+  - profiles = four of Milestone 9's worksheets;
+  - counties = Norfolk (high Z), Newport News (largest factor), Roanoke city (inland), and the lowest-Z county with ≥ 1,000 policy-years (Caroline, Z 0.03).
+- Charts use dataviz reference palette slots 1–4 plus neutral inks, and a blue ramp for beeswarm values. Node.js isn't installed, so the validator wasn't run (same as before). The notebook generator lives outside the repo, as before. **No new packages** (shap 0.54.1 was already pinned).
+
 ### Milestone 11 decisions (2026-11-11)
 - **Decision rule, written before any Milestone 11 result was computed.** The app uses an XGBoost pure-premium structure only if **all** of these hold against the champion (GLM frequency × severity + Bühlmann–Straub county factor):
   1. better on the 16-year LOYO mean re-based Tweedie (p = 1.5) improvement, with the year-bootstrap 95% CI of the difference excluding 0;
@@ -398,6 +472,19 @@ The data is downloaded and explored. Everything except the data files is committ
 - No new packages.
 
 ## Log
+### 2026-11-12: Milestone 12, explainability
+1. Read the plan docs, reports 06–08 and the production-model note. The production model is a GLM, so I planned relativities + GLM SHAP for 1a and TreeSHAP for XGBoost.
+2. Wrote `src/explain.py`: rating tables exported from the production model, an exact Shapley profile waterfall, the county mix × factor breakdown, sentences, waterfall plot, app-data builder and self-test. Built `app/data/`. Self-test: tables = predict on all combinations; Virginia Beach $598.07 matches the model card. Found 51515 unnamed (former Bedford city) and fixed it. Committed.
+3. Wrote `tests/test_explain.py` (every county + 60 random profiles, committed files only; passes) and `app/data/README.md`. Found that `.gitignore`'s `data/` also hid `app/data/`, and anchored it. Committed.
+4. Prototyped TreeSHAP on the saved XGBoost models: additivity error about 3e-6; contributions on 170K rows in 7–66 s; shap 0.54 also parses the models. Wrote `src/global_explain.py`; its self-test includes a brute-force check of the interaction-sharing formula.
+5. Built notebook 10 from a generator and ran it with nbconvert.
+   - The first run failed at the end (`np.cov` on 1-D data); fixed.
+   - Chart checks found scientific-notation tick labels on the log axes and a long post-FIRM label overlapping panel titles. Fixed with multiplier axes and a short label.
+   - Reading the sentences showed Norfolk's "factors roughly offset" was vague and the ratio thresholds were inconsistent. Fixed, then rebuilt app data and re-ran the tests.
+   - Wrote the result text from the outputs and re-ran. Committed.
+6. Wrote report 09, checking numbers against the notebook. Committed.
+7. Updated README, PROJECT_PLAN (modelling complete), docs/production_model.md, LEARNING_NOTES and this file. Committed and pushed.
+
 ### 2026-11-11: Milestone 11, GLM vs XGBoost
 1. Read the plan docs and reports 04–07. Wrote the decision rule into PROGRESS.md before computing anything. Committed.
 2. Added the interaction passthroughs (self-tests still pass). Wrote `src/models/compare.py` with a self-test (cluster-sum deviances = direct formulas, replicate Gini, bootstrap sanity, stability metric).
