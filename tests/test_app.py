@@ -1,5 +1,5 @@
 r"""
-Automated tests for the Streamlit app (Milestone 14). Plain Python, no pytest needed:
+Automated tests for the Streamlit app (Milestones 14-15). Plain Python, no pytest needed:
 
     .venv\Scripts\python.exe tests\test_app.py
 
@@ -7,7 +7,8 @@ Uses Streamlit's built-in testing tool (streamlit.testing.v1.AppTest), which run
 scripts without a browser and lets the test click widgets and read what's on the page.
 
 What it checks:
-  1. Every page loads with no error and shows the disclaimer.
+  1. Every page loads with no error and shows the short disclaimer at the top and the full one
+     (plus name, GitHub link, data source, date) in the footer.
   2. County Explorer: EVERY county in all three states (257) renders, and the big number matches
      app/data/county_summary.csv; tricky names (Richmond, Fairfax, Montgomery) resolve correctly.
   3. Profile Calculator: several profiles in each state, "anywhere in the state", edge cases
@@ -16,6 +17,8 @@ What it checks:
   4. The app never reads data/raw or data/processed: every file read is logged and checked.
   5. The app is lightweight: it doesn't import statsmodels, scipy, scikit-learn, XGBoost, SHAP or
      matplotlib.
+  6. Milestone 15: /county opens the County Explorer; waterfall labels say Yes/No (never True/False)
+     and group small effects; the main pages avoid jargon outside "Learn more" expanders.
 """
 
 import builtins
@@ -91,10 +94,62 @@ def no_error(at, where):
 
 
 def has_disclaimer(at, where):
-    text = " ".join(i.value for i in at.info)
+    """Short disclaimer at the top (an info box) + full disclaimer and credits in the footer (captions)."""
+    top = " ".join(i.value for i in at.info).lower()
+    for phrase in ("area-level", "not a prediction", "quote", "specific property"):
+        check(phrase in top, f"{where}: short disclaimer phrase missing: '{phrase}'")
+    foot = " ".join(c.value for c in at.caption).lower()
     for phrase in ("area-level", "Not a prediction for any specific property", "not an insurance quote",
-                   "not financial advice", "Not affiliated with or endorsed by FEMA"):
-        check(phrase.lower() in text.lower(), f"{where}: disclaimer phrase missing: '{phrase}'")
+                   "not financial advice", "Not affiliated with or endorsed by FEMA", "Theo Dancey",
+                   "github.com/theodancey/flood-risk-explorer", "OpenFEMA", "Last updated"):
+        check(phrase.lower() in foot, f"{where}: footer phrase missing: '{phrase}'")
+    check(not any("disclaimer" in str(c.value).lower() for c in at.sidebar.caption) and
+          not any("not financial advice" in str(c.value).lower() for c in at.sidebar.caption),
+          f"{where}: the sidebar still repeats the disclaimer")
+
+
+JARGON = ("Shapley", "credibility Z", "policy-year", "pure premium", "Mix: overlap", "Bühlmann")
+
+
+def visible_text(at):
+    """Text on the page OUTSIDE expanders (the 'Learn more' sections may be technical)."""
+    inside = set()
+    for e in at.expander:
+        for kind in ("markdown", "caption"):
+            inside |= {id(x) for x in getattr(e, kind)}
+    out = []
+    for kind in ("markdown", "caption", "info", "warning", "subheader", "title", "metric"):
+        for x in getattr(at, kind):
+            if id(x) in inside:
+                continue
+            out.append(str(getattr(x, "label", "")) + " " + str(x.value))
+    return " ".join(out)
+
+
+def no_jargon(at, where):
+    text = visible_text(at)
+    for w in JARGON:
+        check(w.lower() not in text.lower(), f"{where}: jargon '{w}' shown outside a Learn more section")
+
+
+def waterfall_labels(at, key):
+    """y labels of the plotly waterfall with this key."""
+    import json
+    for ch in at.get("plotly_chart"):
+        spec = json.loads(ch.proto.spec)
+        for tr in spec.get("data", []):
+            if tr.get("type") == "waterfall":
+                if key is None or key in str(ch.proto.id):
+                    return list(tr["y"])
+    return []
+
+
+def check_labels(at, where, key=None):
+    ys = waterfall_labels(at, key)
+    check(len(ys) >= 3, f"{where}: no waterfall found")
+    check(not any("True" in y or "False" in y for y in ys), f"{where}: True/False in waterfall labels {ys}")
+    check(not any(y.startswith("Mix:") for y in ys), f"{where}: technical 'Mix:' label {ys}")
+    return ys
 
 
 def money(x):
@@ -108,6 +163,9 @@ def test_county_explorer():
     at = new_app()
     has_disclaimer(at, "county page (default)")
     no_error(at, "county page (default)")
+    no_jargon(at, "county page (default)")
+    ys = check_labels(at, "county page (default)", key="why")
+    check("Other small effects" in ys, f"county page: small effects not grouped: {ys}")
     n = 0
     for state in ("VA", "NC", "MD"):
         at.segmented_control(key="ce_state").set_value(state).run()
@@ -122,6 +180,11 @@ def test_county_explorer():
             check(at.metric[0].value == money(row["expected_pure_premium"]),
                   f"county {fips}: shows {at.metric[0].value}, file says {money(row['expected_pure_premium'])}")
             check(any(row["name"] in s.value for s in at.subheader), f"county {fips}: name not shown")
+            check(at.metric[1].value == money(row["actual_loss_cost_2010_2025"]),
+                  f"county {fips}: actual average shows {at.metric[1].value}")
+            if n % 25 == 0:
+                check_labels(at, f"county {fips}", key="why")
+                no_jargon(at, f"county {fips}")
             n += 1
     print(f"  county explorer: {n} counties rendered")
     # Names shared by several places resolve to the right FIPS (city vs county, three Montgomerys)
@@ -183,6 +246,8 @@ def test_profile_calculator():
         at.run()
         where = f"profile {state} {county} {settings}"
         no_error(at, where)
+        check_labels(at, where, key="pc_wf")
+        no_jargon(at, where)
         # What the page should show = src/explain.py on the same profile
         feats = dict(EX.t.d["bases"])
         keymap = {"pc_zone": "flood_zone_group", "pc_built": "construction_band", "pc_occ": "occupancy_group",
@@ -222,6 +287,25 @@ def test_profile_calculator():
 
 
 # ---------------------------------------------------------------------------
+# /county route (Milestone 15): the same County Explorer script, registered as a hidden page
+# ---------------------------------------------------------------------------
+def test_county_route():
+    at = new_app()
+    pages = at._registered_pages
+    by_url = {info.get("url_pathname"): h for h, info in pages.items()}
+    check("county" in by_url, f"no page registered at /county: {sorted(map(str, by_url))}")
+    check("" in by_url or any(info.get("url_pathname") == "" for info in pages.values()) or "explorer" in by_url,
+          "no default page")
+    if "county" in by_url:
+        at._page_hash = by_url["county"]
+        at.run()
+        no_error(at, "/county")
+        check(any("County Explorer" == t.value for t in at.title), "/county did not open the County Explorer")
+        check(at.metric[0].value.startswith("$"), "/county: no estimate shown")
+    print("  /county route: opens the County Explorer")
+
+
+# ---------------------------------------------------------------------------
 # How It Works
 # ---------------------------------------------------------------------------
 def test_how_it_works():
@@ -235,6 +319,11 @@ def test_how_it_works():
     text = " ".join(m.value for m in at.markdown)
     check("github.com/theodancey/flood-risk-explorer" in text, "how it works: GitHub link missing")
     check("Theo Dancey" in text, "how it works: About blurb missing")
+    for h in ("In short", "How the certainty signals work"):
+        check(h in heads, f"how it works: section '{h}' missing")
+    for term in ("Shapley", "Bühlmann-Straub", "credibility Z", "policy-year", "Pure premium", "6.2×", "6.6×"):
+        check(term in text, f"how it works: '{term}' not explained")
+    check("2009-2025" not in text or "included" in text, "how it works: 2009-2025 not explained")
     print("  how it works: all sections present")
 
 
@@ -274,7 +363,8 @@ def test_lightweight():
 
 if __name__ == "__main__":
     t0 = time.time()
-    for test in (test_county_explorer, test_profile_calculator, test_how_it_works, test_reads, test_lightweight):
+    for test in (test_county_explorer, test_profile_calculator, test_county_route, test_how_it_works,
+                 test_reads, test_lightweight):
         t = time.time()
         print(test.__name__)
         test()
