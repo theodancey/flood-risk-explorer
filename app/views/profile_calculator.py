@@ -39,11 +39,52 @@ YES_NO = {"True": "Yes", "False": "No"}
 FIRM = {"unknown": "Not sure / skip", "False": "No (built before)", "True": "Yes (built after)"}
 
 # ---------------------------------------------------------------------------
+# Starting values. They live in st.session_state (not in each widget's default) so that the address
+# lookup, or the County Explorer's "use this address" button, can fill them in before the widgets
+# are drawn. The user can still change every one of them afterwards.
+# ---------------------------------------------------------------------------
+if "pc_prefill" in st.session_state:                      # handed over from the County Explorer
+    st.session_state.update(st.session_state.pop("pc_prefill"))
+DEFAULTS = {"pc_state": "VA", "pc_county": ANY, "pc_zone": bases["flood_zone_group"],
+            "pc_built": bases["construction_band"], "pc_firm": "unknown", "pc_elev": bases["elevated"],
+            "pc_occ": bases["occupancy_group"], "pc_cover": bases["building_coverage_band"],
+            "pc_floors": bases["floors_group"], "pc_primary": bases["primary_residence"]}
+for k, v in DEFAULTS.items():      # re-assigned every run (see the County Explorer for why)
+    st.session_state[k] = v if st.session_state.get(k) is None else st.session_state[k]
+
+
+def run_lookup():
+    """Runs when 'Look up' is pressed, BEFORE the page is drawn, so it may set the inputs below."""
+    found = C.find_address(st.session_state.get("pc_addr", ""), st.session_state.get("pc_year"))
+    st.session_state["pc_found"] = found
+    st.session_state.update(C.prefill_from(found))
+
+
+# ---------------------------------------------------------------------------
+# Optional: fill in the inputs from an address
+# ---------------------------------------------------------------------------
+with st.expander("Look up an address (optional)", icon=":material/search:",
+                 expanded="pc_found" in st.session_state):
+    st.caption("We'll fill in the state, county, flood zone and age from public maps. "
+               + C.ADDRESS_PRIVACY)
+    with st.form("pc_lookup_form", border=False):
+        a1, a2 = st.columns([3, 1])
+        a1.text_input("Street address in Virginia, North Carolina or Maryland", key="pc_addr",
+                      placeholder="e.g. 1000 Bank St, Richmond, VA 23219")
+        a2.number_input("Year built (optional)", min_value=1700, max_value=2026, value=None, step=1,
+                        key="pc_year", placeholder="e.g. 1985")
+        st.form_submit_button("Look up", on_click=run_lookup, icon=":material/search:")
+    if "pc_found" in st.session_state:
+        C.show_lookup(st.session_state["pc_found"])
+
+# ---------------------------------------------------------------------------
 # Where
 # ---------------------------------------------------------------------------
-state = st.segmented_control("State", list(C.STATES), format_func=C.STATES.get, default="VA",
+state = st.segmented_control("State", list(C.STATES), format_func=C.STATES.get,
                              required=True, key="pc_state")
 fips_list, names = C.counties_in(state)
+cur = st.session_state.get("pc_county")
+st.session_state["pc_county"] = cur if cur in [ANY] + fips_list else ANY       # the state changed
 county = st.selectbox("County or independent city (type to search)", [ANY] + fips_list,
                       format_func=lambda f: f"Anywhere in {C.STATES[state]} (state mix of counties)"
                       if f == ANY else names[f], key="pc_county",
@@ -57,12 +98,10 @@ st.markdown("#### About the building")
 c1, c2 = st.columns(2)
 with c1:
     zone = st.radio("Flood zone", list(ZONE), format_func=ZONE.get, key="pc_zone",
-                    index=list(ZONE).index(bases["flood_zone_group"]),
                     help="FEMA's flood maps put each building in a zone. Zones A and V are high risk: at least "
                          "a 1-in-100 chance of flooding each year (V = on the coast, with waves). Zones B, C and X "
                          "are lower risk.")
     built = st.selectbox("Year built", list(BUILT), format_func=BUILT.get, key="pc_built",
-                         index=list(BUILT).index(bases["construction_band"]),
                          help="Older buildings claim far more often. Many were built before flood-safe "
                               "building rules. Buildings from 1960-1979 have the most claims in the data.")
     firm = st.radio("Built after the area's first flood map?", list(FIRM), format_func=FIRM.get,
@@ -71,23 +110,21 @@ with c1:
                                         "flood-safe building rules. The estimate doesn't use this answer "
                                         "directly (year built covers it); it's only used to check your answers.")
     elevated = st.radio("Raised building?", list(YES_NO), format_func=YES_NO.get, horizontal=True,
-                        key="pc_elev", index=list(YES_NO).index(bases["elevated"]),
+                        key="pc_elev",
                         help="Raised on posts, piers or walls so the lowest floor sits above expected flood "
                              "water. Raised buildings tend to have smaller claims.")
 with c2:
     occ = st.selectbox("What is it used for?", list(OCC), format_func=OCC.get, key="pc_occ",
-                       index=list(OCC).index(bases["occupancy_group"]),
                        help="Apartment and business buildings have much bigger claims than single homes.")
     cover = st.selectbox("Building coverage", list(COVER), format_func=COVER.get, key="pc_cover",
-                         index=list(COVER).index(bases["building_coverage_band"]),
                          help="The most the policy pays to repair the building itself. Bigger, pricier "
                               "buildings usually buy more, so this also hints at the building's value.")
     floors = st.segmented_control("Floors", list(FLOORS), format_func=FLOORS.get, key="pc_floors",
-                                  default=bases["floors_group"], required=True,
+                                  required=True,
                                   help="Number of floors. This barely changes the estimate.")
     nonres = occ == "non-residential"
     primary = st.radio("Someone's main home?", list(YES_NO), format_func=YES_NO.get, horizontal=True,
-                       key="pc_primary", index=list(YES_NO).index(bases["primary_residence"]),
+                       key="pc_primary",
                        disabled=nonres,
                        help="A main home, not a second home, rental or vacation home. Only for homes.")
     if nonres:

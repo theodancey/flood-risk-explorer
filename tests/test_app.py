@@ -71,6 +71,21 @@ pathlib.Path.open = _wrap(pathlib.Path.open)
 pathlib.Path.read_text = _wrap(pathlib.Path.read_text)
 pathlib.Path.read_bytes = _wrap(pathlib.Path.read_bytes)
 
+# No internet during the tests: any connection to a non-local address fails (the address lookup is
+# tested with fake answers instead). Local connections are allowed: Python uses them internally.
+import socket  # noqa: E402
+_real_connect = socket.socket.connect
+
+
+def _local_only(self, address):
+    host = address[0] if isinstance(address, tuple) else address
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        raise RuntimeError(f"network access is blocked in tests ({host})")
+    return _real_connect(self, address)
+
+
+socket.socket.connect = _local_only
+
 from streamlit.testing.v1 import AppTest  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "src"))
@@ -357,14 +372,155 @@ def test_lightweight():
     check(heavy == "none", f"the app imports heavy libraries: {heavy}")
     reqs = [l.split("==")[0] for l in (ROOT / "app" / "requirements.txt").read_text().splitlines()
             if l.strip() and not l.startswith("#")]
-    check(set(reqs) == {"streamlit", "pandas", "numpy", "pyarrow", "plotly"}, f"app/requirements.txt: {reqs}")
+    check(set(reqs) == {"streamlit", "pandas", "numpy", "pyarrow", "plotly", "requests"}, f"app/requirements.txt: {reqs}")
     print(f"  heavy libraries imported by the app: {heavy}; app requirements: {reqs}")
+
+
+# ---------------------------------------------------------------------------
+# 7. Address lookup (Milestone 15), with FAKE web answers: the tests never use the internet
+# ---------------------------------------------------------------------------
+import requests  # noqa: E402
+
+REAL_GET = requests.get
+
+
+class FakeResponse:
+    def __init__(self, data=None, status=200):
+        self.status_code, self._data = status, data
+
+    def json(self):
+        return self._data
+
+
+def fake_web(state_fips="37", county="37055", county_name="Dare County", place=None, x=-75.62, y=35.91,
+             zone="AE", cid="375348", geocoder_down=False, zone_down=False, state_name="North Carolina"):
+    """A stand-in for requests.get that answers like the Census Geocoder and FEMA's flood map."""
+    def get(url, params=None, timeout=None):
+        if "geocoder" in url:
+            if geocoder_down:
+                raise requests.ConnectionError("down")
+            geos = {"States": [{"STATE": state_fips, "NAME": state_name}],
+                    "Counties": [{"GEOID": county, "NAME": county_name}],
+                    "Incorporated Places": [{"BASENAME": place}] if place else []}
+            return FakeResponse({"result": {"addressMatches": [{"matchedAddress": "100 TEST ST, SOMEWHERE",
+                                                                "coordinates": {"x": x, "y": y},
+                                                                "geographies": geos}]}})
+        if "MapServer/28" in url:
+            if zone_down:
+                raise requests.Timeout("slow")
+            return FakeResponse({"features": [{"attributes": {"FLD_ZONE": zone, "ZONE_SUBTY": None}}]})
+        if "MapServer/22" in url:
+            return FakeResponse({"features": [{"attributes": {"CID": cid}}]})
+        raise AssertionError(f"unexpected URL: {url}")
+    return get
+
+
+def click(at, label):
+    btns = [b for b in at.button if b.label == label]
+    check(len(btns) == 1, f"button '{label}' not found: {[b.label for b in at.button]}")
+    btns[0].click().run()
+
+
+def page_text(at):
+    return " ".join(str(x.value) for kind in ("markdown", "caption", "warning", "success", "info")
+                    for x in getattr(at, kind))
+
+
+def test_address_lookup():
+    sys.path.insert(0, str(ROOT / "app"))
+    import lookup
+    lookup._pause = lambda s: None
+    try:
+        # 1. Calculator: a Dare County, NC address in zone AE, built 1985 (first map 1978) -> everything filled in
+        requests.get = fake_web()
+        at = new_app()
+        at.switch_page("views/profile_calculator.py").run()
+        text = page_text(at)
+        check("Your address is only used to look up public map data and is not saved." in text,
+              "calculator: privacy sentence missing")
+        at.text_input(key="pc_addr").set_value("100 Test St, Kill Devil Hills, NC")
+        at.number_input(key="pc_year").set_value(1985)
+        click(at, "Look up")
+        no_error(at, "address lookup (Dare)")
+        ss = at.session_state
+        check(ss["pc_state"] == "NC" and ss["pc_county"] == "37055", f"state/county not set: {ss['pc_state']} {ss['pc_county']}")
+        check(ss["pc_zone"] == "A/V high risk", f"zone not set: {ss['pc_zone']}")
+        check(ss["pc_built"] == "1980-1999", f"year built not set: {ss['pc_built']}")
+        check(ss["pc_firm"] == "True", f"post-FIRM not set: {ss['pc_firm']}")
+        text = page_text(at)
+        for phrase in ("U.S. Census Geocoder", "FEMA National Flood Hazard Layer", "OpenFEMA NFIP Community Status Book",
+                       "October 6, 1978", "not an official flood zone determination", "msc.fema.gov",
+                       "average for similar insured buildings", "December 31, 1974"):
+            check(phrase in text, f"address lookup: '{phrase}' not shown")
+        feats = {**EX.t.d["bases"], "flood_zone_group": "A/V high risk", "construction_band": "1980-1999"}
+        r = EX.explain_profile({**feats, "county": "37055"}, state="NC")
+        check(at.metric[0].value == money(r["pure_premium"]),
+              f"after lookup shows {at.metric[0].value}, expected {money(r['pure_premium'])}")
+        # the user can still override what was filled in
+        at.radio(key="pc_zone").set_value("B/C/X moderate-low risk").run()
+        no_error(at, "override after lookup")
+        check(at.session_state["pc_zone"] == "B/C/X moderate-low risk", "could not override the zone")
+
+        # 2. An address outside VA/NC/MD: a clear message, inputs unchanged
+        requests.get = fake_web(state_fips="11", county="11001", county_name="District of Columbia",
+                                state_name="District of Columbia")
+        at = new_app()
+        at.switch_page("views/profile_calculator.py").run()
+        at.text_input(key="pc_addr").set_value("1 Outside Ave, Washington, DC")
+        click(at, "Look up")
+        no_error(at, "outside address")
+        check(any("only covers Virginia, North Carolina and Maryland" in w.value for w in at.warning),
+              "outside address: message missing")
+        check(at.session_state["pc_state"] == "VA", "outside address changed the state")
+
+        # 3. The address service is down: friendly message, manual inputs still work
+        requests.get = fake_web(geocoder_down=True)
+        at = new_app()
+        at.switch_page("views/profile_calculator.py").run()
+        at.text_input(key="pc_addr").set_value("2 Down St, Norfolk, VA")
+        click(at, "Look up")
+        no_error(at, "geocoder down")
+        check(any("didn't answer" in w.value for w in at.warning), "geocoder down: message missing")
+        check(at.metric[0].value.startswith("$"), "geocoder down: no result shown")
+
+        # 4. The flood map service is down: county filled in, zone left for the user
+        requests.get = fake_web(zone_down=True, x=-75.70, y=35.95)
+        at = new_app()
+        at.switch_page("views/profile_calculator.py").run()
+        at.text_input(key="pc_addr").set_value("3 Slow Rd, Manteo, NC")
+        click(at, "Look up")
+        no_error(at, "zone service down")
+        check(at.session_state["pc_county"] == "37055", "zone down: county not set")
+        check("Please choose the flood zone yourself" in page_text(at), "zone down: message missing")
+
+        # 5. County Explorer: "Find my county", then "Use this address in the calculator"
+        requests.get = fake_web(state_fips="51", county="51810", county_name="Virginia Beach city",
+                                place="Virginia Beach", x=-75.98, y=36.85, zone="VE", cid="515531",
+                                state_name="Virginia")
+        at = new_app()
+        check("not saved" in page_text(at), "county page: privacy sentence missing")
+        at.text_input(key="ce_addr").set_value("4 Beach Rd, Virginia Beach, VA")
+        click(at, "Find")
+        no_error(at, "find my county")
+        check(at.session_state["ce_county"] == "51810", f"find my county: {at.session_state['ce_county']}")
+        check(at.subheader[0].value == "Virginia Beach city, VA", f"find my county header: {at.subheader[0].value}")
+        click(at, "Use this address in the calculator")
+        no_error(at, "explorer -> calculator")
+        check(any(t.value == "Property Profile Calculator" for t in at.title), "did not open the calculator")
+        check(at.session_state["pc_county"] == "51810" and at.session_state["pc_zone"] == "A/V high risk",
+              "calculator not pre-filled from the County Explorer")
+        print("  address lookup: fill-in, sources, override, outside VA/NC/MD, services down, find my county")
+    finally:
+        requests.get = REAL_GET
 
 
 if __name__ == "__main__":
     t0 = time.time()
-    for test in (test_county_explorer, test_profile_calculator, test_county_route, test_how_it_works,
-                 test_reads, test_lightweight):
+    import sys as _sys
+    only = [a for a in _sys.argv[1:]]
+    tests = (test_county_explorer, test_profile_calculator, test_county_route, test_address_lookup,
+             test_how_it_works, test_reads, test_lightweight)
+    for test in [t for t in tests if not only or t.__name__ in only]:
         t = time.time()
         print(test.__name__)
         test()

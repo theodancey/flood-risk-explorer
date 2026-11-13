@@ -28,6 +28,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 import explain  # noqa: E402  (src/explain.py: numpy + pandas only when loaded with with_model=False)
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
+import lookup  # noqa: E402  (app/lookup.py: the address lookup, uses requests)
 
 STATES = {"VA": "Virginia", "NC": "North Carolina", "MD": "Maryland"}
 GITHUB_URL = "https://github.com/theodancey/flood-risk-explorer"
@@ -132,6 +135,144 @@ def zone_average(state, zone):
 def av_share(state):
     """% of the state's insured policy-years in high-risk A/V zones (2010-2025)."""
     return float(state_averages()["states"][state]["mix_pct"]["pct_av_zone"])
+
+
+# ---------------------------------------------------------------------------
+# Address lookup (Milestone 15). The work is in app/lookup.py; here it's cached and combined.
+# Failed lookups are NOT cached (the cached function raises, so a service that was down is asked
+# again next time). Geocoding results are kept only briefly in memory (10 minutes, at most 50).
+# ---------------------------------------------------------------------------
+class _Uncached(Exception):
+    """Carries a failed lookup's result out of a cached function without caching it."""
+    def __init__(self, result):
+        super().__init__("lookup failed")
+        self.result = result
+
+
+@st.cache_data(show_spinner=False)
+def firm_dates():
+    """Each NFIP community's first flood insurance rate map date (OpenFEMA Community Status Book)."""
+    return pd.read_csv(DATA / "firm_dates.csv", dtype=str)
+
+
+@st.cache_data(ttl=600, max_entries=50, show_spinner=False)
+def _geocode_cached(address):
+    res = lookup.geocode(address)
+    if res["status"] == "error":
+        raise _Uncached(res)
+    return res
+
+
+@st.cache_data(ttl=86400, max_entries=1000, show_spinner=False)
+def _zone_cached(lat, lon):
+    res = lookup.flood_zone(lat, lon)
+    if res["status"] == "error":
+        raise _Uncached(res)
+    return res
+
+
+@st.cache_data(ttl=86400, max_entries=1000, show_spinner=False)
+def _community_cached(lat, lon, state, county_name, place):
+    return lookup.community(lat, lon, state, county_name, place, firm_dates())
+
+
+def geocode(address):
+    try:
+        return _geocode_cached(" ".join(str(address or "").split()))
+    except _Uncached as e:
+        return e.result
+
+
+def find_address(address, year_built=None, full=True):
+    """Everything the pages need from an address, as one dict:
+      where: the geocoder result (status, state, county_fips, ...);
+      zone, community, firm: the flood zone, community and pre/post-FIRM results (when full=True);
+      band: the year built's age group (or None).
+    Every part has a 'status', so the page can show what was found and fall back where it wasn't."""
+    out = {"where": geocode(address), "band": lookup.year_to_band(year_built), "year": year_built}
+    w = out["where"]
+    if w["status"] != "ok" or not full:
+        return out
+    lat, lon = round(w["lat"], 5), round(w["lon"], 5)    # about 1 m: plenty for a flood map lookup
+    try:
+        out["zone"] = _zone_cached(lat, lon)
+    except _Uncached as e:
+        out["zone"] = e.result
+    out["community"] = _community_cached(lat, lon, w["state"], w["county_name"], w["place"])
+    fd = out["community"].get("initial_firm") if out["community"]["status"] == "ok" else None
+    out["firm"] = lookup.firm_status(year_built, fd)
+    return out
+
+
+def prefill_from(found):
+    """The calculator inputs (widget key -> value) that an address lookup can fill in."""
+    w = found["where"]
+    if w["status"] != "ok":
+        return {}
+    vals = {"pc_state": w["state"], "pc_county": w["county_fips"]}
+    if found.get("zone", {}).get("status") == "ok":
+        vals["pc_zone"] = found["zone"]["zone_group"]
+    if found.get("band"):
+        vals["pc_built"] = found["band"]
+    firm = found.get("firm", {}).get("status")
+    if found.get("year") is not None:
+        vals["pc_firm"] = {"post": "True", "pre": "False"}.get(firm, "unknown")
+    return vals
+
+
+ADDRESS_PRIVACY = "Your address is only used to look up public map data and is not saved."
+NOT_OFFICIAL = ("This is not an official flood zone determination. Check your flood zone on "
+                "[FEMA's Flood Map Service Center](https://msc.fema.gov/portal/search).")
+STILL_AVERAGE = ("The result is still the average for similar insured buildings, not a prediction or a "
+                 "quote for this property.")
+ZONE_PLAIN = {"A/V high risk": "high risk (A or V)", "B/C/X moderate-low risk": "lower risk (B, C or X)"}
+
+
+def show_lookup(found):
+    """What the address lookup found, where each piece came from, and what's left to choose."""
+    w = found["where"]
+    if w["status"] != "ok":
+        st.warning(w["message"], icon=":material/location_off:")
+        return
+    names = dict(zip(county_summary()["county"], county_summary()["name"]))
+    lines = [f"- **Place:** {w['matched'].title()}, in {names.get(w['county_fips'], w['county_name'])}, "
+             f"{w['state']}. *Source: U.S. Census Geocoder.*"]
+    z = found.get("zone")
+    if z is not None:
+        if z["status"] == "ok":
+            lines.append(f"- **Flood zone:** {z['label']}, so the flood zone is set to {ZONE_PLAIN[z['zone_group']]}. "
+                         "*Source: FEMA National Flood Hazard Layer.*")
+        else:
+            lines.append(f"- **Flood zone:** not set. {z['message']}")
+    c = found.get("community")
+    rule = None
+    if c is not None:
+        if c["status"] == "ok":
+            d = c["initial_firm"]
+            when = f"{d.strftime('%B')} {d.day}, {d.year}" if d else "no date on file"
+            lines.append(f"- **Area's first flood insurance rate map:** {c['name']}, {when}. "
+                         "*Source: OpenFEMA NFIP Community Status Book.*")
+        else:
+            lines.append(f"- **Area's first flood map:** not found. {c['message']}")
+        f = found.get("firm", {})
+        rule = f.get("rule")
+        if found.get("year") is None:
+            lines.append("- **Built after the first flood map?** Add the year built to check this.")
+        elif f.get("status") == "post":
+            lines.append(f"- **Built after the first flood map?** Yes (built {found['year']}).")
+        elif f.get("status") == "pre":
+            lines.append(f"- **Built after the first flood map?** No (built {found['year']}).")
+        else:
+            lines.append("- **Built after the first flood map?** Not sure, so please choose it yourself.")
+    if found.get("year") is not None:
+        lines.append(f"- **Year built:** {found['year']}, so the age group is set to "
+                     f"{found['band'] or 'unknown (please choose)'}.")
+    st.markdown("\n".join(lines))
+    if rule:
+        st.caption(rule)
+    st.caption("Raised building, floors, use and coverage aren't on public maps, so please set them yourself. "
+               "You can change anything that was filled in.")
+    st.caption(NOT_OFFICIAL + " " + STILL_AVERAGE)
 
 
 # ---------------------------------------------------------------------------
