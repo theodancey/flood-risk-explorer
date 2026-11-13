@@ -258,7 +258,7 @@ The data is downloaded and explored. Everything except the data files is committ
 **What you need to do:** nothing required. To get the data on another computer, run `.venv\Scripts\python.exe src\download_data.py all` (about 35 minutes). Optionally, confirm you're happy with the v2 → v3 switch (Question 3).
 
 ## Questions for Theo
-8. *(Milestone 13, 2026-11-12, needs your go-ahead)* **The 3-state refit was stopped for low memory.** The background job `multistate.py refit` (then `xgb`) was killed by Claude Code because the computer ran critically low on memory. It had got as far as the interaction keep-rule checks. I haven't restarted it on my own. Done and committed: NC/MD downloads, the 3-state table (all checks pass), and the transfer test. To continue, close other memory-heavy programs and tell me to resume, or run it yourself: `.venv\Scripts\python.exe src\multistate.py refit`, then `... xgb`, `... production`, then `src\explain.py build`. If memory stays tight, I can make the refit lighter (e.g. fewer leave-one-year-out fits held in memory at once).
+8. *(Milestone 13, 2026-11-12; ✅ resolved 2026-11-13: Theo said resume and asked for a memory-efficient refit; fix in Milestone 13 decisions, "Memory")* **The 3-state refit was stopped for low memory.** The background job `multistate.py refit` (then `xgb`) was killed by Claude Code because the computer ran critically low on memory. It had got as far as the interaction keep-rule checks. I haven't restarted it on my own. Done and committed: NC/MD downloads, the 3-state table (all checks pass), and the transfer test. To continue, close other memory-heavy programs and tell me to resume, or run it yourself: `.venv\Scripts\python.exe src\multistate.py refit`, then `... xgb`, `... production`, then `src\explain.py build`. If memory stays tight, I can make the refit lighter (e.g. fewer leave-one-year-out fits held in memory at once).
 5. *(Week 8, decided)* **Hosting the app.** The plan puts the Streamlit app on a free host (Streamlit Community Cloud), which needs an account linked to your GitHub. **Decision: you'll create the Streamlit Community Cloud account yourself in week 8.** I won't sign up for anything.
 
 ### Earlier (resolved)
@@ -335,6 +335,23 @@ The data is downloaded and explored. Everything except the data files is committ
 - **Feature × state interactions** are adopted only if they pass the existing keep rule (cluster Wald p < 0.05 and better dev-LOYO). Otherwise they're only flagged.
 - **XGBoost:** the Milestone 11 decision rule (criteria 1–6) is applied unchanged, with frozen Milestone 10 settings (no re-tuning). Frequency stays no-geography; `state` joins the severity/Tweedie one-hot geography.
 - **Model files:** the Virginia model is copied to `models/production_model_va.json` (the transfer-test model, kept as the record). `va_model_data.parquet` is still built by the default (VA-only) run.
+- **Consistency labels, a gap in the rule** (filled before reading results by label): a term whose point estimates fall on different sides of 1, but where no state's CI excludes 1 on the other side, fits none of the three labels. It is labelled *unclear*.
+- **State interactions, applying the hybrid rule fully** (2026-11-13): 7 term × state interactions passed the per-term keep rule (Wald p < 0.05 and better mean dev-LOYO). Milestone 11's hybrid rule also requires the model with **all** passing terms to be no worse on the 16-year LOYO and the 2021–2025 holdout, so that was tested (`multistate.py refit candidate`).
+  - It was worse in every state on both: LOYO VA 10.71 → 10.65, NC 6.24 → 5.99, MD 14.57 → 14.20; holdout VA 11.28 → 10.08, NC 0.04 → −0.16, MD 14.22 → 12.57.
+  - **Not adopted.** The production spec stays the same in every state, plus a state factor. The state differences are reported and flagged only.
+  - Supporting this needed `frequency_glm` interactions to allow three-way terms and members that aren't main features (`interaction_columns`). The Virginia model still gives $598.07.
+- **Negative claim payments** (added after the build check failed; no model results existed yet): 3 claims (2 NC, 1 MD, none in VA) have a negative total paid, i.e. a refund or correction. Each total is floored at $0 in `actuarial.total_paid`, so the claim counts as not paid. Virginia's numbers are unchanged.
+- **Memory (2026-11-13, after the first refit was stopped by the system at about 10 GB; the laptop has 31.5 GB in total, as Windows reports it):**
+  - **The cause:** statsmodels result objects and their model point at each other (a reference cycle), so Python frees them only when its cycle collector happens to run. In a loop of hundreds of fits the old design matrices piled up at about +1 GB per fit. Measured: 6 severity fits grew from 1.6 to 4.6 GB without forced collection, and stayed flat at 0.47 GB with it.
+  - **The fix:** `multistate.mem()` forces a collection before every fit (`fit3`, `_component_fit`, the state-interaction fit, the XGBoost fit) and prints the process's memory after each fold (psutil, added to requirements.txt).
+  - **Run one stage at a time:** `multistate.py refit main | consistency | validate`, then `xgb`, then `production`.
+  - **Already efficient, unchanged:** the frequency GLM is already fitted on aggregated rating cells (about 39,000 rows), not on policies; severity on the 51,889 claims.
+  - **Columns:** the three cell-table columns no step uses (`losses_nominal`, `claims_all`, `cpi_factor`) are not loaded.
+  - **Not done, and why:**
+    - *Categorical types:* the data tables are only about 0.17 GB, so these would save under 0.1 GB. Many groupbys in the pipeline would then also create every empty category combination (zero-exposure rows, division by zero), a real bug risk for no real saving.
+    - *float32:* statsmodels converts design matrices to float64 anyway, and the off-balance and total checks need full precision.
+    - *Chunked fitting:* not needed, since the design matrices are 20–30 MB.
+  - **Results are unchanged by these changes:** the full-fit relativities and credibility tables match the run before the fix (checked).
 
 ### Milestone 12 decisions (2026-11-12)
 - **The production model is a GLM**, so step 1a is a relativity breakdown plus a portfolio importance ranking. SHAP is used for XGBoost and, in closed form, for the GLM, so both are compared on one yardstick (exposure-weighted mean |SHAP|, log scale, same rows).

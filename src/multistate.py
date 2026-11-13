@@ -14,11 +14,18 @@ Three questions, in order:
 Run from the project folder (results go to reports/10_*.csv and data/processed/m13_*):
     .venv\\Scripts\\python.exe src\\multistate.py              # self-test (simulated data)
     .venv\\Scripts\\python.exe src\\multistate.py transfer     # step 1 (about a minute)
-    .venv\\Scripts\\python.exe src\\multistate.py refit        # steps 2-3 (several minutes)
+    .venv\\Scripts\\python.exe src\\multistate.py refit        # steps 2-3, all three stages
+    .venv\\Scripts\\python.exe src\\multistate.py refit main   # ... or one stage at a time
+    .venv\\Scripts\\python.exe src\\multistate.py refit consistency
+    .venv\\Scripts\\python.exe src\\multistate.py refit validate
+    .venv\\Scripts\\python.exe src\\multistate.py xgb          # XGBoost check (frozen settings)
+    .venv\\Scripts\\python.exe src\\multistate.py production   # save the 3-state production model
+Long steps print "[memory X GB]" after each fit (needs psutil, in requirements.txt).
 
 Area level only: every number describes groups of insured buildings, never one property.
 """
 
+import gc
 import json
 import sys
 import time
@@ -53,13 +60,40 @@ SEGMENTS = ["flood_zone_group", "construction_band", "occupancy_group", "buildin
 # ---------------------------------------------------------------------------
 # Data and the production specification
 # ---------------------------------------------------------------------------
+# Memory (Milestone 13). statsmodels result objects point back at their model and vice versa
+# (a "reference cycle"). Python frees such objects only when its cycle collector happens to run,
+# so in a loop of hundreds of fits the old design matrices piled up (about +1 GB per fit; the
+# first 3-state refit was stopped by the system at ~10 GB). Forcing a collection before every
+# fit keeps memory flat (~0.5 GB): see PROGRESS.md, Milestone 13 decisions.
+try:
+    import psutil
+    _PROC = psutil.Process()
+except ImportError:                                    # memory printing is optional
+    _PROC = None
+
+
+def mem(tag=""):
+    """Free unreachable objects now, and print this process's memory use if psutil is installed."""
+    gc.collect()
+    if _PROC is not None and tag:
+        print(f"      [memory {_PROC.memory_info().rss / 1e9:.2f} GB] {tag}", flush=True)
+
+
+# Columns of the cell table that no Milestone 13 step uses (dropped on load to save memory)
+UNUSED_CELL_COLS = ["losses_nominal", "claims_all", "cpi_factor"]
+
+
 def load_data(verbose=True):
-    """(cells, claims) for the three states. The claim table is built on first use."""
-    cells = pd.read_parquet(B.OUT_FILE_3)
+    """(cells, claims) for the three states, only the columns the models use. The claim table is
+    built on first use."""
+    import pyarrow.parquet as pq
+    names = [c for c in pq.read_schema(B.OUT_FILE_3).names if c not in UNUSED_CELL_COLS]
+    cells = pd.read_parquet(B.OUT_FILE_3, columns=names)
     if Path(sv.CLAIMS_PATH_3).exists():
         claims = pd.read_parquet(sv.CLAIMS_PATH_3)
     else:
         claims = sv.build_claims_table(B.OUT_FILE_3, sv.CLAIMS_PATH_3, verbose, states=STATES)
+    mem("data loaded" if verbose else "")
     return cells, claims
 
 
@@ -78,6 +112,7 @@ def fit3(cells, claims, spec, county=True):
     (state x year effects + state factor when there are several states), loads, per-state
     off-balance, and Buhlmann-Straub county factors re-centred within each state.
     Returns (model, county table, credibility parameters)."""
+    mem()                                              # free earlier fits first (see mem())
     m = pp.fit_combined(cells, claims, spec["freq_features"], spec["sev_features"], spec["freq_bases"],
                         spec["sev_bases"], spec["freq_interactions"], spec["sev_interactions"], by_state=True)
     if not county:
@@ -284,6 +319,7 @@ def refit_validation(cells, claims, spec, verbose=True):
         oof.append(o)
         if verbose:
             print(f"  LOYO {yr} done ({(time.time() - t0) / 60:.1f} min)", flush=True)
+            mem("after this step")
 
     # holdout: train 2010-2020, test 2021-2025 (scored over the whole window, once)
     tr_c, tr_k = cells[cells["year"] <= val.LAST_TRAIN_YEAR], claims[claims["year"] <= val.LAST_TRAIN_YEAR]
@@ -291,6 +327,7 @@ def refit_validation(cells, claims, spec, verbose=True):
     scores += _score_states(te, preds_for(tr_c, tr_k, te), tr_c, {"design": "holdout", "test_year": 0}, by_year=False)
     if verbose:
         print(f"  holdout done ({(time.time() - t0) / 60:.1f} min)", flush=True)
+        mem("after this step")
 
     # leave-one-state-out: fit on two states (all years), predict the third. The held-out
     # state has no state factor, so it gets the base state's level (Virginia's, or North
@@ -304,6 +341,7 @@ def refit_validation(cells, claims, spec, verbose=True):
         scores += rows
         if verbose:
             print(f"  leave out {st} done ({(time.time() - t0) / 60:.1f} min)", flush=True)
+            mem("after this step")
     return pd.concat(scores, ignore_index=True), pd.concat(oof, ignore_index=True)
 
 
@@ -313,6 +351,7 @@ def refit_validation(cells, claims, spec, verbose=True):
 def _component_fit(cells, claims, spec, kind, cov="cluster"):
     """One GLM component (frequency or severity) with cluster-robust errors (county group x
     year), state x year effects. Returns (model, training rows)."""
+    mem()                                              # free earlier fits first (see mem())
     if kind == "frequency":
         rows = fg.aggregate(cells[cells["exposure"] > 0],
                             [*spec["freq_features"], "county_group", "state", "state_year"])
@@ -355,6 +394,7 @@ def _state_dummies(rows, states):
 def fit_with_state_interaction(rows, model, kind, term_cols, states=("NC", "MD"), cov="cluster"):
     """Refit `model`'s design plus (term columns x state) interactions, cluster-robust errors.
     Returns (statsmodels result, list of the new column names, design builder)."""
+    mem()
     def design(df, include_year=True):
         X = fg.design_matrix(df, model.spec, include_year)
         sd = _state_dummies(df, states)
@@ -396,6 +436,7 @@ def heterogeneity_tests(cells, claims, spec, verbose=True):
                         "p_value": float(w.pvalue)})
             if verbose:
                 print(f"    {kind:9s} {term:45s} p = {float(w.pvalue):.4f}", flush=True)
+                mem("after this step")
     return pd.DataFrame(out)
 
 
@@ -467,6 +508,7 @@ def interaction_keep_rule(cells, claims, spec, terms, verbose=True):
                      "passes_loyo": w > b})
         if verbose:
             print(f"    keep rule {kind} {term}: {b:.2f}% -> {w:.2f}% ({wins}/{len(imp['base'])} better)", flush=True)
+            mem("after this step")
     return pd.DataFrame(rows)
 
 
@@ -488,6 +530,46 @@ def relativity_comparison(cells, claims, spec, verbose=True):
     flagged = [(r.kind, r.term) for r in lab.itertuples() if r.wald_p < 0.05]
     keep = interaction_keep_rule(cells, claims, spec, flagged, verbose) if flagged else pd.DataFrame()
     return rel, het, lab, keep
+
+
+def candidate_spec(spec, keep):
+    """The production spec plus every term x state interaction that passed the keep rule
+    (`keep`: the interaction_keep_rule table; it holds only terms with Wald p < 0.05, so
+    passes_loyo = passes the keep rule). A term "a x b" becomes the three-way term a x b x state."""
+    out = {k: [list(x) for x in v] if "interactions" in k else v for k, v in spec.items()}
+    for _, r in keep[keep["passes_loyo"]].iterrows():
+        key = "freq_interactions" if r["kind"] == "frequency" else "sev_interactions"
+        out[key].append([*r["term"].split(" x "), "state"])
+    out["freq_bases"] = {**spec["freq_bases"], "state": "VA"}
+    out["sev_bases"] = {**spec["sev_bases"], "state": "VA"}
+    return out
+
+
+def state_interaction_candidate(cells, claims, spec, keep, verbose=True):
+    """Milestone 11's hybrid rule, second half: the model with ALL passing term x state
+    interactions replaces the production spec only if its pure premium is not worse on the
+    16-year LOYO (mean, per state) or the 2021-2025 holdout. Both fitted the same way (fit3,
+    county factors included). Returns (scores, candidate spec)."""
+    cand = candidate_spec(spec, keep)
+    scores, t0 = [], time.time()
+    splits = [(yr, cells["year"] != yr, claims["year"] != yr, cells["year"] == yr, "LOYO")
+              for yr in val.ALL_YEARS]
+    splits.append((0, cells["year"] <= val.LAST_TRAIN_YEAR, claims["year"] <= val.LAST_TRAIN_YEAR,
+                   cells["year"] > val.LAST_TRAIN_YEAR, "holdout"))
+    for yr, tr_mc, tr_mk, te_m, design in splits:
+        tr_c, tr_k = cells[tr_mc], claims[tr_mk]
+        te = cells[te_m & (cells["exposure"] > 0)].reset_index(drop=True)
+        preds = {}
+        for name, s in (("production spec", spec), ("with state interactions", cand)):
+            m, _, _ = fit3(tr_c, tr_k, s)
+            preds[name] = m.predict(te)
+            del m
+        scores += _score_states(te, preds, tr_c, {"design": design, **({"test_year": 0} if yr == 0 else {})},
+                                by_year=(design == "LOYO"))
+        if verbose:
+            print(f"  candidate {design} {yr or '2021-25'} done ({(time.time() - t0) / 60:.1f} min)", flush=True)
+            mem("after this step")
+    return pd.concat(scores, ignore_index=True), cand
 
 
 def shared_year_sensitivity(cells, claims, spec):
@@ -568,6 +650,7 @@ class StateLevelXGB:
 def xgb_cell_table(cells):
     """XGBoost's frequency / Tweedie rows: cells with exposure summed over the features + state-year."""
     import xgb_models as X
+    mem()
     m = cells[cells["exposure_matched"] & (cells["exposure"] > 0)]
     keys = X.ALL_FEATURES + ["state", "state_year", "year"]
     return m.groupby(keys, observed=True)[["exposure", "claims", LOSS]].sum().reset_index()
@@ -578,6 +661,7 @@ def fit_xgb3(cells, claims, xcells, settings, kinds=("frequency", "severity", "t
     to their (geography) features; frequency keeps its no-geography features. Returns
     {"pp/XGB fxs": CombinedModel, "pp/XGB Tweedie": StateLevelXGB, "freq": ..., "sev": ...}."""
     import xgb_models as X
+    mem()
     out = {}
     sev_rows = sv.severity_rows(claims)
 
@@ -620,6 +704,7 @@ def xgb_validation(cells, claims, spec, verbose=True):
     """LOYO (16 folds) and the holdout: the 3-state hybrid GLM + county vs XGBoost freq x sev and
     XGBoost Tweedie, identical rows. Returns (scores, out-of-fold predictions)."""
     import xgb_models as X
+    mem()
     settings = X.read_settings()
     xcells = xgb_cell_table(cells)
     scores, oof = [], []
@@ -642,6 +727,7 @@ def xgb_validation(cells, claims, spec, verbose=True):
             oof.append(o)
         if verbose:
             print(f"  XGB check {design} {label or ''}: {(time.time() - t0) / 60:.1f} min", flush=True)
+            mem("after this step")
     return pd.concat(scores, ignore_index=True), pd.concat(oof, ignore_index=True)
 
 
@@ -649,6 +735,7 @@ def xgb_explainability(cells, claims, spec):
     """Milestone 11's flip check on the 2025 in-force cells: flip one feature on every cell and
     record the share of exposure whose prediction moves AGAINST the actuarial direction."""
     import xgb_models as X
+    mem()
     settings = X.read_settings()
     xm = fit_xgb3(cells, claims, xgb_cell_table(cells), settings, kinds=("frequency", "severity"))
     grid = cells[(cells["year"] == 2025) & (cells["exposure"] > 0)].reset_index(drop=True)
@@ -694,14 +781,28 @@ def cmd_transfer():
     print(f"transfer done in {(time.time() - t0) / 60:.1f} min")
 
 
-def cmd_refit():
+def cmd_refit(stage="all"):
+    """The refit runs in three stages, each of which can be run on its own (one at a time keeps
+    memory low): main (full fit, credibility), consistency (by-state fits, tests), validate
+    (LOYO, holdout, leave-one-state-out). stage="all" runs them in order."""
     t0 = time.time()
     cells, claims = load_data()
     spec = production_spec()
     cat = cat_years_by_state(cells)
     print("Cat years:", cat)
     (PROCESSED / "m13_cat_years.json").write_text(json.dumps({k: list(v) for k, v in cat.items()}), encoding="utf-8")
+    if stage in ("all", "main"):
+        _refit_main(cells, claims, spec)
+    if stage in ("all", "consistency"):
+        _refit_consistency(cells, claims, spec)
+    if stage in ("all", "candidate"):
+        _refit_candidate(cells, claims, spec)
+    if stage in ("all", "validate"):
+        _refit_validate(cells, claims, spec, cat)
+    print(f"refit ({stage}) done in {(time.time() - t0) / 60:.1f} min")
 
+
+def _refit_main(cells, claims, spec):
     print("Full fit on all years ...", flush=True)
     m3, tbl, par = fit3(cells, claims, spec)
     rel = pp.combined_relativity_table(m3.freq, m3.sev)
@@ -709,10 +810,14 @@ def cmd_refit():
     tbl.reset_index().to_csv(PROCESSED / "m13_county_table.csv", index=False)
     (PROCESSED / "m13_credibility_params.json").write_text(json.dumps(par, default=float, indent=1), encoding="utf-8")
 
+    mem("full fit")
     print("Credibility then vs now ...", flush=True)
     cs, _ = credibility_summary(cells, claims, spec)
     _save("credibility", cs)
+    mem("credibility")
 
+
+def _refit_consistency(cells, claims, spec):
     print("Relativities by state + heterogeneity tests ...", flush=True)
     rel_s, het, lab, keep = relativity_comparison(cells, claims, spec)
     _save("relativities_by_state", rel_s)
@@ -721,13 +826,38 @@ def cmd_refit():
     if len(keep):
         _save("state_interaction_keep_rule", keep)
     _save("shared_year_sensitivity", shared_year_sensitivity(cells, claims, spec))
+    mem("consistency")
 
+
+def _refit_candidate(cells, claims, spec):
+    kp = REPORTS / "10_state_interaction_keep_rule.csv"
+    if not kp.exists():
+        print("No term x state interaction passed the Wald test: nothing to try.")
+        return
+    keep = pd.read_csv(kp)
+    if not keep["passes_loyo"].any():
+        print("No term x state interaction passed the keep rule: nothing to try.")
+        return
+    print("Hybrid rule, second half: all passing state interactions together vs the production spec ...",
+          flush=True)
+    sc, cand = state_interaction_candidate(cells, claims, spec, keep)
+    _save("state_interaction_candidate_scores", sc)
+    (PROCESSED / "m13_candidate_spec.json").write_text(json.dumps(cand, indent=1), encoding="utf-8")
+    lo = sc[sc["design"] == "LOYO"].groupby(["state", "model"])["improvement_rebased_pct"].mean().unstack()
+    ho = sc[sc["design"] == "holdout"].set_index(["state", "model"])["improvement_rebased_pct"].unstack()
+    print("  16-year LOYO mean improvement (%):")
+    print(lo.round(2).to_string())
+    print("  2021-2025 holdout improvement (%):")
+    print(ho.round(2).to_string())
+
+
+def _refit_validate(cells, claims, spec, cat):
     print("LOYO / holdout / leave-one-state-out ...", flush=True)
     scores, oof = refit_validation(cells, claims, spec)
     _save("refit_scores", scores)
     oof.to_parquet(PROCESSED / "m13_oof_loyo.parquet", index=False)
     _save("refit_summary", summarise(scores[scores["design"] == "LOYO"], cat))
-    print(f"refit done in {(time.time() - t0) / 60:.1f} min")
+    mem("validation")
 
 
 def cmd_production():
@@ -872,7 +1002,7 @@ if __name__ == "__main__":
     elif cmd == "transfer":
         cmd_transfer()
     elif cmd == "refit":
-        cmd_refit()
+        cmd_refit(sys.argv[2] if len(sys.argv) > 2 else "all")
     elif cmd == "xgb":
         cmd_xgb()
     elif cmd == "production":

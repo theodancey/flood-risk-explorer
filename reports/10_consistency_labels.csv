@@ -1,0 +1,14 @@
+kind,term,wald_p,label
+frequency,construction_band,3.4798025946820687e-10,differs in size
+frequency,construction_band x flood_zone_group,3.736348085804012e-06,inconsistent
+frequency,flood_zone_group,0.22447576156783042,consistent
+frequency,floors_group,0.06510751130945451,inconsistent
+severity,building_coverage_band,0.0024347192185112873,unclear
+severity,building_coverage_band x occupancy_group,1.423926318947642e-07,unclear
+severity,construction_band,0.005097141102970738,inconsistent
+severity,elevated,0.0021376713938883966,differs in size
+severity,elevated x flood_zone_group,0.015236383449195317,differs in size
+severity,flood_zone_group,0.043011879965773464,differs in size
+severity,floors_group,0.5833665665992874,consistent
+severity,occupancy_group,1.5407125621593653e-08,differs in size
+severity,primary_residence,1.579012778000654e-10,unclear

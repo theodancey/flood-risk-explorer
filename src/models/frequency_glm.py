@@ -23,6 +23,7 @@ are dropped: a rate needs exposure, and log(0) is undefined). See docs/modeling_
 Run the self-test:  .venv\\Scripts\\python.exe src\\models\\frequency_glm.py
 """
 
+import itertools
 import json
 import sys
 from dataclasses import dataclass, field, asdict
@@ -106,11 +107,21 @@ class Spec:
         cols = ["const"]
         for f in self.features:
             cols += [f"{f}[{l}]" for l in self.levels[f][1:]]
-        for a, b in self.interactions:
-            cols += [f"{a}[{la}]:{b}[{lb}]" for la in self.levels[a][1:] for lb in self.levels[b][1:]]
+        for term in self.interactions:
+            cols += interaction_columns(term, self.levels)
         if self.year_factor:
             cols += [f"year[{l}]" for l in self.levels["year"][1:]]
         return cols
+
+
+def interaction_columns(term, levels):
+    """Column names of one interaction term: every combination of non-base levels of its
+    members, e.g. "a[x]:b[y]". Two-way terms between model features are the usual case;
+    Milestone 13 also allows longer terms and members that are not main features (e.g.
+    construction_band x flood_zone_group x state, where the state's own level is carried by
+    the state x year effects)."""
+    combos = itertools.product(*[levels[m][1:] for m in term])
+    return [":".join(f"{m}[{l}]" for m, l in zip(term, c)) for c in combos]
 
 
 def ordered_levels(df, feature, base, weight="exposure"):
@@ -134,7 +145,8 @@ def make_spec(train, features, interactions=(), year_factor=True, bases=None, we
     if year_col != "year":
         train = train.assign(year=train[year_col])
     spec = Spec(list(features), [list(p) for p in interactions], year_factor, year_col=year_col)
-    for f in list(features) + (["year"] if year_factor else []):
+    extra = [m for term in interactions for m in term if m not in features]   # e.g. "state"
+    for f in list(features) + list(dict.fromkeys(extra)) + (["year"] if year_factor else []):
         s = train[f].astype(str)
         base = str(bases.get(f, train.groupby(s, observed=True)[weight].sum().idxmax()))
         spec.bases[f] = base
@@ -148,7 +160,8 @@ def design_matrix(df, spec, include_year=True):
     all zero (the base year), which predict() then moves to the average-year level."""
     cols = {"const": np.ones(len(df))}
     dummies = {}
-    for f in spec.features + (["year"] if spec.year_factor else []):
+    members = list(dict.fromkeys(m for term in spec.interactions for m in term if m not in spec.features))
+    for f in spec.features + members + (["year"] if spec.year_factor else []):
         s = df[spec.year_col if f == "year" else f].astype(str).to_numpy()
         for l in spec.levels[f][1:]:
             dummies[(f, l)] = (s == l).astype(float)
@@ -156,10 +169,12 @@ def design_matrix(df, spec, include_year=True):
         off = include_year and f in spec.absorbed     # carried by the state-year effect instead
         for l in spec.levels[f][1:]:
             cols[f"{f}[{l}]"] = np.zeros(len(df)) if off else dummies[(f, l)]
-    for a, b in spec.interactions:
-        for la in spec.levels[a][1:]:
-            for lb in spec.levels[b][1:]:
-                cols[f"{a}[{la}]:{b}[{lb}]"] = dummies[(a, la)] * dummies[(b, lb)]
+    for term in spec.interactions:
+        for c in itertools.product(*[spec.levels[m][1:] for m in term]):
+            col = np.ones(len(df))
+            for m, l in zip(term, c):
+                col = col * dummies[(m, l)]
+            cols[":".join(f"{m}[{l}]" for m, l in zip(term, c))] = col
     if spec.year_factor:
         for l in spec.levels["year"][1:]:
             cols[f"year[{l}]"] = dummies[("year", l)] if include_year else np.zeros(len(df))

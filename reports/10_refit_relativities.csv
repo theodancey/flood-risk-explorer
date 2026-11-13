@@ -1,0 +1,24 @@
+feature,level,is_base,in_frequency,in_severity,frequency_rel,severity_rel,pure_premium_rel
+flood_zone_group,A/V high risk,True,True,True,1.0,1.0,1.0
+flood_zone_group,B/C/X moderate-low risk,False,True,True,0.449641054849152,0.7581031965524496,0.3408743209823575
+construction_band,1980-1999,True,True,True,1.0,1.0,1.0
+construction_band,before 1960,False,True,True,1.800181388697168,1.1542177464054373,2.0778013055830558
+construction_band,1960-1979,False,True,True,1.663598737149133,1.2010915033159586,1.9981343081169824
+construction_band,2000 or later,False,True,True,0.6643254941111697,1.0271993810748965,0.6823947363832683
+floors_group,2,True,True,True,1.0,1.0,1.0
+floors_group,1,False,True,True,1.0463721398378205,1.116051961102064,1.1678056787085629
+floors_group,3+,False,True,True,0.9926283366944777,0.8988635161657138,0.8922373969669223
+state,VA,True,True,True,1.0,1.0,1.0
+state,MD,False,True,True,1.0697683564349876,0.8917230504774968,0.9539371021045052
+state,NC,False,True,True,3.505709394377717,1.7283541276342744,6.05910730205898
+occupancy_group,single-unit residential,True,False,True,1.0,1.0,1.0
+occupancy_group,non-residential,False,False,True,1.0,4.280052206810323,4.280052206810323
+occupancy_group,multi-unit residential,False,False,True,1.0,2.7657658204262456,2.7657658204262456
+building_coverage_band,$250K or more,True,False,True,1.0,1.0,1.0
+building_coverage_band,$0 (contents only),False,False,True,1.0,0.47698991281219294,0.47698991281219294
+building_coverage_band,under $100K,False,False,True,1.0,0.7510550975277589,0.7510550975277589
+building_coverage_band,$100K-$249K,False,False,True,1.0,0.9811192415688373,0.9811192415688373
+primary_residence,True,True,False,True,1.0,1.0,1.0
+primary_residence,False,False,False,True,1.0,0.8326158810921302,0.8326158810921302
+elevated,False,True,False,True,1.0,1.0,1.0
+elevated,True,False,False,True,1.0,0.7084602374055421,0.7084602374055421

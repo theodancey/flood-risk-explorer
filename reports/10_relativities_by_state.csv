@@ -1,0 +1,117 @@
+fit,term,column,relativity,ci_low,ci_high,kind
+pooled,flood_zone_group,flood_zone_group[B/C/X moderate-low risk],0.449641054849151,0.3506080984769004,0.5766469145583001,frequency
+pooled,construction_band,construction_band[before 1960],1.8001813886971643,1.5017423167415151,2.1579288244625277,frequency
+pooled,construction_band,construction_band[1960-1979],1.6635987371491365,1.4211063971869409,1.9474690731971567,frequency
+pooled,construction_band,construction_band[2000 or later],0.66432549411117,0.6059866975317875,0.7282806106530086,frequency
+pooled,floors_group,floors_group[1],1.0463721398378136,0.9733709955895279,1.124848243876052,frequency
+pooled,floors_group,floors_group[3+],0.9926283366944734,0.881523415975435,1.1177366329158225,frequency
+pooled,construction_band x flood_zone_group,construction_band[before 1960]:flood_zone_group[B/C/X moderate-low risk],1.13549090427167,0.8738645819809124,1.4754455327173994,frequency
+pooled,construction_band x flood_zone_group,construction_band[1960-1979]:flood_zone_group[B/C/X moderate-low risk],1.0218853711866764,0.8445947313078512,1.2363914586920468,frequency
+pooled,construction_band x flood_zone_group,construction_band[2000 or later]:flood_zone_group[B/C/X moderate-low risk],0.8263306002210968,0.6811223771007509,1.002495709755188,frequency
+VA,flood_zone_group,flood_zone_group[B/C/X moderate-low risk],0.5076799223757166,0.37756195498953055,0.6826400281526258,frequency
+VA,construction_band,construction_band[before 1960],2.732561757440794,1.8963335155413203,3.9375424718454384,frequency
+VA,construction_band,construction_band[1960-1979],3.0062534070886793,2.5875400519458607,3.4927225728683657,frequency
+VA,construction_band,construction_band[2000 or later],0.5990935085082301,0.45849838654899033,0.7828010794937683,frequency
+VA,floors_group,floors_group[1],0.8901575058959977,0.80444745641042,0.9849995534061577,frequency
+VA,floors_group,floors_group[3+],1.1343700943492896,0.9173108385011264,1.4027911335448982,frequency
+VA,construction_band x flood_zone_group,construction_band[before 1960]:flood_zone_group[B/C/X moderate-low risk],1.0385632650473202,0.6715275470824318,1.6062090977383952,frequency
+VA,construction_band x flood_zone_group,construction_band[1960-1979]:flood_zone_group[B/C/X moderate-low risk],0.7368173795465627,0.6156696908198576,0.8818037640912775,frequency
+VA,construction_band x flood_zone_group,construction_band[2000 or later]:flood_zone_group[B/C/X moderate-low risk],1.1852812500376912,0.8916404628811292,1.5756257148215667,frequency
+NC,flood_zone_group,flood_zone_group[B/C/X moderate-low risk],0.44779787955841643,0.33214260181219085,0.6037254475726639,frequency
+NC,construction_band,construction_band[before 1960],1.6176904559703251,1.3383778906330672,1.9552941136076645,frequency
+NC,construction_band,construction_band[1960-1979],1.465157149316066,1.2513248127809535,1.7155301727144459,frequency
+NC,construction_band,construction_band[2000 or later],0.6643448932717593,0.5995445102664325,0.7361490759378836,frequency
+NC,floors_group,floors_group[1],1.1061780262002676,1.0177794130356608,1.202254447256585,frequency
+NC,floors_group,floors_group[3+],0.9156021128623776,0.7799218227316415,1.0748862317274908,frequency
+NC,construction_band x flood_zone_group,construction_band[before 1960]:flood_zone_group[B/C/X moderate-low risk],0.9334634345829536,0.7388078940589369,1.1794053511208065,frequency
+NC,construction_band x flood_zone_group,construction_band[1960-1979]:flood_zone_group[B/C/X moderate-low risk],1.0557744157893945,0.8576041202663612,1.2997367791204615,frequency
+NC,construction_band x flood_zone_group,construction_band[2000 or later]:flood_zone_group[B/C/X moderate-low risk],0.7323493855427801,0.5839013161984499,0.9185381290056961,frequency
+MD,flood_zone_group,flood_zone_group[B/C/X moderate-low risk],0.5770811105002343,0.3589935676117985,0.9276561981642552,frequency
+MD,construction_band,construction_band[before 1960],2.545779250012999,1.8590868273862153,3.486115814670531,frequency
+MD,construction_band,construction_band[1960-1979],2.134582426253904,1.6745742021317682,2.7209556487085247,frequency
+MD,construction_band,construction_band[2000 or later],0.7094875800571798,0.5554573009977715,0.9062310016470784,frequency
+MD,floors_group,floors_group[1],0.8536669938633302,0.7072970960134229,1.0303270584866435,frequency
+MD,floors_group,floors_group[3+],1.103296712448756,0.9020204850912069,1.3494855780100723,frequency
+MD,construction_band x flood_zone_group,construction_band[before 1960]:flood_zone_group[B/C/X moderate-low risk],1.0967750348006884,0.8038101392230279,1.4965169239153953,frequency
+MD,construction_band x flood_zone_group,construction_band[1960-1979]:flood_zone_group[B/C/X moderate-low risk],0.9633945103237109,0.758261463672406,1.2240223550683373,frequency
+MD,construction_band x flood_zone_group,construction_band[2000 or later]:flood_zone_group[B/C/X moderate-low risk],1.501681986337778,1.0767759465116507,2.094259994752748,frequency
+pooled,occupancy_group,occupancy_group[non-residential],4.280052206810323,3.67270192679124,4.987839268793232,severity
+pooled,occupancy_group,occupancy_group[multi-unit residential],2.7657658204262456,2.309123498385294,3.3127117621847075,severity
+pooled,construction_band,construction_band[before 1960],1.1542177464054373,1.0114848169271051,1.3170920451030912,severity
+pooled,construction_band,construction_band[1960-1979],1.2010915033159586,1.071214963793265,1.3467145699956844,severity
+pooled,construction_band,construction_band[2000 or later],1.0271993810748965,0.8286248135031509,1.273361057122915,severity
+pooled,building_coverage_band,building_coverage_band[$0 (contents only)],0.47698991281219294,0.3478666792660387,0.6540418800806816,severity
+pooled,building_coverage_band,building_coverage_band[under $100K],0.7510550975277589,0.658275290348186,0.8569116413652209,severity
+pooled,building_coverage_band,building_coverage_band[$100K-$249K],0.9811192415688373,0.8997817599791346,1.0698093793309755,severity
+pooled,flood_zone_group,flood_zone_group[B/C/X moderate-low risk],0.7581031965524496,0.6823986992978981,0.8422062603788031,severity
+pooled,floors_group,floors_group[1],1.116051961102064,1.0615124885211036,1.1733936183973592,severity
+pooled,floors_group,floors_group[3+],0.8988635161657138,0.8545189764121649,0.9455092783148268,severity
+pooled,primary_residence,primary_residence[False],0.8326158810921302,0.7635303124303495,0.9079524337942557,severity
+pooled,elevated,elevated[True],0.7084602374055421,0.6480045907765417,0.7745560990289311,severity
+pooled,building_coverage_band x occupancy_group,building_coverage_band[$0 (contents only)]:occupancy_group[non-residential],1.1205368637977544,0.7784130490983558,1.6130290526142717,severity
+pooled,building_coverage_band x occupancy_group,building_coverage_band[$0 (contents only)]:occupancy_group[multi-unit residential],0.2502057115127503,0.1755211812105811,0.3566686233640027,severity
+pooled,building_coverage_band x occupancy_group,building_coverage_band[under $100K]:occupancy_group[non-residential],0.30438609610315426,0.26025882761557245,0.355995208115565,severity
+pooled,building_coverage_band x occupancy_group,building_coverage_band[under $100K]:occupancy_group[multi-unit residential],0.5021119620009981,0.3901187783159508,0.6462555416399534,severity
+pooled,building_coverage_band x occupancy_group,building_coverage_band[$100K-$249K]:occupancy_group[non-residential],0.4167420963233921,0.36337699457848177,0.47794433175242057,severity
+pooled,building_coverage_band x occupancy_group,building_coverage_band[$100K-$249K]:occupancy_group[multi-unit residential],0.652535998443254,0.5396578761363386,0.7890243950720363,severity
+pooled,elevated x flood_zone_group,elevated[True]:flood_zone_group[B/C/X moderate-low risk],1.311593491884532,1.1125181940438804,1.5462915547482796,severity
+VA,occupancy_group,occupancy_group[multi-unit residential],2.8391293937485815,2.017408927069791,3.9955487488374413,severity
+VA,occupancy_group,occupancy_group[non-residential],4.5913259913214075,3.6917897392123202,5.710041970884611,severity
+VA,construction_band,construction_band[before 1960],1.033106003884646,0.8575196431679634,1.2446455585781229,severity
+VA,construction_band,construction_band[1960-1979],1.2839743472629197,1.146719251562779,1.437658016277741,severity
+VA,construction_band,construction_band[2000 or later],0.9061026518892473,0.8003661030495296,1.0258080803678395,severity
+VA,building_coverage_band,building_coverage_band[$0 (contents only)],0.3619448654143588,0.2807522544202057,0.4666181073785527,severity
+VA,building_coverage_band,building_coverage_band[under $100K],0.7921233647173352,0.7122498263503388,0.8809541283376601,severity
+VA,building_coverage_band,building_coverage_band[$100K-$249K],0.913626576281221,0.8514535571962573,0.9803394604821025,severity
+VA,flood_zone_group,flood_zone_group[B/C/X moderate-low risk],0.712135661869876,0.6414279668747686,0.7906378067326445,severity
+VA,floors_group,floors_group[1],1.1316686506783415,0.9832199093927297,1.302530514988378,severity
+VA,floors_group,floors_group[3+],0.8862626992643122,0.8148497004036642,0.9639342957580508,severity
+VA,primary_residence,primary_residence[False],1.0704378070337803,0.96892237587444,1.182589160141116,severity
+VA,elevated,elevated[True],0.71930270006292,0.6214907838128153,0.8325085227227438,severity
+VA,building_coverage_band x occupancy_group,building_coverage_band[$0 (contents only)]:occupancy_group[multi-unit residential],0.335442954447329,0.22915647230969732,0.4910268278885143,severity
+VA,building_coverage_band x occupancy_group,building_coverage_band[$0 (contents only)]:occupancy_group[non-residential],0.8092828134324559,0.49477699642833345,1.3237047737566283,severity
+VA,building_coverage_band x occupancy_group,building_coverage_band[under $100K]:occupancy_group[multi-unit residential],0.49491234387546873,0.2982238293202307,0.8213234625771544,severity
+VA,building_coverage_band x occupancy_group,building_coverage_band[under $100K]:occupancy_group[non-residential],0.3343379996428089,0.2617917469274116,0.4269878608363816,severity
+VA,building_coverage_band x occupancy_group,building_coverage_band[$100K-$249K]:occupancy_group[multi-unit residential],0.6456639981368014,0.45711008837297706,0.9119947450160985,severity
+VA,building_coverage_band x occupancy_group,building_coverage_band[$100K-$249K]:occupancy_group[non-residential],0.42702193704924213,0.27751980887237,0.6570620506774264,severity
+VA,elevated x flood_zone_group,elevated[True]:flood_zone_group[B/C/X moderate-low risk],1.2385644652180738,1.0477363612422368,1.464148798541375,severity
+NC,occupancy_group,occupancy_group[non-residential],3.838961020223382,3.1867044352446534,4.624721876242375,severity
+NC,occupancy_group,occupancy_group[multi-unit residential],2.603149538429394,2.106155842291391,3.217419805009681,severity
+NC,construction_band,construction_band[before 1960],1.2259925095438886,1.0447988845027887,1.4386095312238152,severity
+NC,construction_band,construction_band[1960-1979],1.1582717083426843,1.0117148147817474,1.3260588169171925,severity
+NC,construction_band,construction_band[2000 or later],1.0440126253195663,0.8215066345875222,1.326784612486937,severity
+NC,building_coverage_band,building_coverage_band[$0 (contents only)],0.6321049819550557,0.3911021152216254,1.0216173542962943,severity
+NC,building_coverage_band,building_coverage_band[under $100K],0.7238164186390611,0.6102629811862768,0.8584990799754214,severity
+NC,building_coverage_band,building_coverage_band[$100K-$249K],0.9834616247498611,0.8782728254409813,1.1012486545624436,severity
+NC,flood_zone_group,flood_zone_group[B/C/X moderate-low risk],0.8112759540923878,0.6940271391442926,0.948332761885954,severity
+NC,floors_group,floors_group[1],1.1211766518347577,1.0619340716552244,1.1837242237270609,severity
+NC,floors_group,floors_group[3+],0.9070666213107808,0.849010592671929,0.9690925679817596,severity
+NC,primary_residence,primary_residence[False],0.7617286026343565,0.6876787609216614,0.8437521951290681,severity
+NC,elevated,elevated[True],0.6915738923452928,0.625834096641387,0.7642192254150664,severity
+NC,building_coverage_band x occupancy_group,building_coverage_band[$0 (contents only)]:occupancy_group[non-residential],0.8907147672672082,0.5175359820138192,1.5329809408434376,severity
+NC,building_coverage_band x occupancy_group,building_coverage_band[$0 (contents only)]:occupancy_group[multi-unit residential],0.18479562149007145,0.09491197077818275,0.3598009970914188,severity
+NC,building_coverage_band x occupancy_group,building_coverage_band[under $100K]:occupancy_group[non-residential],0.31973347834933763,0.2641481200282173,0.3870158044904723,severity
+NC,building_coverage_band x occupancy_group,building_coverage_band[under $100K]:occupancy_group[multi-unit residential],0.4520630859924082,0.3354626058396303,0.6091916957643718,severity
+NC,building_coverage_band x occupancy_group,building_coverage_band[$100K-$249K]:occupancy_group[non-residential],0.4151102962527854,0.35160516230429895,0.4900854041100307,severity
+NC,building_coverage_band x occupancy_group,building_coverage_band[$100K-$249K]:occupancy_group[multi-unit residential],0.6241238318141257,0.5208105466978671,0.7479313925344176,severity
+NC,elevated x flood_zone_group,elevated[True]:flood_zone_group[B/C/X moderate-low risk],1.2345785780826029,1.045155457933241,1.4583325895599144,severity
+MD,occupancy_group,occupancy_group[non-residential],6.593645707855906,5.3911096028733985,8.064418445055232,severity
+MD,occupancy_group,occupancy_group[multi-unit residential],2.733385306416147,1.8638361365343923,4.008611640733594,severity
+MD,construction_band,construction_band[before 1960],1.1764159859122199,1.0119824476584136,1.3675677627730585,severity
+MD,construction_band,construction_band[1960-1979],1.3307808952799698,1.165954975961127,1.5189075288111318,severity
+MD,construction_band,construction_band[2000 or later],0.7679342246012173,0.6116097281214432,0.9642145083682768,severity
+MD,building_coverage_band,building_coverage_band[$0 (contents only)],0.40097874292210745,0.30145842838597997,0.5333536472549033,severity
+MD,building_coverage_band,building_coverage_band[under $100K],0.8469458012171042,0.7521000457114393,0.9537523555403399,severity
+MD,building_coverage_band,building_coverage_band[$100K-$249K],1.0251182705337407,0.9167551096189466,1.1462902770390728,severity
+MD,flood_zone_group,flood_zone_group[B/C/X moderate-low risk],0.6826790699653301,0.5982954068883236,0.7789642160093,severity
+MD,floors_group,floors_group[1],1.0149097871377935,0.9328157946423604,1.1042285968399548,severity
+MD,floors_group,floors_group[3+],0.9535145059502853,0.8587931190800789,1.058683276400167,severity
+MD,primary_residence,primary_residence[False],1.0862364023487128,0.985099138811776,1.1977571345871627,severity
+MD,elevated,elevated[True],0.9291247472460917,0.8327854444308077,1.0366088909432654,severity
+MD,building_coverage_band x occupancy_group,building_coverage_band[$0 (contents only)]:occupancy_group[non-residential],1.246054549956065,0.8695122486503019,1.785658504381406,severity
+MD,building_coverage_band x occupancy_group,building_coverage_band[$0 (contents only)]:occupancy_group[multi-unit residential],0.29504168751229637,0.08953594772438371,0.9722307026677838,severity
+MD,building_coverage_band x occupancy_group,building_coverage_band[under $100K]:occupancy_group[non-residential],0.23749704764320537,0.1775916020276423,0.3176098812964112,severity
+MD,building_coverage_band x occupancy_group,building_coverage_band[under $100K]:occupancy_group[multi-unit residential],0.6871797001323494,0.4282970439376238,1.102543076021692,severity
+MD,building_coverage_band x occupancy_group,building_coverage_band[$100K-$249K]:occupancy_group[non-residential],0.5120048881298835,0.3917107210159961,0.669241333984804,severity
+MD,building_coverage_band x occupancy_group,building_coverage_band[$100K-$249K]:occupancy_group[multi-unit residential],0.7030459695362847,0.4048851149269502,1.22077502249099,severity
+MD,elevated x flood_zone_group,elevated[True]:flood_zone_group[B/C/X moderate-low risk],1.5996800029908098,1.2868368434753372,1.9885785248871926,severity

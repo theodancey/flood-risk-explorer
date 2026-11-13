@@ -17,3 +17,4 @@ ipykernel==7.4.0
 streamlit==1.67.0
 scipy==1.18.1
 openpyxl==3.1.5
+psutil==7.2.2
