@@ -1,6 +1,78 @@
 # Progress Log
 
-## Summary (latest: 2026-11-13, Milestone 14: the Streamlit app, local)
+## Summary (latest: 2026-11-13, Milestone 15: app polish, address lookup, county map, "what if?")
+All four stages are done, tested, committed and pushed (each push redeployed the live app). No data files from `data/` are in Git.
+
+- **Stage 1 (fixes and clarity):**
+  - `/county` now opens the County Explorer, and `/` still works.
+  - The headline is "Model estimate (typical year)" next to the "Actual 2010-2025 average". When the two are more than 1.5× apart, a sentence names the storms behind the gap.
+  - Certainty is now two plain signals.
+  - The calculator also compares with a typical lower-risk insured building.
+  - Charts say Yes/No instead of True/False, and effects under 2% are grouped.
+  - There's a short disclaimer at the top of each page and a full footer. The sidebar duplicate is gone.
+  - How It Works fixes (see below), and the **plain-language pass** (your item 19).
+- **Stage 2 (address lookup):** type an address in the calculator, or use "Find my county" on the first page.
+  - The **U.S. Census Geocoder** gives the state and county.
+  - **FEMA's National Flood Hazard Layer** gives the flood zone and the community ID.
+  - **OpenFEMA's Community Status Book** gives the date of the area's first flood map, and from that, pre/post-FIRM using FEMA's rule.
+  - Everything that's filled in can be changed, and each item shows where it came from.
+  - If a service fails, you just choose the inputs yourself.
+- **Stage 3 (map, "what if?", polish):**
+  - A clickable county map on the first screen, coloured by expected yearly loss or compared with the state average.
+  - A "What if?" estimate of raising the building.
+  - A wordmark, a bigger hero number, a navy accent colour, tabs, and narrow-screen CSS.
+- **Stage 4 (wrap-up):** READMEs, this log, learning notes, tests.
+- **Tests: all pass.**
+  - `tests\test_app.py` (about 6 minutes): every county, 12 profiles, the map, the address flow with fake web answers, what if, `/county`, Yes/No labels, footer, jargon check.
+  - `tests\test_lookup.py` (seconds): no internet; real connections are blocked.
+  - `tests\test_explain.py`.
+- **App size:**
+  - `app/data` is 1.7 MB (the map outlines add 0.34 MB; FIRM dates 76 KB).
+  - The only new app dependency is `requests`, already installed with Streamlit.
+
+**Please test by hand** (I can't open a browser here):
+1. **The live app's first screen on your phone:** does the map fit, are the legend and the address box readable, and do the columns stack?
+2. **Click a county on the map.** It should outline that county and show it below. This uses Streamlit's chart-selection feature, which the automated tests can only simulate. If clicking does nothing, the county list still works. Tell me and I'll switch to clickable dots.
+3. **Try a real address in each state,** for example your own or a public building:
+   - check that the flood zone matches FEMA's map at msc.fema.gov;
+   - try one in DC or another state (it should say it only covers VA/NC/MD);
+   - try a misspelled one.
+4. **Open `<your app>/county`** directly: it should show the County Explorer, not "Page not found".
+5. **Read the before → after wording table below** and tell me anything you'd word differently.
+
+**Judgment calls worth a look** (details under Milestone 15 decisions):
+1. **Red certainty is now rare.** Red only shows when local data is limited *and* past claims were more than 3× off the model (65 small counties, under 3% of insured buildings). The old "Low" label was red for 199 of 257 counties.
+2. **The FIRM dates are a bundled snapshot** (downloaded today), not a live API call. It's faster and has one less thing to fail, and these dates rarely change.
+3. **"Not saved"** means the address is never written to disk, logged, or put in the app's URL. It must be sent to the Census Geocoder to find it. For speed, the geocoder's answer is kept in memory for up to 10 minutes.
+4. **"What if?" only offers raising the building.** Of the model's features, it's the only one an owner can change to lower flood risk. Coverage changes the payout, not the risk.
+
+**What you need to do:** the hand checks above, add the live app link to the README ("Try the app"), and add screenshots if you like (placeholders are in the README).
+
+### Before → after wording (main changes, for your review)
+| Where | Before | After |
+|---|---|---|
+| County headline number | Expected annual loss per policy-year | Model estimate (typical year) |
+| County comparison | 0.85× vs the Virginia average; "−15% vs $197" | "15% below the Virginia average ($197)" |
+| County, new | (not shown) | Actual 2010-2025 average next to the estimate, plus (Craven County, NC) "Past losses here were about 3.5 times the estimate. A few storms, such as Florence (2018) and Irene (2011), caused most of them. The model estimates a typical year." |
+| Frequency metric | Claim frequency: 7.2 per 1,000 | Chance of a claim each year: 7.2 in 1,000 |
+| Severity metric | Claim severity | Typical claim size |
+| Exposure | "Insured policy-years" in the headline row | A caption: "N years of insured buildings here (one building insured for one year counts as one)" |
+| Certainty | Badge "Low certainty" + "little local claim history, or the county's history differs a lot from the model…" | Badges "Limited local claims data" and, only when it differs a lot, "Past claims were about 3.1 times the estimate" |
+| "Why this label?" | Z ≥ 0.8, A/E 0.8-1.25, Bühlmann-Straub rule | "We checked the estimate against X's own past claims (N paid claims). More claims make that check more reliable." (the rule is now in How It Works) |
+| County summary | "Model-based expected flood losses for insured buildings in Virginia Beach city, VA are about 15% below the Virginia average (about $169 vs $197 per policy-year in an average year), mainly because 36% of insured buildings here are in high-risk A/V zones (Virginia: 51%)… This is an area-level estimate, not a prediction for any individual property." | "Expected yearly losses here are 15% below the Virginia average, mainly because 36% of insured buildings here are in high-risk flood zones (Virginia: 51%)." (at most 166 characters) |
+| County waterfall labels | Mix: flood zone / Mix: year built / Mix: occupancy / Mix: elevated building / Mix: overlap and interactions | How many are in high-risk zones / How old the buildings are / Homes vs. apartments and businesses / How many are raised / Combined effects |
+| Calculator waterfall labels | Elevated building: True / Primary residence: False / Occupancy: single-unit residential / Flood zone: A/V high risk | Raised building: Yes / Main home: No / Single-family home / Flood zone: high risk (A or V) |
+| Waterfall bar text and axis | "×1.44" on each bar; "Expected loss per policy-year (2025 $, average year)" | "+$87" on each bar (the multiplier is on hover as "Raises it by 44%… Multiplier ×1.44"); "Expected yearly loss per building (2025 dollars)" |
+| Calculator chart caption | "…The effects are Shapley values: each one is averaged over every order of adding the characteristics…" | "The first bar is the average for all insured buildings in Virginia ($197). Each bar after it is one feature you chose. Orange raises the estimate, blue lowers it." (Shapley is explained under "Learn more") |
+| Calculator inputs | Flood zone "A/V: high-risk zone"; "Built after the area's first flood map (post-FIRM)?" "No: pre-FIRM"; "Elevated building?"; "Occupancy"; "Primary residence?" | "High risk (zone A or V)"; "Built after the area's first flood map?" "No (built before)"; "Raised building?"; "What is it used for?"; "Someone's main home?" |
+| Calculator result (default Virginia building) | "Expected annual loss $194" + "−1% vs Virginia avg" | "Expected yearly loss $194" + "about the same as the Virginia average ($197)", next to "Typical lower-risk insured building: $99. Yours is 2.0 times this", plus "About 51% of insured buildings in Virginia are in high-risk flood zones, so the Virginia average ($197) is already high." |
+| Calculator sentence | "For insured buildings with this profile in Virginia Beach city, VA, the model's expected flood loss is about $454 per policy-year in an average year, about 2.3x the Virginia average, mainly because it is in a high-risk A/V flood zone and it was built in 1960-1979. This describes…" | "Insured buildings like this have about $454 of flood claims a year on average. The biggest things that raise it: flood zone: high risk (A or V) and built 1960-1979." |
+| Property mix chart | In a high-risk A/V flood zone / Built before the first flood map (pre-FIRM) / Elevated / Multi-unit or non-residential / Not a primary residence | In a high-risk flood zone (A or V) / Built before the area's first flood map / Raised above the ground / Apartments or businesses / Second homes or rentals |
+| Disclaimer | Full disclaimer at the top of every page and again in the sidebar | Short at the top ("Area-level averages from public FEMA flood insurance data. Not a prediction or a quote for any specific property."); the full one in the footer with your name, GitHub, data source and date |
+| How It Works, NC | "NC $988 vs VA $197…", "6.2×" and "(6.6×)" in separate places | One labelled table: $991 vs $198 actual (raw), 6.2× (state factor, same kind of building), 6.6× (Virginia-only model's miss) |
+| How It Works, storms | "the worst 3 years produced 69% of 2009-2025 losses; Florence (2018) alone cost about 46× what the Virginia model expected for North Carolina that year" | "In the early Virginia analysis, which used 2009-2025 (it included the 2009 nor'easter…), the worst 3 years produced 69%… In North Carolina in 2018, Hurricane Florence's claims were about 46 times what the Virginia-only model expected for that year." |
+
+## Summary (previous: 2026-11-13, Milestone 14: the Streamlit app, local)
 All eight steps are done, committed and pushed. No data files are in Git.
 
 **Run the app** (from the project folder, in PowerShell), then open <http://localhost:8501> if it doesn't open by itself; stop it with Ctrl+C:
@@ -379,6 +451,57 @@ The data is downloaded and explored. Everything except the data files is committ
 - **Unmatched claims kept, not forced into a nearby cell:** 111 cells / 122 claims (95 paid) with exposure 0 and `exposure_matched=False`. None are in a county-year without exposure. Ignoring county alone would re-match 118, and ignoring coverage band 105, so they're rare combinations (probably small differences between claim and policy records, or missing policy rows).
 - **Checks are assertions inside the script** (rather than a pytest suite), so they run on every build without a new package.
 - Project-plan week-2 file names updated to the real ones (`build_dataset.py`, `va_model_data.parquet`).
+
+### Milestone 15 decisions (2026-11-13, app polish, address lookup, map, "what if?")
+- **The `/county` fix:** Streamlit always serves the default page at `/` and ignores its own `url_path`. So the County Explorer script is registered twice: as the visible default page (`url_path="explorer"`, served at `/`) and as a **hidden** page at `/county` (`st.Page(..., visibility="hidden")`). Both routes have a test.
+- **Widget values live in `st.session_state`** for the County Explorer's state and county and for all calculator inputs, and they're re-assigned before the widgets are drawn on every run. This lets the address lookup, a map click and the County Explorer → calculator hand-over fill the inputs. It also keeps the choice when the same script runs as two pages. Before, the state came back empty at `/county`.
+- **Certainty, two signals** (from the existing columns, so no data rebuild was needed):
+  - local data: plenty if Z ≥ 0.8, some if 0.5–0.8, limited if Z < 0.5 or no claims (52 / 51 / 154 counties);
+  - past claims vs the model: shown only outside 0.5–2× (133 counties);
+  - red: only for limited data and more than 3× off (65 counties, 2.7% of insured policy-years).
+  - I picked 3× instead of 2× for red because 2× gave 88 red counties, which still read as "everything is shaky".
+- **Typical lower-risk building** = the model's exposure-weighted average over the state's insured buildings in B/C/X zones (VA $99, NC $475, MD $104). The "most insured buildings are in high-risk zones" note uses each state's actual share (VA 51%, NC 59%, MD 52%), not a fixed word.
+- **Small effects:** a waterfall step with a multiplier within ±2% of 1 is merged into "Other small effects" if there are at least two of them. Its multiplier is their product, so the total is unchanged and the hover lists what's inside. A lone small step stays as its own bar.
+- **Plain labels are applied in the app** (`common.pretty_step`). `src/explain.py` and its tests are unchanged, so the model's technical labels still appear in the reports.
+- **Short summaries are built in the app** (`common.short_summary`, at most 166 characters) instead of rebuilding `county_summary.csv`. The long sentence and the uncertainty note are still in the file; the note appears under "Learn more".
+- **Address lookup:**
+  - Services:
+    - Census Geocoder (`Public_AR_Current`, layers States, Counties, Incorporated Places only);
+    - FEMA NFHL layer 28 (Flood Hazard Zones) and layer 22 (Political Jurisdictions, for the community ID). Both were checked live on 2026-11-13: the Virginia State Capitol is zone X, Virginia Beach oceanfront is VE, Dare County is AE, Annapolis is X.
+  - Zone mapping:
+    - A*/V* → high risk;
+    - X (shaded or not), B, C → lower risk;
+    - D, "AREA NOT INCLUDED", "OPEN WATER" or nothing → the user chooses.
+    - If several zones touch the point, the riskiest is used.
+  - **FIRM dates are a bundled snapshot** (`app/data/firm_dates.csv`, 1,084 communities, 76 KB) from the OpenFEMA Community Status Book rather than a live call. They rarely change, and a snapshot is faster and can't be down. Rebuild with `src\build_firm_dates.py`.
+  - The community comes from FEMA's community ID at the point. If that fails, it's matched by town/city name (from the geocoder), then by the county's unincorporated area, within the county. Otherwise it's "not found".
+  - **Pre/post-FIRM:** FEMA's rule with a year only. A building from the cutoff year itself is "not sure" (unless the cutoff is Jan 1), and the user chooses. The page shows the date and the rule.
+  - **Privacy:**
+    - the address goes only to the Census Geocoder;
+    - error messages are generic (a `requests` error message would include the URL, and so the address);
+    - no printing or logging, and no `st.query_params`.
+    - Geocodes are cached for 10 minutes (at most 50); zone and community lookups are cached by rounded coordinates for a day. **Failed lookups are never cached**, so a service that was down is asked again.
+  - Timeouts 6 s, 2 retries with a short pause, on timeouts, connection errors and 5xx answers. A 4xx answer isn't retried.
+  - `requests` was added to `app/requirements.txt`. It was already installed as a Streamlit dependency, so the app isn't any heavier.
+- **Map:**
+  - Plotly `Choropleth` with the bundled GeoJSON, `fitbounds`, and no basemap tiles: light, and no tile service is needed.
+  - **Expected yearly loss** uses one hue (orange, the app's "higher loss" colour; light = low) on a **log scale**, because NC counties run up to about 10× Virginia's and a straight scale would make Virginia and Maryland one flat colour.
+  - **Compared with the state** uses blue → grey → orange around 1×. That matches the waterfalls (orange = higher, blue = lower) and the palette rule (two hues with a grey midpoint).
+  - The legend sits below the map (better on phones); dragging is off so phones can scroll past it.
+  - The chosen county is outlined; its outline trace carries only that county's shape, which keeps the page about 0.38 MB.
+- **Map outlines:** Census 2023 cartographic boundaries at 1:5,000,000, kept to the three states, coordinates rounded to 3 decimals: 0.34 MB, 257 outlines. Read with `pyshp` (pure Python, dev-only, added to the root `requirements.txt`, not the app's).
+  - **The former Bedford city (51515)** has data but no outline (it joined Bedford County in 2013), so it's in the list but not on the map.
+  - **Galax city (51640)** has an outline but no insured data, so it's left blank.
+- **Map click:**
+  - `st.plotly_chart(on_select=..., selection_mode="points")`; the callback reads the selected point's `location` or, failing that, its `customdata` (FIPS).
+  - **Not verified in a real browser** (none available here). The tests check the selection handling and that the page follows a chosen county. If a click does nothing on the live app, the fallback is clickable dots at county centres.
+- **"What if?":** only raising the building, because it's the one model feature an owner can change to lower flood risk. The number is the same model run with "Raised building" flipped. The caveat (average effect, not engineering, not a savings promise) is always visible, and the Simpson's paradox note is under "Learn more".
+- **Look and feel:**
+  - Navy `#1f3a5f` UI accent (buttons, selected options), so the chart blue only ever means "lowers".
+  - A text wordmark on every page; the hero number is enlarged with a few lines of CSS scoped to the hero box.
+  - County Explorer tabs: Overview / Claims history / Why it differs.
+- **Testing gotcha:** the first version of the lookup tests replaced `time.sleep` globally to skip retry pauses. That made Streamlit's test runner spin and starve the app thread (the test hung). The pause is now a `lookup._pause` hook that tests replace instead.
+- **README** intro said "69% of all losses since 2010". The 69% comes from the 2009–2025 Virginia analysis, so it now says "in 2009–2025". The live app link isn't in the repo yet, so the README has a placeholder.
 
 ### Milestone 14 decisions (2026-11-13, the Streamlit app)
 - **Reuse `src/explain.py` instead of re-implementing the model in the app.** It already gives the county and profile explanations, sentences and certainty labels that the tests check against `production.predict`. Its top-level `import production` pulled in statsmodels and scipy, so it's now a small `_production()` helper called only by `load(with_model=True)` and `build`. The app calls `explain.load(app/data, with_model=False)`: numpy + pandas only. `src\explain.py` self-test and `tests\test_explain.py` pass unchanged.

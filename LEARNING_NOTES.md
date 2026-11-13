@@ -810,3 +810,78 @@ A: Three ways. Every page has a visible disclaimer: these are area-level model a
 
 **Q: What's the difference between st.cache_data and st.cache_resource, and where did you use each?**
 A: Both remember a function's result so it isn't recomputed on every rerun. cache_data stores data and hands back a copy each time, so I used it for loading the CSV and JSON files and for each county or profile result. cache_resource stores one shared object without copying, so I used it for the explainer object (the rating tables plus the insured portfolio), which is built once and shared by every visitor.
+
+
+## Milestone 15: Address lookup, county map, "what if?" and plain language (2026-11-13)
+
+### What I did
+I added four things to the live app.
+1. **County map:** a clickable map of every county in the three states, shaded by expected yearly flood loss (or by how each county compares with its state).
+2. **Address lookup:** you type a street address, and the app finds its county, flood zone and whether the building is older or newer than the area's first flood map, using free government map services.
+3. **"What if?":** shows how the model's estimate changes if a building is raised off the ground.
+4. **Plain-language pass:** I rewrote the main pages for a homeowner with no insurance background, moved technical terms into "Learn more" sections and the How It Works page, and fixed several confusing spots and two bugs.
+
+Every new feature has automated tests, and the address tests use fake web answers so they never need the internet.
+
+### Why I did it that way
+
+**Geocoding: turning an address into a place on the map.**
+- *Intuition:* a computer can't look up a flood map with "1000 Bank St". It needs a point: latitude and longitude. **Geocoding** is the translation from address to point. The geocoder also says which state and county that point is in.
+- *Example:* the U.S. Census Geocoder turns "1000 Bank St, Richmond, VA 23219" into about (37.5385° N, 77.4353° W), in Richmond city (county code 51760), Virginia. It's free and needs no account. The Census Bureau keeps it because it already maintains every US street's address ranges for the census.
+- How it works inside: the Census knows that, say, 1000-1098 is on the left side of one block of Bank St, so it places number 1000 at the start of that block. That's why a match is approximate (within a lot or two), which is fine for a county and close to fine for a flood zone.
+
+**Map services and point queries: "what flood zone is this point in?"**
+- *Intuition:* FEMA's flood maps are stored as **shapes** (polygons) on a server: each shape is one flood zone area. A **point query** asks the server: "which shapes contain this point?", and the server answers with that shape's details, without sending the whole map.
+- *Example:* asking FEMA's National Flood Hazard Layer about a point on the Virginia Beach oceanfront returns `FLD_ZONE = "VE"`: a high-risk coastal zone with waves. The same question for the Virginia State Capitol returns `"X"`, "area of minimal flood hazard".
+- This service is an **ArcGIS REST service**: a standard way to publish map layers on the web. Each layer has a number (layer 28 is "Flood Hazard Zones", layer 22 is "Political Jurisdictions", i.e. which town or county the point is in). A query is just a web address with the point and the fields wanted, and the answer comes back as JSON (structured text).
+- The app turns FEMA's zone codes into the model's two groups: zones starting with A or V are high risk ("Special Flood Hazard Areas", at least a 1% chance of flooding each year); X, B and C are lower risk. Zone D ("possible but not studied") and unmapped areas aren't guessed: the user chooses.
+
+**How pre-FIRM and post-FIRM is decided.**
+- *Intuition:* a **FIRM** (Flood Insurance Rate Map) is the official flood map for a community. Once a community gets its first FIRM, new buildings must follow flood-safe rules (for example, the lowest floor above the expected flood height). So a building is **post-FIRM** if it was built after the community's first map, and **pre-FIRM** if before. Pre-FIRM buildings usually flood more.
+- **FEMA's rule:** post-FIRM means construction started after December 31, 1974, **or** on or after the date of the community's first FIRM, **whichever is later**.
+- *Example:* Richmond's first FIRM is June 15, 1979, which is later than the end of 1974, so the cutoff is June 15, 1979. A house built in 1985 is post-FIRM; one built in 1970 is pre-FIRM. One built in 1979 could be either, and the app only has the year, so it says "not sure" and asks.
+- *Example 2:* Virginia Beach's first FIRM is 1970, earlier than 1975, so the cutoff is January 1, 1975. A 1974 house is pre-FIRM and a 1975 house is post-FIRM.
+- The FIRM dates come from FEMA's **Community Status Book** (the official list of communities in the flood insurance program). I saved a small copy in the app (1,084 communities, 76 KB), because the dates almost never change and a saved copy can't be "down".
+
+**Choropleth maps.**
+- *Intuition:* a **choropleth** is a map where each area is filled with a colour that shows a number, like an election map shaded by vote share. Here each county is shaded by its expected yearly flood loss per insured building.
+- **Colour choices:**
+  - For "how much", I used **one colour from light to dark** (light orange = low, dark = high). One hue reads naturally as "more", and it works for colour-blind readers.
+  - For "compared with the state", I used **two colours with grey in the middle** (blue = below average, grey = about the same, orange = above). That's called a diverging scale, and it matches the app's other charts (orange raises, blue lowers).
+- **Log scale:** North Carolina counties run up to about 10 times Virginia's. On a normal scale every Virginia county would be the same pale colour. On a **log scale**, each step in colour means "times 2" instead of "+$200", so you can still see differences in Virginia while NC stays darker. *Example:* $100 → $200 is the same colour step as $1,000 → $2,000.
+- The county outlines come from the Census Bureau's simplified "cartographic boundary" files. I cut them to the three states and rounded the coordinates to about 100 m, which is invisible at map scale. The result is 0.34 MB, small enough to ship with the app so it never downloads a map at runtime.
+
+**Caching, again: the same idea with new rules for live services.**
+- *Intuition:* asking a government server takes about a second. If a visitor clicks around after a lookup, the app reruns, and it shouldn't ask again each time. So results are remembered (cached).
+- **Failures aren't cached.** If FEMA's server is down and we cached "down", the app would keep saying so for a day after it came back. The cached function raises an error on failure (so nothing is stored), and the page catches it and shows a friendly message.
+- **Privacy and caching:** addresses are personal. Geocoding answers are kept only in memory, for at most 10 minutes. Flood-zone answers are stored by map point, not by address.
+
+**Graceful fallbacks.**
+- *Intuition:* a "graceful" app degrades step by step instead of crashing. Every outside service can be slow, down, or unable to find the address, so each step has a plan B.
+- **Short timeouts** (6 seconds) and **two retries** for temporary problems. No retry for "bad request" errors, which won't fix themselves.
+- If the geocoder fails, a plain message appears and you choose the inputs yourself. If only the flood map fails, the state and county are still filled in. If the community can't be matched, pre/post-FIRM says "not sure". Nothing ever shows a technical error, and no message repeats the address.
+- The tests fake each of these situations (timeouts, server errors, no match, an address in DC) to prove the page still works.
+
+**Why the "what if?" number is an average effect, not a guarantee.**
+- *Intuition:* the model learned from thousands of insured buildings that raised buildings, *on average*, have smaller flood claims than similar buildings that aren't raised. The "what if?" number just reruns the model with "raised" switched on.
+- *Example:* a 1960s single-family home in a high-risk zone in Virginia Beach: about $454 a year → about $321 if raised (about −29%).
+- **What it isn't:**
+  - An engineering estimate. It knows nothing about this building's foundation, ground height or how high it would be raised.
+  - A promise of savings. It's an expected claim cost, not a premium.
+- **Correlation, not pure cause:** raised buildings also differ in other ways, for example many are newer or on the coast. In the data this showed up as **Simpson's paradox**: within high-risk zones, raised buildings had much smaller claims (×0.40), but across all zones the gap looked smaller (×0.58), because raised buildings are concentrated in the riskiest places. The model's figure is its best average, so the app labels it that way.
+- Only "raised" is offered. Zone, age and use describe the building and can't be changed, and coverage changes how much a policy pays, not how likely a flood is.
+
+**Plain language without losing the detail.**
+- The main pages are for homeowners; the How It Works page is for reviewers and interviewers. So "pure premium" became "expected yearly loss", "frequency" became "chance of a claim each year", and "Shapley values" became "a fair-share split". Each technical term still appears, defined, on How It Works or in a "Learn more" section.
+- Certainty became two signals that answer real questions: "How much local data is there?" and "Do past claims agree with the model?". The old single "Low" label was red for 199 of 257 counties, which made everything look broken.
+
+### Interview questions
+
+**Q: How does your app find the flood zone for an address?**
+A: Two free government services. First, the U.S. Census Geocoder turns the address into latitude and longitude, plus the state and county. Then I send that point to FEMA's National Flood Hazard Layer, an ArcGIS map service, as a point query: "which flood-zone polygon contains this point?" It returns the zone code, such as AE or X, which I map to the model's high-risk or lower-risk group. I tell users it's not an official determination and link to FEMA's Map Service Center to check.
+
+**Q: What happens if FEMA's server is down?**
+A: The app degrades gracefully. Each call has a 6-second timeout and two retries. If it still fails, the page says the flood map service didn't answer and asks the user to choose the zone, while keeping whatever did work, such as the county. Failures are never cached, so the next try asks again. My tests simulate timeouts, server errors and unmatched addresses with fake responses, and they block real network access, so they run offline.
+
+**Q: Your app says raising a building lowers expected losses by about 29%. Would you tell a homeowner they'll save 29%?**
+A: No. That's the model's average difference between similar insured buildings that are and aren't raised: an association learned from data, not an engineering estimate for one building. Raised buildings differ in other ways too; I even found a Simpson's paradox, where the effect looked different within high-risk zones than overall. And it's an expected claim cost, not a premium. The app says this right next to the number.

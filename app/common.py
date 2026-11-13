@@ -483,7 +483,7 @@ def profile_summary(res):
     if abs(r - 1) < 0.1:
         return head + f", {ratio_words(r, res['state_name'])}."
     drv = explain._drivers(res["waterfall"], 1 if r >= 1 else -1)
-    reasons = [pretty_step(p, s).lower() for p, s in zip(drv["player"], drv["step"])]
+    reasons = [(lab[0].lower() + lab[1:]) for lab in (pretty_step(p, s) for p, s in zip(drv["player"], drv["step"]))]
     word = "raise" if r >= 1 else "lower"
     return head + "." + (f" The biggest things that {word} it: {' and '.join(reasons)}." if reasons else "")
 

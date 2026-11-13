@@ -1,30 +1,39 @@
 # Flood Risk Explorer
-I'm building a flood insurance risk model using FEMA's public data on 2.7 million National Flood Insurance Program claims, for Virginia, North Carolina and Maryland. I calculate the core actuarial measures (claim frequency, severity, and pure premium) and am developing actuarial GLMs and an XGBoost model to compare how well each predicts flood losses by area. So far I've found that Virginia's expected flood loss is about $149 per insured home per year, and that just three storm years caused 69% of all losses since 2010, a pattern that makes flood insurance so hard to price. 
+I'm building a flood insurance risk model using FEMA's public data on 2.7 million National Flood Insurance Program claims, for Virginia, North Carolina and Maryland. I calculate the core actuarial measures (claim frequency, severity, and pure premium) and am developing actuarial GLMs and an XGBoost model to compare how well each predicts flood losses by area. So far I've found that Virginia's expected flood loss is about $149 per insured home per year, and that just three storm years caused 69% of all losses in 2009–2025, a pattern that makes flood insurance so hard to price. 
 
 **How often do flood insurance claims happen in an area, how big are they, and what's the expected annual loss per policy?** This project answers those questions with the classic actuarial toolkit, using FEMA's public National Flood Insurance Program (NFIP) data.
 
 - **Data:** OpenFEMA NFIP claims (2.7 million US claims since 1978) and policies (4.6 million policy terms since 2009 in Virginia, North Carolina and Maryland; Virginia first, the other two added in Milestone 13).
 - **Actuarial foundations:** earned exposure (policy-years), claim **frequency**, claim **severity**, and **pure premium** (expected loss per policy-year), by year and by county.
 - **Models (complete):** a Poisson GLM for frequency and a Gamma GLM for severity (with three interactions and a state factor), compared against XGBoost, with relativities and SHAP to explain what drives risk. Models are tested on held-out years and on a held-out state.
-- **App (Milestone 14, runs locally):** a Streamlit app where you pick a county, or describe a type of building, and see its area-level expected flood loss, how it compares with the state, how certain it is, and the reasons behind it. See [Try the app](#try-the-app).
+- **App (Milestones 14–15, on Streamlit Community Cloud):** a Streamlit app with a county map, an address search, a county explorer and a building-type calculator with a "what if?" section. Each shows area-level expected flood losses, how they compare with the state, how much local data backs them up, and the reasons behind them. See [Try the app](#try-the-app).
 
-**Status:** modelling complete for three states (data, exploration, actuarial basics, modelling dataset, one-way analysis, frequency and severity GLMs, pure premium with credibility, XGBoost, model comparison, explainability, and the Milestone 13 extension to North Carolina and Maryland). The Streamlit app (Milestone 14) runs locally for all 257 counties. Next: public hosting (Milestone 16). See [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
+**Status:** modelling complete for three states (data, exploration, actuarial basics, modelling dataset, one-way analysis, frequency and severity GLMs, pure premium with credibility, XGBoost, model comparison, explainability, and the Milestone 13 extension to North Carolina and Maryland). The Streamlit app (Milestone 14) covers all 257 counties; Milestone 15 added the map, address lookup, "what if?" calculator and a plain-language pass. See [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
 
 > **Disclaimer:** All results are **area-level** estimates built from aggregated public data. They are not predictions, quotes, or risk ratings for any individual property.
 
 ## Try the app
-The app runs on your own computer for now (public hosting is planned for Milestone 16). From the project folder, in PowerShell:
+**Live app:** *(link to be added: the Streamlit Community Cloud address)*
+
+**Screenshots:** *(placeholders: add `reports/figures/app_home.png`, `app_county.png` and `app_calculator.png`)*
+
+Or run it on your own computer. From the project folder, in PowerShell:
 
 ```powershell
 .venv\Scripts\python.exe -m streamlit run app\app.py
 ```
 
-Then open <http://localhost:8501> if it doesn't open by itself (stop it with Ctrl+C). Three pages:
-- **County Explorer:** a county's expected annual loss per policy-year vs its state, certainty label, mix of insured buildings, its own claims history with major storms labelled, and why it differs from the state.
-- **Property Profile Calculator:** expected claim frequency, severity and pure premium for a type of building, with an interactive waterfall of each characteristic's effect.
-- **How It Works:** data sources, methods, key findings, limitations and future work.
+Then open <http://localhost:8501> if it doesn't open by itself (stop it with Ctrl+C).
 
-The app reads only the small files in `app/data/` and needs only streamlit, pandas, numpy, pyarrow and plotly (`app/requirements.txt`). Details: [`app/README.md`](app/README.md). Tests: `.venv\Scripts\python.exe tests\test_app.py`.
+**Features**
+- **County map (first screen):** every county in Virginia, North Carolina and Maryland, shaded by expected yearly loss per insured building or by how it compares with its state average. Hover for details; click a county to open it.
+- **Find my county:** type a street address to jump to its county (U.S. Census Geocoder).
+- **County Explorer:** the model's estimate for a typical year next to the actual 2010–2025 average (with the storms behind any big gap), how much local claims data backs it up, the mix of insured buildings, the county's own claims history with major storms labelled, and why it differs from the state. Also at `/county`.
+- **Property Profile Calculator:** describe a kind of building (or look up an address to fill in the state, county, flood zone from FEMA's flood map, and pre/post-FIRM from the area's first flood map date). See the expected yearly loss vs the state average and vs a typical lower-risk building, a chart of what raises or lowers it, and a **"What if?"** estimate of raising the building.
+- **How It Works:** a three-line summary, data sources, methods with every term defined, key findings, how the certainty signals work, limitations and future work.
+- Plain language on the main pages (technical detail in "Learn more" sections), a short disclaimer at the top of every page and the full one in the footer.
+
+The app reads only the small files in `app/data/` (about 1.7 MB) and needs only streamlit, pandas, numpy, pyarrow, plotly and requests (`app/requirements.txt`). The address lookup uses only free public services with no sign-up. Details: [`app/README.md`](app/README.md). Tests: `.venv\Scripts\python.exe tests\test_app.py` and `tests\test_lookup.py` (no internet needed).
 
 ## Key findings so far (Virginia 2010–2025; three states since Milestone 13)
 - **Three states** (Milestone 13: Virginia, North Carolina, Maryland; 4.1 million policy-years, 51,894 paid claims):
@@ -101,13 +110,14 @@ reports/                    written findings + figures
 docs/                       data dictionary, modelling dataset, project plan, validation plan
 app/data/                   small precomputed files the app reads (county summary, rating tables, history; committed)
 app/app.py, app/views/      Streamlit app (Milestone 14): County Explorer, Profile Calculator, How It Works (see app/README.md)
-tests/test_app.py           app tests (AppTest): every county, profiles, edge cases, no raw/processed reads
+tests/test_app.py           app tests (AppTest): every county, profiles, edge cases, map, address lookup (mocked), what if, no raw/processed reads
+tests/test_lookup.py        address lookup tests with fake web answers (no internet)
 ```
 Data files live in `data/` and are never committed (`app/data/` holds only small aggregates and model output). Re-create them with the download script.
 
 ## Future work
 - **Bring geography back through storm-independent features** rather than county claims history: for example ground elevation, distance to the coast, and each area's share of exposure in FEMA high-risk zones. County history failed on unseen years (in North Carolina a county's history is mostly one hurricane's footprint), while features describing where water can go shouldn't depend on which storms happened to hit.
-- Public hosting of the app (Milestone 16), ZIP-code or census-tract detail, more states, and catastrophe-adjusted pricing (a catastrophe load instead of raw storm years).
+- ZIP-code or census-tract detail, more states, and catastrophe-adjusted pricing (a catastrophe load instead of raw storm years).
 
 ## How to run (Windows, PowerShell)
 ```powershell

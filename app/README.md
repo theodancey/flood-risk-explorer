@@ -1,6 +1,6 @@
 # Flood Risk Explorer: the Streamlit app
 
-*Milestone 14 (2026-11-13). Runs locally; public hosting is planned for Milestone 16.*
+*Milestone 14 (2026-11-13), extended in Milestone 15 (2026-11-13): county map, address lookup, "what if?" calculator, plain-language pass. Deployed on Streamlit Community Cloud (every push to `main` redeploys it).*
 
 A three-page web app showing **area-level** expected flood insurance losses for every county and
 independent city in Virginia (133), North Carolina (100) and Maryland (24), built from public FEMA
@@ -21,51 +21,70 @@ Your browser should open at <http://localhost:8501> (if not, open that address y
 app with **Ctrl+C** in the PowerShell window.
 
 - Run it **from the project folder** so Streamlit picks up the theme in `.streamlit/config.toml`.
-  (The app finds its data from its own location, so it works from anywhere, just without the theme.)
-- The project's `requirements.txt` already includes everything. To set up a fresh environment with
-  **only** what the app needs: `.venv\Scripts\python.exe -m pip install -r app\requirements.txt`.
+- To set up a fresh environment with **only** what the app needs:
+  `.venv\Scripts\python.exe -m pip install -r app\requirements.txt`.
 
-Run the automated tests (about 1 minute):
+Run the automated tests (no internet needed; about 3-6 minutes for the app, seconds for the lookup):
 
 ```powershell
 .venv\Scripts\python.exe tests\test_app.py
+.venv\Scripts\python.exe tests\test_lookup.py
 ```
 
 ## The pages
-| Page | What it does |
-|---|---|
-| **County Explorer** | Pick a state, then a county (type to search). Shows the expected annual loss per policy-year and how it compares with the state average, claim frequency and severity, a plain-English summary, the **certainty label** and why, the county's **mix of insured buildings** vs the state, its **own claims history by year** (major storms labelled), and a **"why" waterfall**: how each part of the property mix moves the county away from the state average. |
-| **Property Profile Calculator** | Describe a type of building (state, county, flood zone, year built, post-FIRM, elevated, occupancy, building coverage, floors, primary residence; each with help text). Shows expected claim frequency, claim severity and pure premium for the average insured building of that type, and an interactive waterfall of each characteristic's effect from the state average (exact Shapley values). Unusual combinations get a warning, rare ones a note, and impossible ones are prevented (a non-residential building can't be a primary residence). |
-| **How It Works** | Data sources (with links and download dates), the methods in plain English (exposure, frequency, severity, pure premium, GLMs vs XGBoost, leave-one-year-out and multistate validation), key findings, limitations, future work, and an About section. |
+| Page | URL | What it does |
+|---|---|---|
+| **County Explorer** (default) | `/` and `/county` | **First screen:** headline, how-to, the **county map** (shade by expected yearly loss or by ratio to the state; hover; click a county to open it), **Find my county** address search, the short disclaimer and a credit line. **Then:** state + searchable county list, the **hero box** (model estimate for a typical year vs the state average, next to the actual 2010-2025 average, with a sentence naming the storms when they differ by more than 1.5×), a one-line summary, and three tabs: **Overview** (chance of a claim, typical claim size, two plain certainty signals, the mix of insured buildings), **Claims history** (by year, big storms labelled), **Why it differs** (waterfall). |
+| **Property Profile Calculator** | `/calculator` | Optional **address lookup** that fills in state, county, flood zone and post-FIRM (and the age group from the year built). Building inputs with help text. Result: expected yearly loss vs the state average **and** vs a typical lower-risk (B/C/X) insured building, chance of a claim, typical claim size, local-data signals, a waterfall of what raises or lowers it, and **"What if?"** (raising the building). |
+| **How It Works** | `/how-it-works` | "In short", data sources, methods with every term defined (policy-year, pure premium, GLM, interactions, Shapley values), key findings (NC numbers labelled), how the certainty signals work (credibility Z, Bühlmann-Straub, A/E), limitations, future work, About. |
 
-Every page shows the disclaimer at the top, and the sidebar repeats it.
+Every page has the wordmark, a **short disclaimer at the top** and a **footer** with the full
+disclaimer, Theo Dancey's name, the GitHub link, the data source and the last-updated date.
+
+## Address lookup (free public services, no sign-up)
+| Step | Service | What it gives |
+|---|---|---|
+| 1 | [U.S. Census Geocoder](https://geocoding.geo.census.gov/geocoder/) `geographies/onelineaddress` | coordinates, state, county, town/city |
+| 2 | FEMA National Flood Hazard Layer [MapServer](https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer), layer 28 "Flood Hazard Zones" (point query) | `FLD_ZONE`, `ZONE_SUBTY` → A*/V* = high risk, X/B/C = lower risk; D, unmapped or nothing → the user chooses |
+| 3 | Same service, layer 22 "Political Jurisdictions" | the NFIP community ID (CID) at the point |
+| 4 | `app/data/firm_dates.csv` (OpenFEMA NFIP Community Status Book snapshot) | the community's initial FIRM date; fallback match by town/county name |
+
+**Pre/post-FIRM rule (FEMA):** post-FIRM = built after Dec 31, 1974, or on/after the initial FIRM
+date, whichever is later. With only a year, the cutoff year itself is "not sure" (unless the cutoff
+is Jan 1) and the user chooses.
+
+**Safeguards:** 6-second timeouts and 2 retries; results cached (failures never cached; geocodes
+only 10 minutes, in memory); every failure falls back to manual inputs with a plain message; a clear
+message outside VA/NC/MD. The address is never logged, printed, written to disk or put in the app's
+URL, and error messages never repeat it. The page says it's not an official flood zone determination
+(link to msc.fema.gov) and that the result is still an average for similar insured buildings.
 
 ## Files
 ```
-app/app.py                       entry point: page setup + menu (st.navigation)
-app/common.py                    shared: data paths, cached loading, formatting, colours, disclaimer, waterfall chart
-app/views/county_explorer.py     page 1
+app/app.py                       entry point: page setup + menu (st.navigation); /county alias
+app/common.py                    shared: data loading, formatting, plain labels, certainty signals, waterfall,
+                                 county map, lookup wrappers (cached), disclaimer/footer, CSS + wordmark
+app/lookup.py                    address lookup (Census Geocoder, FEMA NFHL, FIRM rule); no Streamlit inside
+app/views/county_explorer.py     page 1 (default)
 app/views/profile_calculator.py  page 2
 app/views/how_it_works.py        page 3
-app/requirements.txt             only the app's libraries: streamlit, pandas, numpy, pyarrow, plotly
+app/requirements.txt             streamlit, pandas, numpy, pyarrow, plotly, requests
 app/data/                        the precomputed data (below)
-.streamlit/config.toml           theme (project root, where Streamlit looks for it)
-tests/test_app.py                automated tests (streamlit.testing.v1.AppTest)
+.streamlit/config.toml           theme (navy accent) and settings
+tests/test_app.py                AppTest: every county, profiles, map, address flow (mocked), what if, routes
+tests/test_lookup.py             lookup module with fake web answers; real connections blocked
 ```
-The app also imports `src/explain.py`, which turns the rating tables into county and profile
-explanations. When the app loads it, `explain.py` uses numpy and pandas only (the full model code,
-which needs statsmodels, is imported only when rebuilding `app/data/`).
 
-## Data the app reads (only these, about 1.3 MB)
+## Data the app reads (only these, about 1.7 MB)
 | File | Used for |
 |---|---|
-| `app/data/county_summary.csv` | county list, summary sentence, certainty label and note, history vs model |
-| `app/data/county_history.csv` | the claims-history chart (county × year: policy-years, paid claims, losses in 2025 $) |
-| `app/data/portfolio.parquet` | each state's insured buildings (the starting point for averages and waterfalls) and each county's property mix |
-| `app/data/rating_factors.json` | the production GLM as lookup tables (base rates, multipliers, state factor, loads) |
-| `app/data/state_averages.json` | state averages used on the How It Works page |
+| `app/data/county_summary.csv` | county list, estimates, certainty inputs (Z, history vs model), mix, actual 2010-2025 average |
+| `app/data/county_history.csv` | the claims-history chart and the storm sentence |
+| `app/data/portfolio.parquet` | each state's insured buildings (averages, waterfalls, the lower-risk comparison) |
+| `app/data/rating_factors.json` | the production GLM as lookup tables |
+| `app/data/state_averages.json` | state averages and mix shares |
+| `app/data/counties_va_nc_md.geojson` | county outlines for the map (Census 2023 cartographic boundaries, simplified; 0.34 MB) |
+| `app/data/firm_dates.csv` | each NFIP community's initial FIRM date (OpenFEMA Community Status Book; 76 KB) |
 
-The app **never** reads `data/raw/` or `data/processed/` (they're not in Git and won't exist on a
-host), and never loads model pickles or XGBoost files. `tests/test_app.py` logs every file the app
-opens and checks this. Column definitions are in [`data/README.md`](data/README.md); rebuild the files
-with `.venv\Scripts\python.exe src\explain.py build` whenever the model changes.
+The app **never** reads `data/raw/` or `data/processed/`; `tests/test_app.py` logs every file the app
+opens and checks this. Column definitions and how to rebuild each file: [`data/README.md`](data/README.md).

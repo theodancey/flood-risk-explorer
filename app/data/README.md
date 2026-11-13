@@ -1,6 +1,6 @@
 # app/data: precomputed files for the Streamlit app
 
-*Built by `src/explain.py build` (Milestone 12; three states since Milestone 13). About 1.2 MB in total, committed to Git.*
+*Built by `src/explain.py build` (Milestone 12; three states since Milestone 13), plus two Milestone 15 files built by their own scripts (below). About 1.7 MB in total, committed to Git.*
 
 The app needs everything here plus `models/production_model.json`. It does **not** need `data/processed/`, which isn't in Git and won't exist on a free host. Each file is either an aggregate (county, county × year, or building-type × county exposure) or model output. There's no policy-level or claim-level row.
 
@@ -18,6 +18,8 @@ The app needs everything here plus `models/production_model.json`. It does **not
 | `portfolio.parquet` | ~650 KB | building type (7 model features + post-FIRM) × county | insured policy-years 2010–2025: each state's "background" for the profile waterfall, and each county's mix |
 | `county_history.csv` | ~200 KB | county × year (2010–2025) | the loss-history chart: state, policy-years, paid claims, losses in 2025 $ (actual experience) |
 | `state_averages.json` | ~7 KB | n/a | averages for each state and all three, the state factor, comparison rule, certainty rule, disclaimer |
+| `counties_va_nc_md.geojson` | ~340 KB | county with a Census outline (257) | the county map: outlines, `id` = 5-digit FIPS. Built by `src/build_county_geojson.py` |
+| `firm_dates.csv` | ~76 KB | NFIP community (1,084) | the address lookup: each community's initial FIRM date. Built by `src/build_firm_dates.py` |
 
 `virginia_averages.json` (Milestone 12) was replaced by `state_averages.json`.
 
@@ -92,6 +94,16 @@ explain.plot_waterfall(p)                          # matplotlib figure
 ```
 - Missing profile features default to the model's base levels.
 - Ambiguous names raise an error listing the options: for example "Montgomery County" exists in VA, NC and MD, and Fairfax and Richmond are each both a county and a city. Use "Name, ST" or `state=` to pick one.
+
+**`counties_va_nc_md.geojson`** (Milestone 15)
+- Source: U.S. Census Bureau, 2023 Cartographic Boundary File, counties, 1:5,000,000 (`cb_2023_us_county_5m.zip`, downloaded 2026-11-13 from www2.census.gov/geo/tiger/GENZ2023/shp/), public domain.
+- Kept VA (51), NC (37), MD (24); coordinates rounded to 3 decimals (about 100 m); duplicate points and specks of islands dropped.
+- 257 outlines. Galax city, VA (51640) has an outline but no insured exposure in the data; the former Bedford city (51515, part of Bedford County since 2013) has data but no outline, so it isn't on the map (it's still in the county list).
+
+**`firm_dates.csv`** (Milestone 15)
+- Source: OpenFEMA API, NFIP Community Status Book (`NfipCommunityStatusBook` v1), downloaded 2026-11-13. Full download kept in `data/raw/community_status_book/` (not in Git).
+- Columns: `cid` (6-digit NFIP community ID), `state`, `community` (e.g. "RICHMOND, CITY OF"), `county`, `initial_firm` (date of the community's first Flood Insurance Rate Map), `initial_fhbm` (first Flood Hazard Boundary Map), `participating`.
+- One community (of 1,084) has no FIRM date; the app then says "not sure".
 
 ## Rebuild and test
 ```
