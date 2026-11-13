@@ -750,3 +750,63 @@ A: I fitted each state separately and compared the relativities with confidence 
 
 **Q: Why did you remove the county credibility factor when you had more data?**
 A: With three states, Bühlmann–Straub found real-looking differences between counties, where Virginia alone had found none for frequency. But when I tested it on unseen years, it made predictions worse, especially in North Carolina, where a county's history is mostly the footprint of one or two hurricanes. I'd written the rule down before testing, so I followed it and dropped the factor. The app still shows each county's own history and a certainty label, so the information isn't hidden; it just doesn't change the price.
+
+
+## Milestone 14: The Streamlit app: from Python scripts to a web app (2026-11-13)
+
+### What I did
+I built a three-page web app with Streamlit. **County Explorer** shows a county's expected annual flood loss per policy-year next to its state's average, with a plain-English summary, a certainty label, the county's mix of insured buildings, its own claims history (major storms labelled) and a chart of why it differs from the state. **Property Profile Calculator** lets you describe a type of building and shows its expected claim frequency, claim size and loss cost, with a waterfall chart of each characteristic's effect. **How It Works** explains the data, methods, findings and limitations. The app reads only small precomputed files (about 1.3 MB) and every page carries a disclaimer. Automated tests click through all 257 counties and a dozen building profiles, and check that the app never touches the raw data.
+
+### Why I did it that way
+
+**What Streamlit is.**
+- *Intuition:* building a website usually means learning HTML (page structure), CSS (styling) and JavaScript (interactivity), plus a web server. Streamlit lets a data person skip all that: you write an ordinary Python script, and Streamlit turns it into a web page.
+- *Example:* the line `st.metric("Expected annual loss", "$453")` puts a big number on the page; `st.selectbox("County", counties)` puts a searchable drop-down list there and gives the script back whatever the visitor picked.
+- It's free and open source, and Streamlit Community Cloud can host apps for free (planned for Milestone 16).
+
+**How a script becomes a web app: the rerun model.**
+- *Intuition:* every time the visitor changes anything (picks a county, clicks a button), Streamlit runs the **whole script again from top to bottom**, with the widgets now returning the new choices, and redraws the page. There are no "event handlers" to wire up: the script simply describes what the page should look like for the current choices.
+- *Example:* the County Explorer script reads the chosen county near the top, then looks up its numbers and draws its charts. Pick another county and the script reruns, so everything below updates automatically.
+- **Widgets** (drop-downs, radio buttons) remember their value between reruns via a `key`, e.g. `key="ce_county"`. Each visitor gets their own **session**, so two people using the app at once don't see each other's choices.
+- **Multi-page:** `app/app.py` lists the three page scripts with `st.navigation`, which builds the menu and runs whichever page is selected.
+
+**Caching: why the app is fast even though it reruns constantly.**
+- *Intuition:* if every click re-read every file and recomputed everything, the app would be slow. Caching means "remember the answer the first time, and reuse it whenever the same question comes back".
+- **`st.cache_data`** is for data: file loads (the county table, the history table) and computed results (one county's explanation, one building profile's waterfall). The function runs once per distinct input; afterwards Streamlit hands back a copy of the saved result. *Example:* the first time anyone rates "1960s house in an A/V zone, Virginia Beach", the exact Shapley waterfall takes about 1.5 seconds; after that it's instant.
+- **`st.cache_resource`** is for one shared object that shouldn't be copied, like a loaded model. The rating tables + insured portfolio ("explainer") is built once per server and shared by all visitors.
+- The difference: `cache_data` returns a fresh copy each time (safe if the page changes it); `cache_resource` returns the same object (fast, but it must never be modified).
+
+**Why the app uses precomputed data, not the raw data or the full model.**
+- The raw FEMA files are about 370 MB and can't go in Git (a project rule); a free host won't have them. Building the modelling table takes minutes, far too slow for a web page.
+- So the heavy work was done once, offline, in earlier milestones, and the results were saved as small summary files in `app/data/`: one row per county, one row per county-year, the insured mix, and the model as **lookup tables** (base rate and multipliers).
+- *Example:* rating a building only needs base rate × the multiplier for each characteristic × the state factor, which is a few lookups, not a model fit.
+- This also makes the app **lightweight to deploy**: it needs only five libraries (streamlit, pandas, numpy, pyarrow, plotly), not statsmodels, XGBoost or SHAP. To get there I changed one line of design in `src/explain.py`: the full model code (which needs statsmodels) is now imported only when rebuilding the app data, never when the app runs. A test checks that none of the heavy libraries get loaded.
+- Privacy and honesty bonus: every file is an aggregate, with no policy-level or claim-level rows.
+
+**Responsible design: disclaimers and not over-claiming.**
+- *Intuition:* a number on a polished web page looks authoritative. Someone could read "$4,783" as "my building's flood insurance price", or think the app is an official FEMA tool. Both would be wrong, so the app has to say so clearly, where people will see it.
+- Every page starts with a short disclaimer: these are **model-based, area-level averages** from public FEMA NFIP data; **not a prediction for any specific property**, **not an insurance quote** and **not financial advice**; and **not affiliated with or endorsed by FEMA**. No FEMA logo or branding is used.
+- *Why "area-level"?* The data is aggregated and anonymized, and the model predicts the **average** insured building of a type in an area in an **average** year. A real building's risk depends on things the data can't see (its exact ground height, its distance to a creek).
+- *Why "not a quote"?* The app shows the **pure premium**, the expected claim cost only. A real price adds expenses, a catastrophe load and the NFIP's own rules.
+- **Certainty labels** are part of the same idea: where a county's own history disagrees with the model, or there's little history, the app says so instead of showing one confident number.
+- Input checks are honest too: an unusual combination (built before 1960 but "post-FIRM") gets a warning, a rare building type gets a note that there's little local data, and an impossible one (a business as a primary residence) is prevented.
+
+**Design choices.**
+- **Colour-blind-friendly colours:** orange = raises the expected loss, blue = lowers it, grey = totals and the state comparison. Blue/orange is a standard pair that people with the common forms of colour blindness can tell apart, and the bars also have labels (×1.63), so meaning never depends on colour alone.
+- **Waterfall charts** start at the state average and show each factor's effect as a step, so a visitor can see *why* a number is high or low.
+- **Mobile-friendly:** a centred layout, and columns that stack on narrow screens.
+
+**Testing a web app automatically.**
+- Streamlit's `AppTest` runs the app's scripts without a browser, lets a test "click" widgets (pick a state, pick a county) and read what's on the page.
+- The tests visit **all 257 counties** and check the big number matches the data file; rate 12 profiles across the three states and check the numbers equal `src/explain.py`'s; try the edge cases; and **log every file the app opens** to prove it never reads `data/raw` or `data/processed`.
+
+### Interview questions
+
+**Q: How does your app compute a prediction so fast without loading the model?**
+A: The production model is a GLM, so a prediction is a base rate times one multiplier per characteristic, times a state factor. I exported those multipliers as small lookup tables, so rating a building is a handful of lookups. The heavier part, the exact Shapley waterfall that explains a prediction, takes about a second, and Streamlit's cache stores each result so a repeat request is instant. The app doesn't need statsmodels or XGBoost at all, which keeps it lightweight to host.
+
+**Q: How did you make sure people don't misuse the numbers?**
+A: Three ways. Every page has a visible disclaimer: these are area-level model averages from public NFIP data, not a prediction for any property, not a quote and not financial advice, and not affiliated with FEMA. The app calls the number an "expected annual loss per policy-year" and explains that a real premium adds expenses and catastrophe loads. And every county shows a certainty label and its own claims history, so where the model and the history disagree, the user can see it.
+
+**Q: What's the difference between st.cache_data and st.cache_resource, and where did you use each?**
+A: Both remember a function's result so it isn't recomputed on every rerun. cache_data stores data and hands back a copy each time, so I used it for loading the CSV and JSON files and for each county or profile result. cache_resource stores one shared object without copying, so I used it for the explainer object (the rating tables plus the insured portfolio), which is built once and shared by every visitor.

@@ -1,6 +1,30 @@
 # Progress Log
 
-## Summary (latest: 2026-11-13, Milestone 13: three states, Virginia + North Carolina + Maryland)
+## Summary (latest: 2026-11-13, Milestone 14: the Streamlit app, local)
+All eight steps are done, committed and pushed. No data files are in Git.
+
+**Run the app** (from the project folder, in PowerShell), then open <http://localhost:8501> if it doesn't open by itself; stop it with Ctrl+C:
+```powershell
+.venv\Scripts\python.exe -m streamlit run app\app.py
+```
+
+- **Three pages** (`app/app.py` + `app/views/`), working for all **257 counties** (VA 133, NC 100, MD 24):
+  - **County Explorer:** state → searchable county. Expected annual loss per policy-year + ratio to the state average, frequency and severity, the plain-English summary, the **certainty label** with its meaning and note, the **property mix** vs the state (chart), the county's **claims history 2010–2025** with major storms labelled, and a **"why" waterfall** (property mix vs the state; no county factor, per Question 9).
+  - **Property Profile Calculator:** state, county (or "anywhere in the state"), flood zone, year built, post-FIRM, elevated, occupancy, coverage, floors, primary residence, each with help text. Shows frequency, severity, pure premium, the sentence, the county's certainty, and an interactive Shapley waterfall from the state average. Check: Virginia Beach 1960s house **$453.69**, Dare $2,820.24, Worcester $458.67 (the Milestone 13 check values).
+  - **How It Works:** sources with links and download dates, methods in plain English, 6 key findings with numbers, limitations, future work (your Question 9 wording), and an About section with the GitHub link.
+- **Disclaimer on every page** (top of the page + sidebar): model-based area-level averages from public FEMA NFIP data; not a prediction for any property, not a quote, not financial advice; not affiliated with or endorsed by FEMA. No FEMA logo or branding.
+- **Lightweight and deployable:** reads only `app/data/` (1.3 MB) with relative paths; `app/requirements.txt` = streamlit, pandas, numpy, pyarrow, plotly; theme in `.streamlit/config.toml`. To make that possible, `src/explain.py` now imports the statsmodels-based model code **only when rebuilding app data** (all its tests still pass, same numbers).
+- **Tests** (`tests/test_app.py`, AppTest, about 1 minute): **all pass**. They render every county and check its number against the data file, rate 12 profiles plus edge cases and compare with `explain.py`, log every file the app opens (only the 5 `app/data` files; nothing from `data/raw` or `data/processed`), and confirm no heavy libraries are imported. The app also **starts headlessly** (health check "ok" after 2 s).
+- Docs: `app/README.md`, README "Try the app" + "Future work", project plan row 7 ✅, Milestone 14 learning notes (Streamlit, the rerun model, caching, why precomputed data, responsible-design disclaimers).
+
+**Judgment calls worth a look** (details under Milestone 14 decisions):
+1. **Storm labels** on the history chart come from a one-time check of claim dates and FEMA event names during development: Maryland's 2016 and 2018 spikes are the **Ellicott City flash floods**, and Virginia's 2018 is **Hurricane Michael**. The app itself never reads claims.
+2. **The calculator never refuses a profile.** Non-residential locks "primary residence" to No (only 11 of 223,000 non-residential policy-years say yes). "Built before 1960 + post-FIRM" (0.6% of buildings) gets a warning, but "2000 or later + pre-FIRM" (about 6%) doesn't, because it's uncommon but real.
+3. **I haven't looked at the pages in a browser** (no browser available to me in this session). The tests confirm every page and county renders without errors and shows the right numbers, but please click through once to check that the layout looks right, especially on your phone.
+
+**What you need to do:** run the app (command above) and click through the three pages. No new questions. Question 9 is resolved.
+
+## Summary (previous: 2026-11-13, Milestone 13: three states, Virginia + North Carolina + Maryland)
 All eight steps are done, committed and pushed. No raw data, processed data or XGBoost model files are in Git. `app/data/` is about 1.3 MB of small aggregates.
 
 - **Data:** NC and MD policies downloaded (OpenFEMA v3, same 37 columns).
@@ -40,7 +64,7 @@ All eight steps are done, committed and pushed. No raw data, processed data or X
 3. **Certainty labels now need agreement** (added after seeing results). Brunswick County, NC had high credibility but history at 0.35× the model, and "High" would have misled. Only about 16% of exposure lies in counties whose history is within 0.8–1.25× the model.
 4. **A fourth consistency label, "unclear"**, filled a gap in the pre-stated rule (added before reading results by label).
 
-**What you need to do:** answer Question 9 (keep the county factor out, or switch to severity-only). Then read `reports/10_multistate.md` (about 15 minutes) and the Milestone 13 learning notes.
+**What you need to do:** ~~answer Question 9~~ (answered: no county factor). Then read `reports/10_multistate.md` (about 15 minutes) and the Milestone 13 learning notes.
 
 ## Summary (previous: 2026-11-12, Milestone 12: explainability; modelling complete)
 All five parts are done, committed and pushed. No raw data, processed data or model tree files are in Git. The new `app/data/` files are small aggregates (about 0.55 MB).
@@ -300,11 +324,11 @@ The data is downloaded and explored. Everything except the data files is committ
 **What you need to do:** nothing required. To get the data on another computer, run `.venv\Scripts\python.exe src\download_data.py all` (about 35 minutes). Optionally, confirm you're happy with the v2 → v3 switch (Question 3).
 
 ## Questions for Theo
-9. *(Milestone 13, 2026-11-13, open)* **The county factor was dropped from the production model.** You asked (Milestone 9) for a credibility-weighted county factor in the app. On three states, my pre-stated rule removed it: it made unseen years worse, badly in North Carolina, where a county's history is mostly one hurricane's footprint. The near-tie alternative is a **severity-only** county factor: best average LOYO by 0.06 points, and +2.3 points on Virginia's holdout, but −1.9 on NC's. The app still shows certainty labels and each county's own history. If you'd rather keep a county factor in the price, the switch is one setting: edit `chosen` in `reports/10_county_form_summary.csv` to the severity-only row, then run `multistate.py production` and `explain.py build`. Details in Milestone 13 decisions, "County factor form". ✅ Theo: Keep the pre-stated rule's result: no county factor in the production price. The app shows each county's property mix, its own claims history, and certainty labels. Add to README "Future work": bring geography back through storm-independent features (e.g., elevation, distance to coast, share of exposure in FEMA high-risk zones) rather than county claims history.
 8. *(Milestone 13, 2026-11-12; ✅ resolved 2026-11-13: Theo said resume and asked for a memory-efficient refit; fix in Milestone 13 decisions, "Memory")* **The 3-state refit was stopped for low memory.** The background job `multistate.py refit` (then `xgb`) was killed by Claude Code because the computer ran critically low on memory. It had got as far as the interaction keep-rule checks. I haven't restarted it on my own. Done and committed: NC/MD downloads, the 3-state table (all checks pass), and the transfer test. To continue, close other memory-heavy programs and tell me to resume, or run it yourself: `.venv\Scripts\python.exe src\multistate.py refit`, then `... xgb`, `... production`, then `src\explain.py build`. If memory stays tight, I can make the refit lighter (e.g. fewer leave-one-year-out fits held in memory at once).
 5. *(Week 8, decided)* **Hosting the app.** The plan puts the Streamlit app on a free host (Streamlit Community Cloud), which needs an account linked to your GitHub. **Decision: you'll create the Streamlit Community Cloud account yourself in week 8.** I won't sign up for anything.
 
 ### Earlier (resolved)
+9. *(Milestone 13, 2026-11-13; ✅ resolved 2026-11-13: no county factor; applied in Milestone 14: the app shows mix, history and certainty, and README/app "Future work" name storm-independent geography features)* **The county factor was dropped from the production model.** You asked (Milestone 9) for a credibility-weighted county factor in the app. On three states, my pre-stated rule removed it: it made unseen years worse, badly in North Carolina, where a county's history is mostly one hurricane's footprint. The near-tie alternative is a **severity-only** county factor: best average LOYO by 0.06 points, and +2.3 points on Virginia's holdout, but −1.9 on NC's. The app still shows certainty labels and each county's own history. If you'd rather keep a county factor in the price, the switch is one setting: edit `chosen` in `reports/10_county_form_summary.csv` to the severity-only row, then run `multistate.py production` and `explain.py build`. Details in Milestone 13 decisions, "County factor form". ✅ Theo: Keep the pre-stated rule's result: no county factor in the production price. The app shows each county's property mix, its own claims history, and certainty labels. Add to README "Future work": bring geography back through storm-independent features (e.g., elevation, distance to coast, share of exposure in FEMA high-risk zones) rather than county claims history.
 7. *(Resolved in Milestone 9)* **Geography in the app.** The frequency model has no county or coastal factor, because those effects didn't hold up on unseen years. So for now, county differences in the app will come only from each county's mix of flood zones and building ages (the severity model, next milestone, may add geography back). If you'd rather the app show a county factor anyway (e.g. a credibility-weighted one, clearly labelled as less certain), tell me and I'll plan it for the app milestone. Otherwise I'll test geography again with XGBoost. ✅ Theo: Yes, plan a credibility-weighted county factor for the app milestone (blend each county's experience with the statewide average based on its exposure; explain the credibility method used and label it clearly as less certain in the app). Also still test geography with XGBoost as planned.
    *Status (Milestone 8):* added to the app row of `docs/PROJECT_PLAN.md`. The severity model also dropped geography (Tidewater and county group failed on unseen years), so the credibility-weighted county factor will cover both frequency and severity. Out-of-fold severity A/E by county (Newport News 1.67, Norfolk 0.79) shows it is needed.
    **Outcome (Milestone 9):** built in `src/models/pure_premium.py` with Bühlmann–Straub credibility on county A/E, frequency and severity separately (limited fluctuation also compared). Frequency gets Z = 0 (county differences are storm noise), and severity k = 33 claims. Factors 0.73–1.78, saved in `models/pure_premium.json` for the app to display, labelled less certain. It improves held-out county fit and the overall holdout fit. See `reports/06_pure_premium.md` §2.
@@ -355,6 +379,23 @@ The data is downloaded and explored. Everything except the data files is committ
 - **Unmatched claims kept, not forced into a nearby cell:** 111 cells / 122 claims (95 paid) with exposure 0 and `exposure_matched=False`. None are in a county-year without exposure. Ignoring county alone would re-match 118, and ignoring coverage band 105, so they're rare combinations (probably small differences between claim and policy records, or missing policy rows).
 - **Checks are assertions inside the script** (rather than a pytest suite), so they run on every build without a new package.
 - Project-plan week-2 file names updated to the real ones (`build_dataset.py`, `va_model_data.parquet`).
+
+### Milestone 14 decisions (2026-11-13, the Streamlit app)
+- **Reuse `src/explain.py` instead of re-implementing the model in the app.** It already gives the county and profile explanations, sentences and certainty labels that the tests check against `production.predict`. Its top-level `import production` pulled in statsmodels and scipy, so it's now a small `_production()` helper called only by `load(with_model=True)` and `build`. The app calls `explain.load(app/data, with_model=False)`: numpy + pandas only. `src\explain.py` self-test and `tests\test_explain.py` pass unchanged.
+- **The app doesn't read `models/production_model.json`.** It's only needed for the optional rating worksheet; everything else comes from `app/data/rating_factors.json`. So the app reads exactly the five `app/data` files.
+- **Caching:** `st.cache_data` for the file loads and for each county/profile result (the exact profile waterfall takes about 0.6–1.5 s the first time); `st.cache_resource` for the explainer object (built once, about 1.5 s, shared and never modified). The request said `st.cache_data`; Streamlit recommends `cache_resource` for one shared model-like object, and copying it on every call would be slow.
+- **Pages with `st.navigation`** (the current Streamlit multi-page API) and page scripts in `app/views/`, so the menu titles and order are explicit and the URLs are readable (`/county`, `/calculator`, `/how-it-works`).
+- **`.streamlit/config.toml` lives in the project root**, because that's where `streamlit run` (started from the project folder) and Streamlit Community Cloud look for it. `app/requirements.txt` sits next to the entry point, which Community Cloud checks first.
+- **Layout `centered`** (readable line length; columns stack on a phone). Plotly charts without the toolbar.
+- **Colours:** the dataviz reference palette's blue `#2a78d6` (lowers / the county) and orange `#eb6834` (raises), grey for totals and the state; the same as the Milestone 12 matplotlib waterfalls. The palette validator needs Node.js, which isn't installed (not installed system-wide, per the rules), so I used the pre-validated reference slots; every bar also has a text label.
+- **Storm labels** (statewide events shown on every county's history chart): VA 2011 Irene, 2012 Sandy, 2016 Matthew, 2018 Michael; NC 2011 Irene, 2016 Matthew, 2018 Florence, 2024 Helene; MD 2011 Irene, 2012 Sandy, 2016 and 2018 Ellicott City flash floods (Howard County, 2016-07-30 and 2018-05-27), 2021 October nor'easter (2021-10-29). Checked once from `data/raw` claims (`floodEvent`, `dateOfLoss`, top years by paid losses) in a scratch script; the app hard-codes the labels and never reads claims.
+- **Calculator input rules** (from the insured portfolio):
+  - non-residential → primary residence fixed to No (11 policy-years of 222,709 say yes); multi-unit is left free (18% say yes);
+  - a post-FIRM answer is checked against year built: a warning when under 2% of that state's buildings in that band have that answer (pre-1960 + post-FIRM ≈ 0.6–0.9%). Post-FIRM isn't in the model, so it never changes the number;
+  - an exact building type with under 50 insured policy-years in the chosen county (or state) gets a note that there's little local data; it's still rated;
+  - any rating error is shown as a friendly message, never a traceback.
+- **County page "history vs model"** uses the precomputed storm-adjusted ratio (`history_vs_model`) alongside the raw actual loss cost, because the raw loss cost of a 16-year window depends on which storms hit.
+- **Tests are plain Python** (`tests\test_app.py`), like `test_explain.py`: pytest isn't installed and isn't needed. The file-read check wraps `open`, `Path.open/read_text/read_bytes` and `pandas.read_csv/read_parquet/read_json` before the app runs.
 
 ### Milestone 13 decisions (2026-11-12, multi-state: VA + NC + MD)
 **Written before any NC/MD result was computed:**
@@ -594,6 +635,15 @@ The data is downloaded and explored. Everything except the data files is committ
 - No new packages.
 
 ## Log
+### 2026-11-13: Milestone 14, the Streamlit app (local)
+1. **Lazy model import.** Made `src/explain.py` import the statsmodels-based production code only when needed; checked the app-side load imports no heavy libraries and still gives Virginia Beach $453.69. Self-test and `tests/test_explain.py` pass. Committed with your Question 9 answer.
+2. **Skeleton:** `app/app.py` (navigation, sidebar), `app/common.py` (relative paths, cached loaders, formatting, disclaimer, plotly waterfall), `.streamlit/config.toml`, `app/requirements.txt`. Committed.
+3. **County Explorer.** Checked storm years offline first (Maryland's 2016/2018 = Ellicott City, Virginia's 2018 = Michael). Fixed the ratio delta arrow (it pointed up for below-average counties). Committed.
+4. **Profile Calculator** with input checks. Fixed the exact-match exposure check (a DataFrame-vs-dict comparison replaced by an explicit loop). Committed.
+5. **How It Works.** Committed.
+6. **Tests.** The first run had 2 failures, both in the test setup: the test's own `explain.load` filled explain's module cache, so the app's reads of two files weren't logged (fixed by clearing that cache), and `common.py`'s docstring mentioned the raw-data path (reworded). Then all passed (60 s). Headless start: health "ok" in 2 s, server stopped. Committed.
+7. **Docs:** `app/README.md`, README "Try the app" and "Future work", project plan, these notes and LEARNING_NOTES. Committed and pushed.
+
 ### 2026-11-12 to 2026-11-13: Milestone 13, three states (VA + NC + MD)
 1. **Download and data dictionary.** Planned, wrote the pre-stated rules (Milestone 13 decisions), and generalized the policy download to any state. Downloaded NC and MD in the background (resumable pages, row counts checked). Updated `docs/data_dictionary.md` with the differences by state. Committed.
 2. **3-state table.** Built `model_data_3states.parquet` with state, state_year and per-state tidal lists (sources fetched and cited).

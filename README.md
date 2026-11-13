@@ -6,11 +6,25 @@ I'm building a flood insurance risk model using FEMA's public data on 2.7 millio
 - **Data:** OpenFEMA NFIP claims (2.7 million US claims since 1978) and policies (4.6 million policy terms since 2009 in Virginia, North Carolina and Maryland; Virginia first, the other two added in Milestone 13).
 - **Actuarial foundations:** earned exposure (policy-years), claim **frequency**, claim **severity**, and **pure premium** (expected loss per policy-year), by year and by county.
 - **Models (complete):** a Poisson GLM for frequency and a Gamma GLM for severity (with three interactions and a state factor), compared against XGBoost, with relativities and SHAP to explain what drives risk. Models are tested on held-out years and on a held-out state.
-- **App (planned):** a Streamlit app where you pick a county or ZIP code and see its area-level flood risk, expected claim cost, and the reasons behind it.
+- **App (Milestone 14, runs locally):** a Streamlit app where you pick a county, or describe a type of building, and see its area-level expected flood loss, how it compares with the state, how certain it is, and the reasons behind it. See [Try the app](#try-the-app).
 
-**Status:** modelling complete for three states (data, exploration, actuarial basics, modelling dataset, one-way analysis, frequency and severity GLMs, pure premium with credibility, XGBoost, model comparison, explainability, and the Milestone 13 extension to North Carolina and Maryland). Everything the app needs is precomputed in `app/data/` for 257 counties. Next: the Streamlit app. See [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
+**Status:** modelling complete for three states (data, exploration, actuarial basics, modelling dataset, one-way analysis, frequency and severity GLMs, pure premium with credibility, XGBoost, model comparison, explainability, and the Milestone 13 extension to North Carolina and Maryland). The Streamlit app (Milestone 14) runs locally for all 257 counties. Next: public hosting (Milestone 16). See [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
 
 > **Disclaimer:** All results are **area-level** estimates built from aggregated public data. They are not predictions, quotes, or risk ratings for any individual property.
+
+## Try the app
+The app runs on your own computer for now (public hosting is planned for Milestone 16). From the project folder, in PowerShell:
+
+```powershell
+.venv\Scripts\python.exe -m streamlit run app\app.py
+```
+
+Then open <http://localhost:8501> if it doesn't open by itself (stop it with Ctrl+C). Three pages:
+- **County Explorer:** a county's expected annual loss per policy-year vs its state, certainty label, mix of insured buildings, its own claims history with major storms labelled, and why it differs from the state.
+- **Property Profile Calculator:** expected claim frequency, severity and pure premium for a type of building, with an interactive waterfall of each characteristic's effect.
+- **How It Works:** data sources, methods, key findings, limitations and future work.
+
+The app reads only the small files in `app/data/` and needs only streamlit, pandas, numpy, pyarrow and plotly (`app/requirements.txt`). Details: [`app/README.md`](app/README.md). Tests: `.venv\Scripts\python.exe tests\test_app.py`.
 
 ## Key findings so far (Virginia 2010–2025; three states since Milestone 13)
 - **Three states** (Milestone 13: Virginia, North Carolina, Maryland; 4.1 million policy-years, 51,894 paid claims):
@@ -86,9 +100,14 @@ models/                     saved models (production_model.json = what the app l
 reports/                    written findings + figures
 docs/                       data dictionary, modelling dataset, project plan, validation plan
 app/data/                   small precomputed files the app reads (county summary, rating tables, history; committed)
-app/                        Streamlit app (coming)
+app/app.py, app/views/      Streamlit app (Milestone 14): County Explorer, Profile Calculator, How It Works (see app/README.md)
+tests/test_app.py           app tests (AppTest): every county, profiles, edge cases, no raw/processed reads
 ```
 Data files live in `data/` and are never committed (`app/data/` holds only small aggregates and model output). Re-create them with the download script.
+
+## Future work
+- **Bring geography back through storm-independent features** rather than county claims history: for example ground elevation, distance to the coast, and each area's share of exposure in FEMA high-risk zones. County history failed on unseen years (in North Carolina a county's history is mostly one hurricane's footprint), while features describing where water can go shouldn't depend on which storms happened to hit.
+- Public hosting of the app (Milestone 16), ZIP-code or census-tract detail, more states, and catastrophe-adjusted pricing (a catastrophe load instead of raw storm years).
 
 ## How to run (Windows, PowerShell)
 ```powershell
@@ -113,6 +132,8 @@ py -3.13 -m venv .venv
 .venv\Scripts\jupyter-nbconvert.exe --to notebook --execute --inplace notebooks\04_one_way_analysis.ipynb
 .venv\Scripts\python.exe src\explain.py build       # rebuild app/data from the modelling table (~10 s)
 .venv\Scripts\python.exe tests\test_explain.py      # explanations for every county, committed files only (~2 min)
+.venv\Scripts\python.exe tests\test_app.py          # Streamlit app tests (~1 min)
+.venv\Scripts\python.exe -m streamlit run app\app.py  # the app, at http://localhost:8501
 ```
 
 *This product uses FEMA's OpenFEMA API but is not endorsed by FEMA. FEMA may update the data at any time.*
