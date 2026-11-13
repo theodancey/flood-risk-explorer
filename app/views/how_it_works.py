@@ -14,6 +14,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import common as C  # noqa: E402
 
+C.header()
 st.title("How It Works")
 st.caption("Where the numbers come from, how the model was built and tested, and what it can't tell you.")
 C.disclaimer()
@@ -44,6 +45,8 @@ agencies below.
 | NFIP **claims** (v3): 2.7 million US flood insurance claims since 1978 | OpenFEMA API, [`NfipClaims` v3](https://www.fema.gov/api/open/v3/NfipClaims) ([OpenFEMA data sets](https://www.fema.gov/about/openfema/data-sets)) | 2026-11-10 |
 | NFIP **policies** (v3): 4.6 million policy terms since 2009 in VA, NC and MD | OpenFEMA API, [`NfipPolicies` v3](https://www.fema.gov/api/open/v3/NfipPolicies) | VA 2026-11-10; NC, MD 2026-11-12 |
 | Inflation (CPI-U), to put all losses in 2025 dollars | [U.S. Bureau of Labor Statistics public API](https://www.bls.gov/developers/), series CUUR0000SA0 | 2026-11-10 |
+| Map outlines | [U.S. Census Bureau 2023 cartographic boundary file](https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html), counties 1:5,000,000, simplified | 2026-11-13 |
+| First flood map date of each community (for the address lookup) | OpenFEMA API, [`NfipCommunityStatusBook` v1](https://www.fema.gov/api/open/v1/NfipCommunityStatusBook) | 2026-11-13 |
 | County names | [U.S. Census Bureau 2020 county codes](https://www2.census.gov/geo/docs/reference/codes2020/national_county2020.txt) | 2026-11-10 |
 | Tidal-area definitions (one per state) | [Code of Virginia § 62.1-44.15:68](https://law.lis.virginia.gov/vacode/title62.1/chapter3.1/section62.1-44.15:68/) (Tidewater); [N.C. Gen. Stat. § 113A-103](https://www.ncleg.gov/EnactedLegislation/Statutes/HTML/BySection/Chapter_113A/GS_113A-103.html) (CAMA counties); [Md. Code, Nat. Res. § 8-1807](https://mgaleg.maryland.gov/mgawebsite/Laws/StatuteText?article=gnr&section=8-1807) (Critical Area) | 2026-11-11 to 11-12 |
 

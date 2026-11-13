@@ -19,6 +19,9 @@ What it checks:
      matplotlib.
   6. Milestone 15: /county opens the County Explorer; waterfall labels say Yes/No (never True/False)
      and group small effects; the main pages avoid jargon outside "Learn more" expanders.
+  7. Address lookup with FAKE web answers (no internet: real connections are blocked).
+  8. The county map (all counties, legend, hover, both colourings, a click selects the county) and
+     the "what if?" elevation estimate (equal to src/explain.py).
 """
 
 import builtins
@@ -315,7 +318,7 @@ def test_county_route():
         at._page_hash = by_url["county"]
         at.run()
         no_error(at, "/county")
-        check(any("County Explorer" == t.value for t in at.title), "/county did not open the County Explorer")
+        check(any(m.label == "Model estimate (typical year)" for m in at.metric), "/county did not open the County Explorer")
         check(at.metric[0].value.startswith("$"), "/county: no estimate shown")
     print("  /county route: opens the County Explorer")
 
@@ -349,7 +352,7 @@ def test_reads():
     norm = [p.replace("\\", "/") for p in READS]
     bad = [p for p in norm if "data/raw" in p or "data/processed" in p]
     check(not bad, f"the app read raw/processed data: {bad[:3]}")
-    data_reads = {Path(p).resolve() for p in READS if Path(p).suffix in (".csv", ".parquet", ".json")}
+    data_reads = {Path(p).resolve() for p in READS if Path(p).suffix in (".csv", ".parquet", ".json", ".geojson")}
     outside = [str(p) for p in data_reads if APP_DATA not in p.parents]
     check(not outside, f"data files read from outside app/data: {outside}")
     check(len(data_reads) >= 4, f"expected the app to read its data files; logged {sorted(map(str, data_reads))}")
@@ -514,12 +517,92 @@ def test_address_lookup():
         requests.get = REAL_GET
 
 
+# ---------------------------------------------------------------------------
+# 8. County map and "what if?" (Milestone 15)
+# ---------------------------------------------------------------------------
+def chart_specs(at):
+    import json
+    return [(str(ch.proto.id), json.loads(ch.proto.spec)) for ch in at.get("plotly_chart")]
+
+
+def test_map():
+    import json
+    at = new_app()
+    no_error(at, "map")
+    maps = [(i, s) for i, s in chart_specs(at) if any(t.get("type") == "choropleth" for t in s.get("data", []))]
+    check(len(maps) == 1, f"expected one county map, found {len(maps)}")
+    if not maps:
+        return
+    trace = maps[0][1]["data"][0]
+    geo = json.loads((APP_DATA / "counties_va_nc_md.geojson").read_text(encoding="utf-8"))
+    with_outline = {f["id"] for f in geo["features"]}
+    expected = set(CS["county"]) & with_outline
+    check(set(trace["locations"]) == expected, f"map shows {len(trace['locations'])} counties, expected {len(expected)}")
+    check(len(expected) >= 256, f"only {len(expected)} counties have an outline")
+    check((APP_DATA / "counties_va_nc_md.geojson").stat().st_size < 2e6, "boundary file is over 2 MB")
+    check("colorbar" in trace and trace["colorbar"].get("ticktext"), "map legend (colour bar) missing")
+    check("Expected yearly loss" in trace["hovertemplate"], "map hover text missing")
+    check(len(maps[0][1]["data"]) == 2, "selected county not outlined")
+    # switch to "compared with the state average"
+    at.segmented_control(key="ce_map_mode").set_value("ratio").run()
+    no_error(at, "map ratio mode")
+    trace = [s for _, s in chart_specs(at) if any(t.get("type") == "choropleth" for t in s.get("data", []))][0]["data"][0]
+    check("same" in trace["colorbar"]["ticktext"], f"ratio legend: {trace['colorbar'].get('ticktext')}")
+    # a map click: Streamlit stores the selection under the chart's key; the callback picks the county
+    sys.path.insert(0, str(ROOT / "app"))
+    import common
+    for ev, want in [({"selection": {"points": [{"curve_number": 0, "location": "37055"}]}}, "37055"),
+                     ({"selection": {"points": [{"curve_number": 0, "customdata": ["x", "$1", "y", "z", "24047"]}]}}, "24047"),
+                     ({"selection": {"points": [{"curve_number": 1, "location": "51810"}]}}, None),
+                     ({"selection": {"points": []}}, None), (None, None)]:
+        check(common.selected_county(ev) == want, f"map click {ev} -> {common.selected_county(ev)}, expected {want}")
+    at.session_state["ce_select"] = "37055"
+    at.run()
+    no_error(at, "county picked on the map")
+    check(at.subheader[0].value == "Dare County, NC", f"map pick: header {at.subheader[0].value}")
+    check(at.segmented_control(key="ce_state").value == "NC", "map pick: state not switched")
+    print(f"  map: {len(expected)} counties, legend, hover, ratio mode, click -> county")
+
+
+def test_what_if():
+    for state, county, settings in [("VA", "51810", {"pc_built": "1960-1979"}), ("NC", None, {"pc_elev": "True"}),
+                                    ("MD", "24047", {"pc_occ": "non-residential"})]:
+        at = new_app()
+        at.switch_page("views/profile_calculator.py").run()
+        at.segmented_control(key="pc_state").set_value(state).run()
+        at.selectbox(key="pc_county").set_value(county or "__any__").run()
+        for k, v in settings.items():
+            set_widget(at, k, v)
+        at.run()
+        where = f"what-if {state} {county} {settings}"
+        no_error(at, where)
+        feats = dict(EX.t.d["bases"])
+        keymap = {"pc_built": "construction_band", "pc_elev": "elevated", "pc_occ": "occupancy_group"}
+        for k, v in settings.items():
+            feats[keymap[k]] = v
+        if feats["occupancy_group"] == "non-residential":
+            feats["primary_residence"] = "False"
+        no = EX.explain_profile({**feats, "elevated": "False", "county": county}, state=state)["pure_premium"]
+        yes = EX.explain_profile({**feats, "elevated": "True", "county": county}, state=state)["pure_premium"]
+        text = " ".join(m.value for m in at.markdown)
+        if feats["elevated"] == "False":
+            want = f"{money(no)} → {money(yes)}"
+            check(want in text and "Raising this building" in text, f"{where}: '{want}' not shown")
+        else:
+            check("already raised" in text and money(no) in text, f"{where}: already-raised message missing")
+        check(f"{100 * (yes / no - 1):+.0f}%" in text or "already raised" in text, f"{where}: % change missing")
+        caps = " ".join(c.value for c in at.caption)
+        check("not an engineering estimate" in caps and "not a promise of savings" in caps,
+              f"{where}: what-if caveat missing")
+    print("  what if: elevation effect matches explain.py (3 profiles), caveat shown")
+
+
 if __name__ == "__main__":
     t0 = time.time()
     import sys as _sys
     only = [a for a in _sys.argv[1:]]
     tests = (test_county_explorer, test_profile_calculator, test_county_route, test_address_lookup,
-             test_how_it_works, test_reads, test_lightweight)
+             test_map, test_what_if, test_how_it_works, test_reads, test_lightweight)
     for test in [t for t in tests if not only or t.__name__ in only]:
         t = time.time()
         print(test.__name__)

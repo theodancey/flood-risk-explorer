@@ -19,6 +19,7 @@ import common as C  # noqa: E402
 
 ANY = "__any__"     # "anywhere in the state": the state's mix of counties
 
+C.header()
 st.title("Property Profile Calculator")
 st.caption("Describe a kind of building. See the average yearly flood loss for insured buildings like it.")
 C.disclaimer()
@@ -224,5 +225,36 @@ with st.expander("Learn more: how the bars are worked out"):
     if res["notes"]:
         st.caption("Your answer to \"built after the first flood map\" isn't used in the estimate: the year "
                    "built and flood zone already carry its effect.")
+
+# ---------------------------------------------------------------------------
+# "What if?": the model's average effect of raising (elevating) the building
+# ---------------------------------------------------------------------------
+st.markdown("#### What if?")
+st.caption("Of the features here, raising the building is the one an owner can change to lower flood risk.")
+other = "False" if elevated == "True" else "True"
+alt = C.profile_result(state, None if county == ANY else county,
+                       tuple(sorted({**features, "elevated": other}.items())))
+before, after = (pp, alt["pure_premium"]) if elevated == "False" else (alt["pure_premium"], pp)
+change = 100 * (after / before - 1)
+with st.container(border=True, key="whatif"):
+    if elevated == "False":
+        st.markdown(f"**Raising this building:** about **{C.money(before)} → {C.money(after)}** a year "
+                    f"(**{change:+.0f}%**).")
+    else:
+        st.markdown(f"**This building is already raised.** If it weren't, the estimate would be about "
+                    f"**{C.money(before)}** a year instead of **{C.money(after)}** "
+                    f"(raising saves about {abs(change):.0f}%).")
+    st.caption("This is the model's average difference between similar insured buildings that are and aren't "
+               "raised. It is not an engineering estimate for your building and not a promise of savings.")
+with st.expander("Learn more: why only raising the building?"):
+    st.markdown(
+        "- **Flood zone, year built and use** describe the building and where it is; an owner can't change them.\n"
+        "- **Coverage** changes how much a policy pays out, not how likely or how bad a flood is.\n"
+        "- **Floors** barely change the estimate.\n\n"
+        "The model's \"raised building\" effect is an *average* over insured buildings. Raised buildings also "
+        "differ in other ways (for example, many are newer or on the coast), so the true effect for one "
+        "building could be bigger or smaller. Within high-risk zones, raised buildings had much smaller "
+        "claims, while across all zones the gap looks smaller (a statistical trap called *Simpson's "
+        "paradox*). Real flood-proofing decisions need a professional and an official elevation certificate.")
 
 C.footer()

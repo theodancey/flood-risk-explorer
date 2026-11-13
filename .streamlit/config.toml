@@ -1,10 +1,10 @@
-# Streamlit settings for the Flood Risk Explorer app (Milestone 14).
+# Streamlit settings for the Flood Risk Explorer app (Milestones 14-15).
 # Streamlit reads this file from the folder you start it in (the project folder), and
 # Streamlit Community Cloud reads it from the repository root.
 
 [theme]
 base = "light"
-primaryColor = "#2a78d6"            # blue from the colour-blind-safe chart palette
+primaryColor = "#1f3a5f"            # deep navy accent (Milestone 15): kept apart from the chart blue that means "lowers"
 backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#f4f4f1"
 textColor = "#0b0b0b"

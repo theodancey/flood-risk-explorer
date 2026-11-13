@@ -4,7 +4,8 @@ Page 1: County Explorer (the default page, also at /county).
 Pick a state and a county (or click the map, or search an address) to see the model's expected
 yearly flood loss for the insured buildings there (an area-level average), next to what actually
 happened in 2010-2025, how it compares with the state, how much local data backs it up, and WHY it
-differs from the state average. Milestone 15: plain wording, a hero number, tabs.
+differs from the state average. Milestone 15: a first screen with the county map and address
+search, plain wording, a hero number, tabs.
 """
 
 import sys
@@ -16,39 +17,60 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import common as C  # noqa: E402
 
-st.title("County Explorer")
-st.caption("How much flood damage insured buildings in a county are expected to have each year, "
-           "compared with the rest of the state.")
-C.disclaimer()
+C.header()
 
 # ---------------------------------------------------------------------------
-# "Find my county": type an address, and the state and county below are set from it. The callbacks
-# run BEFORE the page is drawn, so they can set the state and county widgets.
+# Which county? It can be set three ways: the map, the address search, or the state + county
+# lists. The callbacks below run BEFORE the page is drawn, so they can set the state and county.
+# The state and county are also (re)assigned on every run, before their widgets are drawn: this
+# keeps the choice when the same page is opened at "/" or "/county" (two pages, one script) and
+# gives a first visit Virginia and its biggest county.
 # ---------------------------------------------------------------------------
-# The state and county are (re)assigned on every run, before their widgets are drawn. This keeps
-# the choice when the same page is opened at "/" or "/county" (two pages, one script) and gives a
-# first visit Virginia and its biggest county.
-st.session_state["ce_state"] = st.session_state.get("ce_state") if st.session_state.get("ce_state") in C.STATES else "VA"
-if "ce_select" in st.session_state:                       # a county picked on the map (or elsewhere)
-    pick = st.session_state.pop("ce_select")
-    st.session_state["ce_state"], st.session_state["ce_county"] = C.explain.state_of(pick), pick
+ss = st.session_state
+ss["ce_state"] = ss.get("ce_state") if ss.get("ce_state") in C.STATES else "VA"
+if "ce_select" in ss:                                     # a county chosen elsewhere (e.g. a test)
+    pick = ss.pop("ce_select")
+    ss["ce_state"], ss["ce_county"] = C.explain.state_of(pick), pick
+_list, _ = C.counties_in(ss["ce_state"])
+ss["ce_county"] = ss.get("ce_county") if ss.get("ce_county") in _list else C.biggest_county(ss["ce_state"])
+
+
+def on_map_click():
+    fips = C.selected_county(ss.get("ce_map"))
+    if fips and fips in set(C.county_summary()["county"]):
+        ss["ce_state"], ss["ce_county"] = C.explain.state_of(fips), fips
 
 
 def find_county():
-    found = C.find_address(st.session_state.get("ce_addr", ""), full=False)
-    st.session_state["ce_found"] = found
+    found = C.find_address(ss.get("ce_addr", ""), full=False)
+    ss["ce_found"] = found
     if found["where"]["status"] == "ok":
-        st.session_state["ce_state"] = found["where"]["state"]
-        st.session_state["ce_county"] = found["where"]["county_fips"]
+        ss["ce_state"] = found["where"]["state"]
+        ss["ce_county"] = found["where"]["county_fips"]
 
 
 def to_calculator():
     """Full lookup (flood zone, first flood map) for the calculator, then open it."""
-    found = C.find_address(st.session_state.get("ce_addr", ""))
-    st.session_state["pc_found"] = found
-    st.session_state["pc_prefill"] = C.prefill_from(found)
-    st.session_state["ce_go_calc"] = True
+    found = C.find_address(ss.get("ce_addr", ""))
+    ss["pc_found"] = found
+    ss["pc_prefill"] = C.prefill_from(found)
+    ss["ce_go_calc"] = True
 
+
+# ---------------------------------------------------------------------------
+# First screen: headline, how-to, map, address search, short disclaimer, credit
+# ---------------------------------------------------------------------------
+st.title("Flood insurance losses, county by county")
+st.markdown("See the average yearly flood damage for insured buildings in **Virginia, North Carolina and "
+            "Maryland**. Click a county on the map, type an address, or pick from the lists below.")
+mode = st.segmented_control("Color the map by", list(C.MAP_MODES), format_func=C.MAP_MODES.get,
+                            default="loss", required=True, key="ce_map_mode", label_visibility="collapsed")
+C.show_chart(C.county_map(mode, ss["ce_county"]), key="ce_map", on_select=on_map_click,
+             selection_mode="points")
+st.caption(("Darker = higher expected yearly loss per insured building (typical year, 2025 dollars)."
+            if mode == "loss" else
+            "Orange = above the county's state average, blue = below, grey = about the same.")
+           + " Hover for details; click to see a county.")
 
 with st.form("ce_find_form", border=False):
     f1, f2 = st.columns([4, 1], vertical_alignment="bottom")
@@ -56,24 +78,32 @@ with st.form("ce_find_form", border=False):
                   placeholder="e.g. 1000 Bank St, Richmond, VA 23219")
     f2.form_submit_button("Find", on_click=find_county, icon=":material/search:", width="stretch")
 st.caption(C.ADDRESS_PRIVACY)
-if "ce_found" in st.session_state:
-    w = st.session_state["ce_found"]["where"]
+if "ce_found" in ss:
+    w = ss["ce_found"]["where"]
     if w["status"] == "ok":
         st.success(f"Found it: {w['matched'].title()}. Showing its county below.", icon=":material/location_on:")
         st.button("Use this address in the calculator", on_click=to_calculator, icon=":material/calculate:")
     else:
         st.warning(w["message"], icon=":material/location_off:")
-if st.session_state.pop("ce_go_calc", False):
+if ss.pop("ce_go_calc", False):
     st.switch_page("views/profile_calculator.py")
+
+C.disclaimer()
+cr1, cr2 = st.columns([3, 1.3], vertical_alignment="center")
+cr1.caption("Built by **Theo Dancey**, Statistics & Data Science at Virginia Tech.")
+with cr2:
+    st.page_link("views/how_it_works.py", label="How it works", icon=":material/menu_book:")
+st.divider()
 
 # ---------------------------------------------------------------------------
 # Inputs: state, then county (the county list is searchable: click it and type)
 # ---------------------------------------------------------------------------
+st.markdown("#### Choose a county")
 state = st.segmented_control("State", list(C.STATES), format_func=C.STATES.get,
                              required=True, key="ce_state")
 fips_list, names = C.counties_in(state)
-cur = st.session_state.get("ce_county")
-st.session_state["ce_county"] = cur if cur in fips_list else C.biggest_county(state)   # new visit / new state
+if ss.get("ce_county") not in fips_list:                  # the state was just changed
+    ss["ce_county"] = C.biggest_county(state)
 fips = st.selectbox("County or independent city (type to search)", fips_list,
                     format_func=lambda f: names[f], key="ce_county",
                     help="In Virginia, cities like Norfolk are separate from counties, as in Census and FEMA data.")

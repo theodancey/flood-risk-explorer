@@ -556,3 +556,112 @@ def waterfall_figure(wf, title=None):
 
 def show_chart(fig, key=None, **kwargs):
     return st.plotly_chart(fig, config=PLOTLY_CONFIG, key=key, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# County map (Milestone 15): a choropleth = a map whose areas are shaded by a number
+# ---------------------------------------------------------------------------
+# Expected yearly loss: ONE hue (orange, the app's "higher loss" colour), light = low, dark = high.
+LOSS_SCALE = [[0.0, "#fde7dc"], [0.25, "#f8b899"], [0.5, "#f08a5d"], [0.75, "#d4582a"], [1.0, "#8f3410"]]
+# Compared with the state: blue = below, grey = about the same, orange = above (as in the waterfalls).
+RATIO_SCALE = [[0.0, "#184f95"], [0.25, "#6da7ec"], [0.5, "#f0efec"], [0.75, "#f08a5d"], [1.0, "#a63d14"]]
+MAP_MODES = {"loss": "Expected yearly loss", "ratio": "Compared with the state average"}
+
+
+@st.cache_data(show_spinner=False)
+def county_geojson():
+    """Simplified county outlines for VA, NC and MD (Census cartographic boundaries, bundled in app/data)."""
+    return json.loads((DATA / "counties_va_nc_md.geojson").read_text(encoding="utf-8"))
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def county_map(mode="loss", selected=None):
+    """Plotly choropleth of every county, shaded by the model's expected yearly loss (log scale, since
+    North Carolina's counties run up to 10x Virginia's) or by the ratio to the county's state average."""
+    import numpy as np
+
+    cs = county_summary()
+    ids = {f["id"] for f in county_geojson()["features"]}
+    cs = cs[cs["county"].isin(ids)]
+    amount = [AMOUNT_TEXT[certainty_signals(z, n, h)[0]][0]
+              for z, n, h in zip(cs["Z_sev"], cs["paid_claims_2010_2025"], cs["history_vs_model"])]
+    custom = np.column_stack([
+        cs["name"] + ", " + cs["state"], cs["expected_pure_premium"].map(money),
+        [ratio_words(r, STATES[s]) for r, s in zip(cs["ratio_to_state"], cs["state"])], amount, cs["county"]])
+    if mode == "ratio":
+        z = np.log2(cs["ratio_to_state"].clip(0.25, 4))
+        ticks = [0.25, 0.5, 1, 2, 4]
+        cb = dict(tickvals=list(np.log2(ticks)), ticktext=["¼×", "½×", "same", "2×", "4×"])
+        scale, zmin, zmax = RATIO_SCALE, -2, 2
+    else:
+        z = np.log10(cs["expected_pure_premium"].clip(lower=20))
+        ticks = [t for t in (50, 100, 200, 500, 1000, 2000, 5000)
+                 if z.min() - 0.15 <= np.log10(t) <= z.max() + 0.15]
+        cb = dict(tickvals=list(np.log10(ticks)), ticktext=[money(t) for t in ticks])
+        scale, zmin, zmax = LOSS_SCALE, float(z.min()), float(z.max())
+    fig = go.Figure(go.Choropleth(
+        geojson=county_geojson(), locations=cs["county"], z=z, customdata=custom,
+        colorscale=scale, zmin=zmin, zmax=zmax, marker=dict(line=dict(color="white", width=0.5)),
+        hovertemplate="<b>%{customdata[0]}</b><br>Expected yearly loss: %{customdata[1]}<br>"
+                      "%{customdata[2]}<br>%{customdata[3]}<extra></extra>",
+        colorbar=dict(orientation="h", x=0.5, xanchor="center", y=-0.02, yanchor="top", thickness=10, len=0.85,
+                      outlinewidth=0, tickfont=dict(size=12), **cb),
+    ))
+    if selected in set(cs["county"]):              # outline the chosen county
+        one = {"type": "FeatureCollection",                # just that county's outline (keeps the page small)
+               "features": [f for f in county_geojson()["features"] if f["id"] == selected]}
+        fig.add_trace(go.Choropleth(
+            geojson=one, locations=[selected], z=[0], showscale=False, hoverinfo="skip",
+            colorscale=[[0, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0)"]], marker=dict(line=dict(color=INK, width=2.5))))
+    fig.update_geos(fitbounds="locations", visible=False, projection_type="mercator")
+    fig.update_layout(height=430, margin=dict(l=0, r=0, t=0, b=40), paper_bgcolor="white", dragmode=False,
+                      font=dict(size=13, color=INK), hoverlabel=dict(font_size=13), clickmode="event+select")
+    return fig
+
+
+def selected_county(event):
+    """The county FIPS a map click selected, from Streamlit's selection state (or None)."""
+    try:
+        pts = event["selection"]["points"]
+    except (KeyError, TypeError):
+        return None
+    for p in pts or []:
+        if p.get("curve_number", 0) != 0:          # ignore the outline trace
+            continue
+        loc = p.get("location")
+        cd = p.get("customdata")
+        if isinstance(cd, (list, tuple)) and cd:
+            loc = loc or cd[-1]
+        if loc:
+            return str(loc)
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Look and feel (Milestone 15): a simple text wordmark, one accent colour, a dominant hero number
+# ---------------------------------------------------------------------------
+ACCENT = "#1f3a5f"          # deep navy: UI accent, kept apart from the chart blue that means "lowers"
+CSS = f"""
+<style>
+.fre-wordmark {{ font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: .78rem;
+                 color: {ACCENT}; margin-bottom: -.4rem; }}
+.fre-wordmark span {{ color: {ORANGE}; }}
+.st-key-hero {{ background: #f7f8fa; }}
+.st-key-hero [data-testid="stColumn"]:first-child [data-testid="stMetricValue"] {{ font-size: 2.6rem; color: {ACCENT}; }}
+.st-key-hero [data-testid="stMetricLabel"] p {{ font-weight: 600; }}
+[data-testid="stMetricValue"] {{ font-size: 1.6rem; }}
+h1 {{ font-size: 2.0rem !important; line-height: 1.2 !important; }}
+h4 {{ margin-top: .6rem; }}
+@media (max-width: 640px) {{
+  h1 {{ font-size: 1.55rem !important; }}
+  .st-key-hero [data-testid="stColumn"]:first-child [data-testid="stMetricValue"] {{ font-size: 2.1rem; }}
+  [data-testid="stMetricValue"] {{ font-size: 1.35rem; }}
+}}
+</style>
+"""
+
+
+def header():
+    """Minimal CSS + the text wordmark at the top of every page."""
+    st.html(CSS)
+    st.markdown('<div class="fre-wordmark">Flood Risk <span>Explorer</span></div>', unsafe_allow_html=True)

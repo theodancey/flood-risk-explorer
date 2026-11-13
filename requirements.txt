@@ -5,6 +5,7 @@ pandas==3.1.1
 numpy==2.5.4
 pyarrow==26.0.1
 requests==2.34.2
+pyshp==3.1.8                 # dev only: reads the Census county shapefile in src/build_county_geojson.py (not needed by the app)
 matplotlib==3.11.2
 seaborn==0.13.2
 plotly==7.1.0
