@@ -1,18 +1,26 @@
 # Flood Risk Explorer
-I'm building a flood insurance risk model using FEMA's public data on 2.7 million National Flood Insurance Program claims, starting with Virginia. I calculate the core actuarial measures (claim frequency, severity, and pure premium) and am developing actuarial GLMs and an XGBoost model to compare how well each predicts flood losses by area. So far I've found that Virginia's expected flood loss is about $149 per insured home per year, and that just three storm years caused 69% of all losses since 2010, a pattern that makes flood insurance so hard to price. 
+I'm building a flood insurance risk model using FEMA's public data on 2.7 million National Flood Insurance Program claims, for Virginia, North Carolina and Maryland. I calculate the core actuarial measures (claim frequency, severity, and pure premium) and am developing actuarial GLMs and an XGBoost model to compare how well each predicts flood losses by area. So far I've found that Virginia's expected flood loss is about $149 per insured home per year, and that just three storm years caused 69% of all losses since 2010, a pattern that makes flood insurance so hard to price. 
 
 **How often do flood insurance claims happen in an area, how big are they, and what's the expected annual loss per policy?** This project answers those questions with the classic actuarial toolkit, using FEMA's public National Flood Insurance Program (NFIP) data.
 
-- **Data:** OpenFEMA NFIP claims (2.7 million US claims since 1978) and policies (1.67 million Virginia policy terms since 2009).
+- **Data:** OpenFEMA NFIP claims (2.7 million US claims since 1978) and policies (4.6 million policy terms since 2009 in Virginia, North Carolina and Maryland; Virginia first, the other two added in Milestone 13).
 - **Actuarial foundations:** earned exposure (policy-years), claim **frequency**, claim **severity**, and **pure premium** (expected loss per policy-year), by year and by county.
-- **Models (complete):** a Poisson GLM for frequency and a Gamma GLM for severity (with three interactions and a credibility-weighted county factor), compared against XGBoost, with relativities and SHAP to explain what drives risk. Models are tested on held-out years.
+- **Models (complete):** a Poisson GLM for frequency and a Gamma GLM for severity (with three interactions and a state factor), compared against XGBoost, with relativities and SHAP to explain what drives risk. Models are tested on held-out years and on a held-out state.
 - **App (planned):** a Streamlit app where you pick a county or ZIP code and see its area-level flood risk, expected claim cost, and the reasons behind it.
 
-**Status:** modelling complete (weeks 1–6 of 9: data, exploration, actuarial basics, modelling dataset, one-way analysis, frequency and severity GLMs, pure premium with credibility county factors, XGBoost, model comparison, explainability). Everything the app needs is precomputed in `app/data/`. Next: the Streamlit app. See [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
+**Status:** modelling complete for three states (data, exploration, actuarial basics, modelling dataset, one-way analysis, frequency and severity GLMs, pure premium with credibility, XGBoost, model comparison, explainability, and the Milestone 13 extension to North Carolina and Maryland). Everything the app needs is precomputed in `app/data/` for 257 counties. Next: the Streamlit app. See [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md).
 
 > **Disclaimer:** All results are **area-level** estimates built from aggregated public data. They are not predictions, quotes, or risk ratings for any individual property.
 
-## Key findings so far (Virginia, 2010–2025)
+## Key findings so far (Virginia 2010–2025; three states since Milestone 13)
+- **Three states** (Milestone 13: Virginia, North Carolina, Maryland; 4.1 million policy-years, 51,894 paid claims):
+  - **North Carolina is a different kind of flood state:** a loss cost of **$988** per policy-year vs about **$198** in Virginia and Maryland (claims 3x as often, 1.7x as big), driven by Irene, Matthew, Florence and Helene.
+  - **The Virginia model, applied unchanged, ranks risk almost as well out of state** (Gini 0.49–0.51 vs 0.53), but it underestimated NC's level **6.6-fold** (Florence 2018: 46x). Maryland's level was right (0.99).
+  - **Refit with a state factor:** NC 6.2x Virginia, Maryland 1.0x. The building relativities barely move, and the big ones (zone, age, occupancy, elevation) point the same way in every state, which is evidence they're real. State-specific effects and the county credibility factor both made unseen years worse, so neither is used: in NC a county's history is mostly one storm's footprint.
+  - **XGBoost** is about 4 points more accurate on average but fails the pre-stated rule on catastrophe years and segment balance, so **the GLM stays in production**.
+  - See [`reports/10_multistate.md`](reports/10_multistate.md).
+
+*The findings below are the Virginia milestones (1–12):*
 - **Average loss cost: about $149 per policy per year.** That's 6.5 paid claims per 1,000 policy-years × a $23,039 average paid claim.
 - **Catastrophe-driven:** the worst 3 years (2009 nor'easter, 2016 Matthew, 2011 Irene) produced **69%** of 2009–2025 losses. The *median* year's loss cost ($79) is about half the average.
 - **Storms drive frequency, not severity:** claim frequency swings about 40-fold between years, while the average claim stays roughly between $10K and $44K.
@@ -42,7 +50,7 @@ I'm building a flood insurance risk model using FEMA's public data on 2.7 millio
   - **Local explanations** for the app: an exact waterfall from the Virginia average ($197 per policy-year) for any building profile or county, a plain-English sentence and a certainty label, precomputed for all 133 Virginia localities. Property mix explains most county differences; the county factor explains, for example, Newport News's 1.6×.
   - See [`reports/09_explainability.md`](reports/09_explainability.md) and [`app/data/README.md`](app/data/README.md).
 
-Details: [`reports/01_data_overview.md`](reports/01_data_overview.md) · [`reports/02_actuarial_basics.md`](reports/02_actuarial_basics.md) · [`reports/03_one_way_findings.md`](reports/03_one_way_findings.md) · [`reports/04_frequency_glm.md`](reports/04_frequency_glm.md) · [`reports/05_severity_glm.md`](reports/05_severity_glm.md) · [`reports/06_pure_premium.md`](reports/06_pure_premium.md) · [`reports/07_xgboost.md`](reports/07_xgboost.md) · [`reports/08_model_comparison.md`](reports/08_model_comparison.md) · [`reports/09_explainability.md`](reports/09_explainability.md)
+Details: [`reports/01_data_overview.md`](reports/01_data_overview.md) · [`reports/02_actuarial_basics.md`](reports/02_actuarial_basics.md) · [`reports/03_one_way_findings.md`](reports/03_one_way_findings.md) · [`reports/04_frequency_glm.md`](reports/04_frequency_glm.md) · [`reports/05_severity_glm.md`](reports/05_severity_glm.md) · [`reports/06_pure_premium.md`](reports/06_pure_premium.md) · [`reports/07_xgboost.md`](reports/07_xgboost.md) · [`reports/08_model_comparison.md`](reports/08_model_comparison.md) · [`reports/09_explainability.md`](reports/09_explainability.md) · [`reports/10_multistate.md`](reports/10_multistate.md)
 
 ![Frequency, severity, and pure premium by year](reports/figures/02_measures_by_year.png)
 
@@ -61,6 +69,7 @@ src/models/compare.py       GLM vs XGBoost on identical folds: bootstrap CIs, st
 src/models/production.py    loads the production model (models/production_model.json): predict + rating worksheet
 src/explain.py              local explanations for the app: explain_profile, explain_county, sentences, waterfalls; builds app/data
 src/global_explain.py       SHAP values: exact for the GLM, TreeSHAP for XGBoost (grouped to features)
+src/multistate.py           Milestone 13: transfer test, 3-state refit + validation, consistency by state, XGBoost check, production save
 tests/test_explain.py       runs every county + random profiles from committed files only
 notebooks/01_first_look     data exploration
 notebooks/02_actuarial_basics   Virginia actuarial measures by year and county
@@ -72,6 +81,7 @@ notebooks/07_pure_premium       pure premium, county credibility, Tweedie compar
 notebooks/08_xgboost            XGBoost challengers: leakage-free tuning, geography, monotone constraints, preview vs GLMs
 notebooks/09_model_comparison   GLM vs XGBoost head to head, significance, stability, explainability, hybrid GLM, production model
 notebooks/10_explainability     global drivers (relativities, SHAP beeswarm/dependence), GLM vs XGBoost explanations, causation caveat, waterfalls
+notebooks/11_multistate         VA + NC + MD: transfer test, state factor, validation by state, consistency of relativities, county factor, XGBoost check
 models/                     saved models (production_model.json = what the app loads; frequency_glm.json, severity_glm.json, pure_premium.json, xgb_settings.json; XGBoost .ubj files rebuilt with xgb_models.py fit-final)
 reports/                    written findings + figures
 docs/                       data dictionary, modelling dataset, project plan, validation plan
@@ -85,9 +95,19 @@ Data files live in `data/` and are never committed (`app/data/` holds only small
 py -3.13 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 .venv\Scripts\python.exe src\check_setup.py
-.venv\Scripts\python.exe src\download_data.py all      # about 35 minutes, ~270 MB
+.venv\Scripts\python.exe src\download_data.py all      # claims + VA/NC/MD policies, about 1-1.5 hours, ~400 MB
 .venv\Scripts\python.exe src\actuarial.py              # self-test + county-year table
-.venv\Scripts\python.exe src\build_dataset.py          # modelling table + data checks (~20 s)
+.venv\Scripts\python.exe src\build_dataset.py          # Virginia modelling table + data checks (~20 s)
+.venv\Scripts\python.exe src\build_dataset.py --states VA NC MD   # 3-state table (~2 min)
+.venv\Scripts\python.exe src\multistate.py transfer   # Milestone 13, one step at a time (each prints memory use)
+.venv\Scripts\python.exe src\multistate.py refit main
+.venv\Scripts\python.exe src\multistate.py refit consistency
+.venv\Scripts\python.exe src\multistate.py refit candidate
+.venv\Scripts\python.exe src\multistate.py refit county
+.venv\Scripts\python.exe src\multistate.py refit validate
+.venv\Scripts\python.exe src\multistate.py xgb        # ~10 min
+.venv\Scripts\python.exe src\multistate.py xgb-decision
+.venv\Scripts\python.exe src\multistate.py production
 .venv\Scripts\jupyter-nbconvert.exe --to notebook --execute --inplace notebooks\02_actuarial_basics.ipynb
 .venv\Scripts\jupyter-nbconvert.exe --to notebook --execute --inplace notebooks\03_dataset_summary.ipynb
 .venv\Scripts\jupyter-nbconvert.exe --to notebook --execute --inplace notebooks\04_one_way_analysis.ipynb
