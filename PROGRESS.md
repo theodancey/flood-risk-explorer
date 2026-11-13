@@ -1,6 +1,48 @@
 # Progress Log
 
-## Summary (latest: 2026-11-12, Milestone 12: explainability; modelling complete)
+## Summary (latest: 2026-11-13, Milestone 13: three states, Virginia + North Carolina + Maryland)
+All eight steps are done, committed and pushed. No raw data, processed data or XGBoost model files are in Git. `app/data/` is about 1.3 MB of small aggregates.
+
+- **Data:** NC and MD policies downloaded (OpenFEMA v3, same 37 columns).
+  - The 3-state table `data/processed/model_data_3states.parquet` has 654,284 rating cells and passes all checks. The Virginia subset matches the Virginia-only table cell for cell.
+  - Each state's tidal flag comes from its own law (VA Tidewater; NC CAMA, § 113A-103(2); MD Critical Area, § 8-1807).
+
+  | 2010–2025 | Policy-years | Paid claims | Losses (2025 $) | Loss cost per policy-year |
+  |---|---|---|---|---|
+  | Virginia | 1,482,413 | 9,557 | $292.7M | $197 |
+  | North Carolina | 1,945,568 | 37,825 | $1,923.0M | $988 |
+  | Maryland | 674,957 | 4,512 | $133.9M | $198 |
+
+- **Transfer test (the Virginia model, unchanged):**
+  - **Ranking transfers:** Gini 0.49 in NC and 0.51 in MD (0.53 in Virginia); deviance improvement 12.6% and 13.9% (15.0%).
+  - **Level doesn't transfer for NC:** A/E 6.55, i.e. claims 3.95× as often and 1.64× as large. By storm year: Florence 2018 46×, Matthew 2016 15.8×, Helene 2024 15.6×. Maryland's level was about right (A/E 0.99).
+- **3-state production GLM:** the same features as Virginia, with **state × year** effects.
+  - **State factors** (pure premium vs Virginia): **NC 6.22×**, MD 1.01×.
+  - Validation, as % improvement on unseen data:
+
+    | | VA | NC | MD |
+    |---|---|---|---|
+    | Leave-one-year-out (16 years) | 10.97 | 12.51 | 13.34 |
+    | 2021–25 holdout | 9.52 | 16.70 | 16.57 |
+    | Leave-one-state-out | 10.85 | 13.17 | 12.87 |
+
+- **Consistency:**
+  - The big relativities (zone, year built, occupancy, elevation) point the same way in all three states.
+  - State-specific effects were tested on the full LOYO and holdout and made things **worse in every state**, so they weren't adopted.
+- **County factor dropped** by the pre-stated rule: it hurt unseen years, badly in NC. **This reverses your Milestone 9 request** (Question 9).
+- **XGBoost** (frozen Milestone 10 settings): Tweedie is +3.8 points on average but fails the catastrophe-year, segment and Maryland criteria. **The GLM stays.**
+- **App data:** 257 counties (VA 133, NC 100, MD 24) with state averages (VA $197, NC $988, MD $198). Explanations are state-aware, and certainty labels now require the county's own history to agree with the model. **All tests pass** (every county).
+- **Memory:** the first refit was stopped by the system at about 10 GB. The cause was statsmodels objects piling up (a reference cycle). Fixed by forcing garbage collection before each fit; the peak is now 0.5–1.3 GB. Results are unchanged.
+
+**Judgment calls worth a look** (details under Milestone 13 decisions):
+1. **No county factor in the price** (Question 9). Severity-only came a near second; switching is one setting.
+2. **Virginia Beach's check value changed from $598.07 to $453.69.** The old county factor (×1.21) is gone and the relativities are now pooled over three states. The Virginia-only model is kept in `models/production_model_va.json` and still gives $598.07.
+3. **Certainty labels now need agreement** (added after seeing results). Brunswick County, NC had high credibility but history at 0.35× the model, and "High" would have misled. Only about 16% of exposure lies in counties whose history is within 0.8–1.25× the model.
+4. **A fourth consistency label, "unclear"**, filled a gap in the pre-stated rule (added before reading results by label).
+
+**What you need to do:** answer Question 9 (keep the county factor out, or switch to severity-only). Then read `reports/10_multistate.md` (about 15 minutes) and the Milestone 13 learning notes.
+
+## Summary (previous: 2026-11-12, Milestone 12: explainability; modelling complete)
 All five parts are done, committed and pushed. No raw data, processed data or model tree files are in Git. The new `app/data/` files are small aggregates (about 0.55 MB).
 
 - **Files:**
@@ -371,6 +413,26 @@ The data is downloaded and explored. Everything except the data files is committ
     - *float32:* statsmodels converts design matrices to float64 anyway, and the off-balance and total checks need full precision.
     - *Chunked fitting:* not needed, since the design matrices are 20–30 MB.
   - **Results are unchanged by these changes:** the full-fit relativities and credibility tables match the run before the fix (checked).
+  - **XGBoost: no sampling needed.** The full data fitted at a peak of 1.31 GB, so the "representative sample" fallback wasn't used.
+- **XGBoost check** (`multistate.py xgb`, `xgb-decision`):
+  - Frozen Milestone 10 settings, refit once per fold; `state` added to the severity/Tweedie one-hot geography; base margin = state × year level.
+  - **The Milestone 11 flip check now covers Tweedie too.** In Milestone 11 it covered only the frequency and severity models.
+  - **Tweedie results:**
+    - pooled LOYO +3.78 points (CI 1.58–5.54);
+    - fails criterion 3 (worse in catastrophe years: VA, MD, pooled) and criterion 5 (segments newly outside 0.8–1.25×);
+    - in MD, also criterion 1 (CI includes 0).
+  - **Frequency × severity results:** fails criteria 1 (NC, MD), 3 (VA), 5 and 6. Its frequency model raises predictions for elevated buildings for 96–98% of exposure.
+  - **No challenger passes all six criteria in any state, so the GLM stays.**
+- **App and explanation changes** (made while building app data; none changes a model number):
+  - **Certainty rule** (changed after seeing results). With no county factor applied, Z alone measures "how much local history there is", not whether it agrees.
+    - New rule: **Low** if Z < 0.5 or the county's history-vs-model A/E is outside 0.5–2.0; **High** only if Z ≥ 0.8 **and** A/E is within 0.8–1.25; otherwise **Medium**.
+    - Result: High 12 counties (13.8% of exposure), Medium 46 (42.6%), Low 199 (43.6%).
+  - **Unknown-county pools** (`UNKNOWN-<ST>`, geocoding errors) are excluded from the county list, as in Milestone 12.
+  - **County factor step:** waterfalls drop the "× 1.00 county" step when no county factor is applied.
+  - **`global_explain.glm_shap`** gets a "state" player (the state factor, plus off-balance for pure premium). Without it, SHAP values didn't add up to the prediction across states.
+  - **Two code fixes** for leave-one-state-out:
+    - if Virginia isn't in the training data, the base state becomes the one with most exposure (frequency and severity share it);
+    - `design_matrix` skips the year column when asked for a prediction without year effects.
 
 ### Milestone 12 decisions (2026-11-12)
 - **The production model is a GLM**, so step 1a is a relativity breakdown plus a portfolio importance ranking. SHAP is used for XGBoost and, in closed form, for the GLM, so both are compared on one yardstick (exposure-weighted mean |SHAP|, log scale, same rows).
@@ -532,6 +594,24 @@ The data is downloaded and explored. Everything except the data files is committ
 - No new packages.
 
 ## Log
+### 2026-11-12 to 2026-11-13: Milestone 13, three states (VA + NC + MD)
+1. **Download and data dictionary.** Planned, wrote the pre-stated rules (Milestone 13 decisions), and generalized the policy download to any state. Downloaded NC and MD in the background (resumable pages, row counts checked). Updated `docs/data_dictionary.md` with the differences by state. Committed.
+2. **3-state table.** Built `model_data_3states.parquet` with state, state_year and per-state tidal lists (sources fetched and cited).
+   - The first build failed the negative-values check: 3 NC/MD claims had negative payments. Fixed by flooring at $0.
+   - All checks pass; the Virginia subset is identical to the Virginia-only table. Committed.
+3. **Transfer test** with the Virginia model unchanged: A/E overall, by year and by segment; lift; Gini. Committed.
+4. **Refit.**
+   - The first run was stopped by the system for low memory (Question 8). On Theo's go-ahead I profiled it, found the statsmodels reference-cycle leak, fixed it, and ran the stages one at a time.
+   - Results: relativities, state factors, pooled credibility, per-state fits, heterogeneity tests and consistency labels. The state-interaction candidate was tested and rejected.
+   - LOYO, holdout and leave-one-state-out. Two KeyErrors in leave-one-state-out fixed.
+   - The county factor hurt NC, so I pre-stated a three-form test; it chose no county factor. Committed in two steps.
+5. **XGBoost** with frozen settings (about 10 min, peak 1.31 GB) and the decision table: the GLM stays.
+6. **Production model** saved for three states. Made `explain.py` state-aware and rebuilt `app/data/` (257 counties).
+   - Fixed: the GLM SHAP state player, the unknown-county exclusion, and certainty labels that were misleading.
+   - All self-tests and `tests/test_explain.py` pass. Committed.
+7. **Notebook 11** from a generator: 13 charts, each checked visually; fixed `$` rendering, log ticks, legend overlaps and duplicate labels. Committed.
+8. **Write-ups.** `reports/10_multistate.md`, README, PROJECT_PLAN and `docs/production_model.md`; then LEARNING_NOTES and this file. Committed and pushed.
+
 ### 2026-11-12: Milestone 12, explainability
 1. Read the plan docs, reports 06–08 and the production-model note. The production model is a GLM, so I planned relativities + GLM SHAP for 1a and TreeSHAP for XGBoost.
 2. Wrote `src/explain.py`: rating tables exported from the production model, an exact Shapley profile waterfall, the county mix × factor breakdown, sentences, waterfall plot, app-data builder and self-test. Built `app/data/`. Self-test: tables = predict on all combinations; Virginia Beach $598.07 matches the model card. Found 51515 unnamed (former Bedford city) and fixed it. Committed.

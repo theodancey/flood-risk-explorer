@@ -685,3 +685,68 @@ A: To compare it fairly with XGBoost. A GLM's SHAP values have a closed form (ea
 
 **Q: Can you use a model explanation to tell someone how to reduce their flood risk?**
 A: Not directly. Explanations describe the model, not causes. For example, my model gives lower claim sizes to buildings with low coverage, but that's because low coverage stands in for cheaper buildings; only the policy-limit cap is causal. Elevation is a good counter-example: the evidence within flood zones does support it, but XGBoost still got it backwards because elevated buildings cluster in risky places. So my app sticks to area-level, descriptive statements and says clearly that it isn't advice or a prediction for any property.
+
+## Milestone 13: Three states (Virginia + North Carolina + Maryland), out-of-state validation, state factors and credibility (2026-11-13)
+
+### What I did
+I added North Carolina and Maryland to the project. I downloaded their policies, built one rating-cell table for all three states, and used each state's own law to define which counties are "tidal". First, I tested the Virginia model on the other two states without changing it. It ranked risk almost as well as it does in Virginia, but it underestimated North Carolina's overall level 6.6-fold.
+
+Then I refit the same model on all three states, adding a **state factor**, and validated it three ways: on unseen years, on a five-year holdout, and on a whole state left out. I checked whether each relativity points the same way in every state. I also tested state-specific effects and the county credibility factor. Both made predictions on unseen years worse, so neither went into production. XGBoost, refit with its frozen settings, again failed the pre-stated decision rule, so the GLM stays.
+
+### Why I did it that way
+
+**Out-of-sample vs out-of-state validation.**
+- *Intuition:* a model is only useful if it works on data it hasn't seen. Testing it on the data it learned from is like marking your own homework with the answer key open.
+- **Out-of-sample** means testing on rows the model wasn't fitted on. I had used two kinds of these since Milestone 7:
+  - **leave-one-year-out (LOYO):** fit on 15 years, predict the 16th, and repeat for every year;
+  - **holdout:** fit on 2010–2020, predict 2021–2025 once.
+- **Out-of-state** is a stricter version: fit on two states and predict the third, a state the model has never seen. It answers a different question: does what the model learned about buildings (zones, ages, elevation) apply in a new place?
+- *Example:* the Virginia model, unchanged, ranked North Carolina's buildings well. Its Gini was 0.49 vs 0.53 at home. (Gini measures how well a model sorts risky from safe: 0 is random, 1 is perfect.) But it got the **level** badly wrong (actual ÷ expected, A/E = 6.55). So *ranking* transferred and *level* didn't. That's exactly why insurers price each state with its own base rate.
+- *Lesson:* every validation answers a specific question. LOYO asks "will next year look like this?" Leave-one-state-out asks "will a new place look like this?" You need the one that matches how the model will be used.
+
+**State factors.**
+- *Intuition:* some differences between states have nothing to do with the buildings. North Carolina sticks out into the Atlantic and gets hit by hurricanes far more often. A state factor is one multiplier per state that carries this "where you are" level, so the building relativities only have to explain differences between buildings.
+- *Example:* pure premium = Virginia base × building relativities × state factor. NC's factor is **6.22** and MD's is **1.01**. An identical building costs about 6.2 times as much to insure in NC as in VA, on these data.
+- *Why state × year, not one shared year factor:* storms hit different states in different years (Florence in 2018 hit NC, not VA). A single year factor would average NC's terrible 2018 with Virginia's quiet 2018 and leave the rest for the building relativities to absorb. So each state gets its own year effects, and the state factor is the gap between its average-year level and Virginia's.
+- *Off-balance per state:* after multiplying everything out, I rescale each state slightly (NC by 1.026, MD by 1.060) so the model's total expected losses equal that state's actual total. Then no state subsidizes another.
+
+**Why relativities that agree across datasets signal a real effect.**
+- *Intuition:* if a coin lands heads 6 times out of 10, that could be luck. If three different coins each land heads about 60% of the time, it's much harder to blame luck.
+- In the same way, a relativity fitted on one state could be noise, or a quirk of that state's storms. If Virginia, North Carolina and Maryland, with different storms, coastlines and building stock, each independently show the same direction, the effect is very unlikely to be a fluke. That's **replication**, one of the strongest forms of evidence in statistics.
+- *What I found:*
+  - **Consistent:** flood zone (frequency) and number of floors (severity) point the same way, with sizes not significantly different.
+  - **Differs in size:** year built (frequency) and elevation, occupancy and zone (severity) point the same way, but the size varies by state.
+  - **Inconsistent:** a few smaller terms, e.g. floors for frequency, flip direction between states. Those are the ones to trust least.
+- *How I tested it:* a **Wald test** checks whether a set of coefficients is the same across groups. I used a cluster-robust version, which treats claims from the same storm and area as related rather than independent, so one storm doesn't count as thousands of separate pieces of evidence.
+- *Agreeing in direction but not in size is fine:* the model uses one pooled relativity, which is a weighted average. When I tried giving each state its own relativities, predictions on unseen years got **worse in every state**. The extra precision was mostly fitting noise.
+
+**How more data changes credibility.**
+- *Intuition (recap from Milestone 9):* credibility is how much to trust a small group's own experience vs the bigger average. **Z** is between 0 and 1: estimate = Z × own experience + (1 − Z) × average.
+- *Bühlmann–Straub* sets Z = n / (n + k), where n is the group's exposure (or claims) and k = EPV / VHM:
+  - **EPV** (expected process variance): how much a county's results bounce around from luck alone;
+  - **VHM** (variance of hypothetical means): how much counties *really* differ.
+
+  A small k means real differences are large compared with luck, so you trust local experience sooner.
+- *What happened:*
+  - In Virginia alone, the frequency VHM came out at or below zero (k = ∞, so Z = 0): differences between counties' claim rates looked like pure storm luck.
+  - With three states, VHM turned positive. Pooled k for frequency was 160; per state, NC 230 and MD 84. Severity k barely moved (VA 33, pooled 41).
+  - More counties gave the method enough spread to detect real differences.
+- *The twist:* "detectable" isn't the same as "useful for prediction". In North Carolina, a county's history is dominated by one or two hurricanes' footprints, and the next hurricane goes somewhere else. The county factor made unseen years worse (NC's LOYO score halved, from 12.5% to 6.2%), so the pre-stated rule removed it.
+- *Lesson:* more data makes credibility estimates more stable, but Bühlmann–Straub assumes each county's true level is stable over time. Catastrophe-driven flood history breaks that assumption. Always test the credibility-weighted result on unseen years.
+
+**A practical lesson: memory.**
+- The first 3-state refit was stopped by the computer at about 10 GB of memory. The data was only 0.17 GB.
+- The cause was that statsmodels' result objects point at each other (a "reference cycle"). Python frees those only when its cycle collector runs, so hundreds of old fits piled up.
+- Forcing a collection before each fit (`gc.collect()`) kept memory at 0.5–1.3 GB with identical results.
+- *Lesson:* measure before optimizing. The suggested fixes (float32, categorical types, chunking) would have saved almost nothing, because the data was never the problem.
+
+### Interview questions
+
+**Q: Your Virginia model was off by 6.6× in North Carolina. Does that mean it was a bad model?**
+A: No. It ranked North Carolina's risks almost as well as Virginia's (Gini 0.49 vs 0.53), so what it learned about buildings carried over. What didn't carry over was the overall level: North Carolina gets far more hurricane damage. That's a state-level effect, so I added a state factor (6.2× for NC) and kept the building relativities shared. Out-of-state testing is useful precisely because it separates those two things.
+
+**Q: How did you decide whether to give each state its own relativities?**
+A: I fitted each state separately and compared the relativities with confidence intervals and cluster-robust Wald tests. The main ones (flood zone, year built, elevation, occupancy) point the same way in all three states, which is strong evidence they're real. Some differed in size, so I tested a model with state-specific effects on every left-out year and the 2021–25 holdout. It was worse in every state, so I kept one shared set of relativities plus a state factor.
+
+**Q: Why did you remove the county credibility factor when you had more data?**
+A: With three states, Bühlmann–Straub found real-looking differences between counties, where Virginia alone had found none for frequency. But when I tested it on unseen years, it made predictions worse, especially in North Carolina, where a county's history is mostly the footprint of one or two hurricanes. I'd written the rule down before testing, so I followed it and dropped the factor. The app still shows each county's own history and a certainty label, so the information isn't hidden; it just doesn't change the price.
