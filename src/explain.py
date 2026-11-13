@@ -47,7 +47,14 @@ SRC = Path(__file__).resolve().parent
 for p in (SRC, SRC / "models"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
-import production                              # noqa: E402
+
+
+def _production():
+    """The full production-model module, imported only when needed (building app data, the
+    optional worksheet). It pulls in statsmodels and scipy; the Streamlit app never needs it,
+    so `load(with_model=False)` works with numpy + pandas only (Milestone 14)."""
+    import production                          # noqa: E402
+    return production
 
 ROOT = SRC.parent
 APP_DATA = ROOT / "app" / "data"
@@ -810,7 +817,7 @@ def load(app_data=APP_DATA, with_model=True):
             if (app_data / "county_summary.csv").exists() else None
         av_path = app_data / "state_averages.json"
         av = json.loads(av_path.read_text(encoding="utf-8")) if av_path.exists() else None
-        _CACHE[key] = Explainer(t, port, cs, av, production.load() if with_model else None)
+        _CACHE[key] = Explainer(t, port, cs, av, _production().load() if with_model else None)
     return _CACHE[key]
 
 
@@ -869,7 +876,7 @@ def build_app_data(out=APP_DATA, cells_path=CELLS_PATH, verbose=True):
     """Write every file in app/data/. Reads data/processed (local only)."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    m = production.load()
+    m = _production().load()
     t = RatingTables.from_production(m)
     t.to_json(out / "rating_factors.json")
     port, cells = build_portfolio(cells_path)
