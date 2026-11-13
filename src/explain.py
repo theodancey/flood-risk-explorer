@@ -401,6 +401,14 @@ class Explainer:
         where = STATE_NAMES.get((state or "").upper(), "Virginia, North Carolina or Maryland")
         raise ValueError(f"unknown county or city in {where}: '{county}'")
 
+    def _applied_steps(self, steps):
+        """Without a county factor in the price (Milestone 13) the county step is exactly x1.00,
+        so it is left out of the waterfall."""
+        if self.t.d.get("county_factor_applied", True):
+            return steps
+        assert all(abs(s["log_effect"]) < 1e-9 for s in steps if s["player"] == "county")
+        return [s for s in steps if s["player"] != "county"]
+
     def county_credibility(self, fips):
         cc = self.t.d["county_credibility"].get(str(fips))
         if cc is None:
@@ -486,7 +494,7 @@ class Explainer:
             lvl = prof[name] if name != "county" else (self.names.get(prof["county"], prof["county"]))
             steps.append({"player": name, "step": f"{LABELS[name]}: {lvl}",
                           "multiplier": float(math.exp(phi[j])), "log_effect": float(phi[j])})
-        wf = _waterfall_table(steps, va_pp, pp, f"{sname} average", "This profile")
+        wf = _waterfall_table(self._applied_steps(steps), va_pp, pp, f"{sname} average", "This profile")
         cred = self.county_credibility(prof["county"]) if prof["county"] else None
         any_county = f"{sname} (any county)"
         res = {
@@ -538,7 +546,7 @@ class Explainer:
                       "log_effect": math.log(overlap)})
         steps.append({"player": "county", "step": LABELS["county"], "multiplier": cf_effect,
                       "log_effect": math.log(cf_effect)})
-        wf = _waterfall_table(steps, va["expected_pure_premium"], c["expected_pure_premium"],
+        wf = _waterfall_table(self._applied_steps(steps), va["expected_pure_premium"], c["expected_pure_premium"],
                               f"{sname} average", self.names[fips])
         cred = self.county_credibility(fips)
         res = {
