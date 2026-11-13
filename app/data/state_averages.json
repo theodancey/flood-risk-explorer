@@ -1,0 +1,157 @@
+{
+ "states": {
+  "VA": {
+   "name": "Virginia",
+   "basis": "Exposure-weighted average of the production model's average-year expected values over all insured buildings in Virginia, 2010-2025 mix. 2025 dollars.",
+   "expected_frequency_per_policy_year": 0.006379167183967281,
+   "expected_severity_per_claim": 30618.915197008282,
+   "expected_pure_premium_per_policy_year": 197.33221893784315,
+   "expected_pure_premium_2025_mix": 217.51849651760185,
+   "actual_loss_cost_2010_2025": 198.1250455213425,
+   "policy_years_2010_2025": 1475629.0546522944,
+   "paid_claims_2010_2025": 9549,
+   "losses_2025_dollars_2010_2025": 292359073.6256015,
+   "mix_pct": {
+    "pct_av_zone": 50.95291327343045,
+    "pct_elevated": 41.32765306389832,
+    "pct_pre_firm": 50.963494148289556,
+    "pct_built_pre_1980": 50.07145093191321,
+    "pct_multi_or_nonres": 10.694646484942611,
+    "pct_not_primary": 27.65989046696834,
+    "pct_cover_250k_plus": 60.863006853016806,
+    "pct_cover_under_100k": 10.71605733362093,
+    "pct_one_floor": 32.581945489270254
+   },
+   "mean_relativity": {
+    "flood_zone_group": 0.6767180565751264,
+    "construction_band": 1.4558956296515786,
+    "occupancy_group": 1.2591659117254528,
+    "building_coverage_band": 0.9642336099734171,
+    "elevated": 0.8795134583716495,
+    "floors_group": 1.0364573793060428,
+    "primary_residence": 0.9537017360509831
+   },
+   "average_county_factor": 1.0
+  },
+  "NC": {
+   "name": "North Carolina",
+   "basis": "Exposure-weighted average of the production model's average-year expected values over all insured buildings in North Carolina, 2010-2025 mix. 2025 dollars.",
+   "expected_frequency_per_policy_year": 0.01926257752401294,
+   "expected_severity_per_claim": 49477.63140854567,
+   "expected_pure_premium_per_policy_year": 987.8453517265767,
+   "expected_pure_premium_2025_mix": 1027.607991576352,
+   "actual_loss_cost_2010_2025": 991.4717217016463,
+   "policy_years_2010_2025": 1936290.4424058688,
+   "paid_claims_2010_2025": 37776,
+   "losses_2025_dollars_2010_2025": 1919777218.646589,
+   "mix_pct": {
+    "pct_av_zone": 58.9227572478582,
+    "pct_elevated": 57.7791877148745,
+    "pct_pre_firm": 31.594492914380115,
+    "pct_built_pre_1980": 25.945029923894445,
+    "pct_multi_or_nonres": 11.574272622164488,
+    "pct_not_primary": 44.139095465881965,
+    "pct_cover_250k_plus": 59.70991414008535,
+    "pct_cover_under_100k": 11.453199457105137,
+    "pct_one_floor": 41.407941068157996
+   },
+   "mean_relativity": {
+    "flood_zone_group": 0.7292493447882201,
+    "construction_band": 1.1528379340607844,
+    "occupancy_group": 1.2941243246907062,
+    "building_coverage_band": 0.962306141796345,
+    "elevated": 0.8315506933070487,
+    "floors_group": 1.0546589468800909,
+    "primary_residence": 0.9261181639605299
+   },
+   "average_county_factor": 1.0
+  },
+  "MD": {
+   "name": "Maryland",
+   "basis": "Exposure-weighted average of the production model's average-year expected values over all insured buildings in Maryland, 2010-2025 mix. 2025 dollars.",
+   "expected_frequency_per_policy_year": 0.006633869580517222,
+   "expected_severity_per_claim": 27918.093247739973,
+   "expected_pure_premium_per_policy_year": 198.3000942983855,
+   "expected_pure_premium_2025_mix": 211.2355947778604,
+   "actual_loss_cost_2010_2025": 199.1203089544818,
+   "policy_years_2010_2025": 672353.7880679691,
+   "paid_claims_2010_2025": 4510,
+   "losses_2025_dollars_2010_2025": 133879294.00681022,
+   "mix_pct": {
+    "pct_av_zone": 51.915538622347476,
+    "pct_elevated": 40.38881769073583,
+    "pct_pre_firm": 48.22681829760437,
+    "pct_built_pre_1980": 46.42465064817589,
+    "pct_multi_or_nonres": 15.388788822917615,
+    "pct_not_primary": 37.21322620039536,
+    "pct_cover_250k_plus": 65.49139292908141,
+    "pct_cover_under_100k": 13.030004261864365,
+    "pct_one_floor": 26.36761653747064
+   },
+   "mean_relativity": {
+    "flood_zone_group": 0.6830629674425717,
+    "construction_band": 1.4129141123204159,
+    "occupancy_group": 1.3605110996370011,
+    "building_coverage_band": 0.9562731958081457,
+    "elevated": 0.8822505367897204,
+    "floors_group": 1.018240407315766,
+    "primary_residence": 0.9377109692072757
+   },
+   "average_county_factor": 1.0
+  }
+ },
+ "three_states": {
+  "basis": "Exposure-weighted average of the production model's average-year expected values over all insured buildings in Virginia, North Carolina and Maryland, 2010-2025 mix. 2025 dollars.",
+  "expected_frequency_per_policy_year": 0.012528920805901522,
+  "expected_severity_per_claim": 44129.25524566788,
+  "expected_pure_premium_per_policy_year": 572.2615322766038,
+  "expected_pure_premium_2025_mix": 622.6588544329618,
+  "actual_loss_cost_2010_2025": 574.4022063417214,
+  "policy_years_2010_2025": 4084273.285126132,
+  "paid_claims_2010_2025": 51835,
+  "losses_2025_dollars_2010_2025": 2346015586.2790008,
+  "mix_pct": {
+   "pct_av_zone": 54.88975990255815,
+   "pct_elevated": 48.972518529141524,
+   "pct_pre_firm": 41.330439845491206,
+   "pct_built_pre_1980": 38.03315306104324,
+   "pct_multi_or_nonres": 11.88441409494983,
+   "pct_not_primary": 37.0450970706725,
+   "pct_cover_250k_plus": 61.078269263303575,
+   "pct_cover_under_100k": 11.44644730087745,
+   "pct_one_floor": 35.74320879652594
+  },
+  "mean_relativity": {
+   "flood_zone_group": 0.7026668236512476,
+   "construction_band": 1.3051450646228469,
+   "occupancy_group": 1.2924226143059931,
+   "building_coverage_band": 0.9620093825053389,
+   "elevated": 0.857225635743614,
+   "floors_group": 1.0420875782668682,
+   "primary_residence": 0.9379923906696899
+  },
+  "average_county_factor": 1.0
+ },
+ "state_factor": {
+  "levels": [
+   "VA",
+   "MD",
+   "NC"
+  ],
+  "base": "VA",
+  "frequency_log_relativity": {
+   "VA": 0.0,
+   "MD": 0.06744213572352498,
+   "NC": 1.2543928949796987
+  },
+  "severity_log_relativity": {
+   "VA": 0.0,
+   "MD": -0.11459967613896616,
+   "NC": 0.5471695843590991
+  },
+  "note": "state factor = the state's average-year level vs the base state (from state x year effects); the state comes from the county code"
+ },
+ "comparison_rule": "Each county and profile is compared with its OWN state's average (ratio_to_state); ratio_to_three_states compares with all three states together.",
+ "certainty_rule": "Z = the Buhlmann-Straub severity credibility of the county's own claim history; A/E = its 2010-2025 actual claims vs the model, each year at that year's own storm level. With no county factor in the price (since Milestone 13): High = Z >= 0.8 and A/E within 0.8-1.25; Low = no claims, Z < 0.5, or A/E outside 0.5-2.0; Medium = everything else. (With a county factor: High Z >= 0.8, Medium 0.5-0.8, Low below 0.5 or no claims.)",
+ "disclaimer": "Area-level estimate from aggregated public NFIP data (Virginia, North Carolina and Maryland, 2010-2025). It describes the average insured building with these characteristics in this county in an average year. It is NOT a quote, a premium, or a prediction for any individual property."
+}

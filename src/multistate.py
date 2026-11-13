@@ -795,26 +795,91 @@ def xgb_explainability(cells, claims, spec):
     import xgb_models as X
     mem()
     settings = X.read_settings()
-    xm = fit_xgb3(cells, claims, xgb_cell_table(cells), settings, kinds=("frequency", "severity"))
+    xm = fit_xgb3(cells, claims, xgb_cell_table(cells), settings)
     grid = cells[(cells["year"] == 2025) & (cells["exposure"] > 0)].reset_index(drop=True)
     checks = [("elevated", "False", "True", "down", "frequency"), ("elevated", "False", "True", "down", "severity"),
               ("flood_zone_group", "A/V high risk", "B/C/X moderate-low risk", "down", "frequency"),
               ("flood_zone_group", "A/V high risk", "B/C/X moderate-low risk", "down", "severity"),
-              ("building_coverage_band", "$100K-$249K", "$250K or more", "up", "severity")]
+              ("building_coverage_band", "$100K-$249K", "$250K or more", "up", "severity"),
+              # Milestone 13: the Tweedie (pure premium in one model) is the stronger challenger now
+              ("elevated", "False", "True", "down", "tweedie"),
+              ("flood_zone_group", "A/V high risk", "B/C/X moderate-low risk", "down", "tweedie"),
+              ("building_coverage_band", "$100K-$249K", "$250K or more", "up", "tweedie")]
     rows = []
     for f, a, b, direction, kind in checks:
         g = grid[grid[f].astype(str) == a]
         if not len(g):
             continue
-        m = xm["freq" if kind == "frequency" else "sev"]
         g1 = g.assign(exposure=1.0)
-        r0, r1 = m.rate(g1), m.rate(g1.assign(**{f: b}))
+        if kind == "tweedie":
+            m = xm["pp/XGB Tweedie"]
+            r0, r1 = np.asarray(m.predict(g1)), np.asarray(m.predict(g1.assign(**{f: b})))
+        else:
+            m = xm["freq" if kind == "frequency" else "sev"]
+            r0, r1 = m.rate(g1), m.rate(g1.assign(**{f: b}))
         wrong = (r1 > r0 * 1.0001) if direction == "down" else (r1 < r0 * 0.9999)
         for st in STATES:
             mk = (g["state"] == st).to_numpy()
             e = g["exposure"].to_numpy()[mk]
             rows.append({"kind": kind, "flip": f"{f}: {a} -> {b}", "expected_direction": direction, "state": st,
                          "share_exposure_wrong_way": float((e * wrong[mk]).sum() / e.sum()) if e.sum() else np.nan})
+    return pd.DataFrame(rows)
+
+
+def xgb_decision(cells):
+    """Milestone 11's decision rule (PROGRESS.md, Milestone 11 decisions), criteria 1-6, for each
+    XGBoost challenger vs the 3-state GLM (production form), in each state and pooled. A challenger
+    replaces the GLM only if it passes ALL criteria everywhere."""
+    import compare as C
+    sc = pd.read_csv(REPORTS / "10_xgb_scores.csv")
+    flips = pd.read_csv(REPORTS / "10_xgb_flip_check.csv")
+    o = pd.read_parquet(PROCESSED / "m13_oof_xgb.parquet")
+    cat = cat_years_by_state(cells)
+    glm = "3-state hybrid GLM (production)"
+    segs = ["flood_zone_group", "elevated", "building_coverage_band", "occupancy_group", "construction_band",
+            "county_group"]
+    rows = []
+    for ch in ("XGB freq x sev", "XGB Tweedie"):
+        for st in (*STATES, "pooled"):
+            L = sc[(sc["design"] == "LOYO") & ((sc["state"] == st) if st != "pooled" else True)]
+            a = L[L["model"] == glm].set_index(["state", "test_year"])["improvement_rebased_pct"]
+            b = L[L["model"] == ch].set_index(["state", "test_year"])["improvement_rebased_pct"].reindex(a.index)
+            d = (b - a).to_numpy(float)
+            rng = np.random.default_rng(11)
+            reps = d[rng.integers(0, len(d), size=(10_000, len(d)))].mean(axis=1)
+            lo, hi = np.percentile(reps, [2.5, 97.5])
+            H = sc[sc["design"] == "holdout"]
+            Hs = H if st == "pooled" else H[H["state"] == st]
+            ho_b = Hs[Hs["model"] == ch]["improvement_rebased_pct"].mean()
+            ho_a = Hs[Hs["model"] == glm]["improvement_rebased_pct"].mean()
+            iscat = np.array([y in cat[s] for s, y in a.index])
+            cat_a, cat_b = a.to_numpy()[iscat].mean(), b.to_numpy()[iscat].mean()
+            oo = o if st == "pooled" else o[o["state"] == st]
+            key = oo["state"] + "|" + oo["year"].astype(str)
+            ra, rb = rebase_by(oo[glm], oo[LOSS], key), rebase_by(oo[ch], oo[LOSS], key)
+            dl = pp.double_lift(oo[LOSS], ra, rb, oo["exposure"])
+            ede = C.end_decile_error(dl)
+            sa = segment_ae(oo, oo[LOSS].to_numpy(), ra, segs).set_index(["feature", "level"])["ae"]
+            sb = segment_ae(oo, oo[LOSS].to_numpy(), rb, segs).set_index(["feature", "level"])["ae"]
+            inside = lambda s: (s >= 0.8) & (s <= 1.25)
+            bad = sb.index[inside(sa) & ~inside(sb.reindex(sa.index))]
+            kind = "tweedie" if ch == "XGB Tweedie" else None
+            fl = flips[(flips["kind"] == kind) if kind else flips["kind"].isin(["frequency", "severity"])]
+            fl = fl if st == "pooled" else fl[fl["state"] == st]
+            worst = fl.loc[fl["share_exposure_wrong_way"].idxmax()] if len(fl) else None
+            r = {"challenger": ch, "state": st,
+                 "1 LOYO diff (pts)": float(d.mean()), "1 CI low": float(lo), "1 CI high": float(hi),
+                 "1 pass": bool(lo > 0),
+                 "2 holdout GLM": ho_a, "2 holdout XGB": ho_b, "2 pass": bool(ho_b > ho_a),
+                 "3 cat-year GLM": cat_a, "3 cat-year XGB": cat_b, "3 pass": bool(cat_b >= cat_a),
+                 "4 end-decile err GLM": ede["a"], "4 end-decile err XGB": ede["b"], "4 pass": bool(ede["b"] <= ede["a"]),
+                 "5 segments newly outside 0.8-1.25": "; ".join(f"{f}={l} ({sb[(f, l)]:.2f})" for f, l in bad),
+                 "5 pass": len(bad) == 0,
+                 "6 worst wrong-way flip": (f"{worst['kind']} {worst['flip']}: {worst['share_exposure_wrong_way']:.0%}"
+                                            if worst is not None else ""),
+                 "6 pass": bool(worst is None or worst["share_exposure_wrong_way"] < 0.5)}
+            r["passes all"] = all(r[f"{i} pass"] for i in range(1, 7))
+            rows.append(r)
     return pd.DataFrame(rows)
 
 
@@ -1085,6 +1150,12 @@ if __name__ == "__main__":
         cmd_refit(sys.argv[2] if len(sys.argv) > 2 else "all")
     elif cmd == "xgb":
         cmd_xgb()
+    elif cmd == "xgb-decision":                  # flip check (incl. Tweedie) + criteria 1-6
+        c, k = load_data()
+        _save("xgb_flip_check", xgb_explainability(c, k, production_spec()))
+        dec = xgb_decision(c)
+        _save("xgb_decision", dec)
+        print(dec.T.to_string())
     elif cmd == "production":
         cmd_production()
     else:

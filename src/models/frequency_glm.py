@@ -161,7 +161,7 @@ def design_matrix(df, spec, include_year=True):
     cols = {"const": np.ones(len(df))}
     dummies = {}
     members = list(dict.fromkeys(m for term in spec.interactions for m in term if m not in spec.features))
-    for f in spec.features + members + (["year"] if spec.year_factor else []):
+    for f in spec.features + members + (["year"] if spec.year_factor and include_year else []):
         s = df[spec.year_col if f == "year" else f].astype(str).to_numpy()
         for l in spec.levels[f][1:]:
             dummies[(f, l)] = (s == l).astype(float)

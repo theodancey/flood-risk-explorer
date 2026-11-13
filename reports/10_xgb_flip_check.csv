@@ -1,0 +1,25 @@
+kind,flip,expected_direction,state,share_exposure_wrong_way
+frequency,elevated: False -> True,down,VA,0.9691047781918946
+frequency,elevated: False -> True,down,NC,0.9754369452615987
+frequency,elevated: False -> True,down,MD,0.9578637848990932
+severity,elevated: False -> True,down,VA,0.13829687396799265
+severity,elevated: False -> True,down,NC,0.05483291525700639
+severity,elevated: False -> True,down,MD,0.44533881534989855
+frequency,flood_zone_group: A/V high risk -> B/C/X moderate-low risk,down,VA,0.005809434019226655
+frequency,flood_zone_group: A/V high risk -> B/C/X moderate-low risk,down,NC,0.008883128241089324
+frequency,flood_zone_group: A/V high risk -> B/C/X moderate-low risk,down,MD,0.012529930843850816
+severity,flood_zone_group: A/V high risk -> B/C/X moderate-low risk,down,VA,0.12201437062592295
+severity,flood_zone_group: A/V high risk -> B/C/X moderate-low risk,down,NC,0.36943915401603444
+severity,flood_zone_group: A/V high risk -> B/C/X moderate-low risk,down,MD,0.22703732438526011
+severity,building_coverage_band: $100K-$249K -> $250K or more,up,VA,0.10221182122300704
+severity,building_coverage_band: $100K-$249K -> $250K or more,up,NC,0.21020734120547188
+severity,building_coverage_band: $100K-$249K -> $250K or more,up,MD,0.13356429599058547
+tweedie,elevated: False -> True,down,VA,0.0
+tweedie,elevated: False -> True,down,NC,0.0
+tweedie,elevated: False -> True,down,MD,0.0
+tweedie,flood_zone_group: A/V high risk -> B/C/X moderate-low risk,down,VA,0.0
+tweedie,flood_zone_group: A/V high risk -> B/C/X moderate-low risk,down,NC,0.0
+tweedie,flood_zone_group: A/V high risk -> B/C/X moderate-low risk,down,MD,0.0
+tweedie,building_coverage_band: $100K-$249K -> $250K or more,up,VA,0.0
+tweedie,building_coverage_band: $100K-$249K -> $250K or more,up,NC,0.0
+tweedie,building_coverage_band: $100K-$249K -> $250K or more,up,MD,0.0

@@ -47,6 +47,11 @@ def glm_shap(tables, df, weight=None, parts=("frequency", "severity", "pure_prem
     Each row's values sum to log(prediction) - weighted mean of log(prediction)."""
     w = np.ones(len(df)) if weight is None else np.asarray(weight, float)
     codes = tables.codes(df)
+    # Milestone 13: rows can span several states -> a 'state' player (the state factor, and for the
+    # pure premium also the per-state off-balance), so each row still sums to its log prediction
+    has_geo = "state" in df or "county" in df
+    sf, ss, sob = tables._state_terms(tables.state_codes(df) if has_geo else None, len(df))
+    multi = has_geo and len(getattr(tables, "states", []) or []) > 1
     out = {}
     for part in parts:
         phi = {}
@@ -73,6 +78,10 @@ def glm_shap(tables, df, weight=None, parts=("frequency", "severity", "pure_prem
         if part == "pure_premium" and "county" in df:
             lcf = tables.county_log_factor(tables.county_codes(df["county"]))
             phi["county"] = lcf - _wmean(lcf, w)
+        if multi:
+            term = {"frequency": sf, "severity": ss, "pure_premium": sf + ss + sob}[part]
+            term = np.broadcast_to(np.asarray(term, float), (len(df),))
+            phi["state"] = term - _wmean(term, w)
         out[part] = pd.DataFrame(phi, index=df.index)
     return out
 

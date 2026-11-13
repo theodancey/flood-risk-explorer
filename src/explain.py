@@ -105,7 +105,11 @@ LEVEL_PHRASES = {
     ("primary_residence", "False"): "it is not a primary residence",
 }
 
-CERTAINTY_RULE = "High: Z >= 0.8; Medium: 0.5 <= Z < 0.8; Low: Z < 0.5 or no claims (Z = severity credibility)"
+CERTAINTY_RULE = ("Z = the Buhlmann-Straub severity credibility of the county's own claim history; A/E = its "
+                  "2010-2025 actual claims vs the model, each year at that year's own storm level. With no county "
+                  "factor in the price (since Milestone 13): High = Z >= 0.8 and A/E within 0.8-1.25; Low = no "
+                  "claims, Z < 0.5, or A/E outside 0.5-2.0; Medium = everything else. (With a county factor: "
+                  "High Z >= 0.8, Medium 0.5-0.8, Low below 0.5 or no claims.)")
 
 
 def _str_levels(df, cols):
@@ -194,6 +198,9 @@ class RatingTables:
             "state": state,
             "county_factors": {str(k): float(v) for k, v in m.combined.county_factors.items()},
             "county_factor_default": 1.0,
+            # Milestone 13: False = no county factor in the price (all 1.0); county_credibility
+            # then holds the severity credibility each county WOULD get (used for certainty only)
+            "county_factor_applied": bool(m.card.get("county_factor_applied", True)),
             "county_credibility": {r.county: {"Z_freq": float(r.Z_freq), "Z_sev": float(r.Z_sev),
                                               "claims": float(r.s_n), "freq_ae": float(r.freq_ae),
                                               "sev_ae": float(r.sev_ae), "name": r.name}
@@ -489,7 +496,7 @@ class Explainer:
             "state_average_pure_premium": va_pp, "ratio_to_state": pp / va_pp,
             "ratio_to_three_states": pp / self.all_stats["expected_pure_premium"],
             "Z_sev": cred["Z_sev"] if cred else None, "Z_freq": cred["Z_freq"] if cred else None,
-            "certainty": certainty_label(cred) if cred else None,
+            "certainty": certainty_label(cred, self.t.d.get("county_factor_applied", True)) if cred else None,
             "waterfall": wf,
             "notes": ["post_firm is not in the model: its effect is carried by year built and flood zone."]
                      if prof.get("post_firm") is not None else [],
@@ -543,7 +550,9 @@ class Explainer:
             "ratio_to_three_states": c["expected_pure_premium"] / self.all_stats["expected_pure_premium"],
             "mix_effect": mix_effect, "county_factor_effect": cf_effect, "overlap_effect": overlap,
             "county_factor": cf, "Z_sev": cred["Z_sev"], "Z_freq": cred["Z_freq"],
-            "claims": cred["claims"], "certainty": certainty_label(cred),
+            "claims": cred["claims"], "certainty": certainty_label(cred, self.t.d.get("county_factor_applied", True)),
+            "history_vs_model": county_ae(cred) if cred["claims"] > 0 else None,
+            "county_factor_applied": self.t.d.get("county_factor_applied", True),
             "mix": c["mix"], "state_mix": va["mix"], "waterfall": wf,
             "disclaimer": self.t.d["disclaimer"],
         }
@@ -596,15 +605,30 @@ def mix_shares(p):
     return {k: float(100 * w[p[col].astype(str).isin(lv).to_numpy()].sum() / W) for k, (col, lv, _) in MIX_DEFS.items()}
 
 
-def certainty_label(cred):
+def county_ae(cred):
+    """The county's 2010-2025 claims history vs the model (frequency A/E x severity A/E, each
+    year at its own fitted storm level); 1.0 = the model matched it."""
+    return float(cred.get("freq_ae", 1.0)) * float(cred.get("sev_ae", 1.0))
+
+
+def certainty_label(cred, applied=True):
+    """See CERTAINTY_RULE. applied=False (no county factor in the price): also asks whether the
+    county's own history AGREES with the model, since nothing pulls the estimate toward it."""
     z, n = cred.get("Z_sev", 0.0), cred.get("claims", 0.0)
     if n <= 0:
         return "Low"
-    return "High" if z >= 0.8 else ("Medium" if z >= 0.5 else "Low")
+    if applied:
+        return "High" if z >= 0.8 else ("Medium" if z >= 0.5 else "Low")
+    ae = county_ae(cred)
+    if z < 0.5 or not 0.5 <= ae <= 2.0:
+        return "Low"
+    return "High" if z >= 0.8 and 0.8 <= ae <= 1.25 else "Medium"
 
 
 def uncertainty_note(res):
     z, n, lab = res["Z_sev"], res["claims"], res["certainty"]
+    if not res.get("county_factor_applied", True):
+        return _note_without_county_factor(z, n, lab, res.get("history_vs_model"))
     zf = res.get("Z_freq") or 0.0
     what = "claim-size" if zf == 0 else "claim-size and claim-frequency"
     base = (f"{lab} certainty. The county factor ({res['county_factor']:.2f}) blends this county's own {what} "
@@ -623,6 +647,26 @@ def uncertainty_note(res):
                        "claims happen were no bigger than storm-to-storm noise.")
     return base + (f"Claim frequency gets some county credit (Z = {zf:.2f}), but frequency differences between "
                    "counties are mostly storm-to-storm noise.")
+
+
+def _note_without_county_factor(z, n, lab, ae=None):
+    """Milestone 13: the estimate uses no county factor. Certainty = how much local claim history
+    there is to check it against (Z) and whether it agrees with the model (ae)."""
+    base = ("This estimate comes from the county's mix of insured buildings and its state's level; the "
+            "county's own claim history is not used to adjust it, because county adjustments made unseen "
+            "years less accurate (in North Carolina a county's history is mostly one hurricane's footprint). ")
+    if n <= 0:
+        return "Low certainty. " + base + "There are no paid claims here in 2010-2025 to check it against."
+    amount = ("only a little" if z < 0.5 else "some" if z < 0.8 else "plenty of")
+    out = (f"{lab} certainty. " + base + f"There is {amount} local claim history to check it against "
+           f"({n:,.0f} paid claims, credibility Z = {z:.2f})")
+    if ae is None:
+        return out + "."
+    if 0.8 <= ae <= 1.25:
+        return out + f", and it agrees with the model (2010-2025 claims about {ae:.2f}x what the model expects)."
+    return out + (f"; over 2010-2025 this county's claims cost about {ae:.1f}x what the model expects, "
+                  f"so the true level here may differ from the estimate. Such county differences did not "
+                  f"repeat reliably in unseen years, so the model doesn't follow them.")
 
 
 def _ratio_phrase(r, state_name="Virginia"):
@@ -777,6 +821,9 @@ def build_portfolio(cells_path=CELLS_PATH):
     if "state" not in c:                                 # a Virginia-only table
         c = c[c["county"].astype(str).str.startswith(VA_STATE_FIPS)].assign(state="VA")
     c = c[c["state"].isin(list(STATE_NAMES))]
+    # blank / invalid county codes (pooled as "UNKNOWN-<ST>" in the 3-state build) are not an area a
+    # user can pick, so they are left out, as in Milestone 12 (about 0.4% of exposure)
+    c = c[~c["county"].astype(str).str.startswith("UNKNOWN")]
     c = c.assign(county=c["county"].astype(str),
                  county_name=[FORMER_NAMES.get(k, n) for k, n in zip(c["county"].astype(str), c["county_name"])])
     m = c[c["exposure_matched"] & (c["exposure"] > 0)]
@@ -858,7 +905,8 @@ def build_app_data(out=APP_DATA, cells_path=CELLS_PATH, verbose=True):
                "expected_pure_premium": e["pure_premium"], "ratio_to_state": e["ratio_to_state"],
                "ratio_to_three_states": e["ratio_to_three_states"],
                "county_factor": e["county_factor"], "Z_sev": e["Z_sev"], "Z_freq": e["Z_freq"],
-               "certainty": e["certainty"], "mix_effect": e["mix_effect"],
+               "certainty": e["certainty"], "history_vs_model": e.get("history_vs_model"),
+               "mix_effect": e["mix_effect"],
                "county_factor_effect": e["county_factor_effect"], "overlap_effect": e["overlap_effect"]}
         row.update({f"mix_index_{f}": float(wf.loc[f, "multiplier"]) for f in FEATURES})
         row.update(e["mix"])
