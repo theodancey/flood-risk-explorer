@@ -251,9 +251,10 @@ def absorb_group_levels(model, train, group="state", base=None, actual=None, wei
     weight = train["exposure"].to_numpy(float) if weight is None else np.asarray(weight, float)
     eta0 = design_matrix(train, model.spec, include_year=False).to_numpy() @ model.params.to_numpy()
     g = train[group].astype(str).to_numpy()
-    d = pd.DataFrame({"g": g, "a": actual, "m": weight * np.exp(eta0)}).groupby("g")[["a", "m"]].sum()
+    d = pd.DataFrame({"g": g, "a": actual, "m": weight * np.exp(eta0), "w": weight}).groupby("g")[["a", "m", "w"]].sum()
     lv = np.log(d["a"] / d["m"])
-    base = base or lv.index[0]
+    if base not in lv.index:            # e.g. Virginia left out (leave-one-state-out): use the
+        base = str(d["w"].idxmax())     # training state with the most weight (exposure / claims)
     spec = replace(model.spec, features=[*model.spec.features, group],
                    absorbed=[*model.spec.absorbed, group],
                    levels={**model.spec.levels, group: [base] + [l for l in lv.index if l != base]},

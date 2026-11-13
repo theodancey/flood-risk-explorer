@@ -258,6 +258,7 @@ The data is downloaded and explored. Everything except the data files is committ
 **What you need to do:** nothing required. To get the data on another computer, run `.venv\Scripts\python.exe src\download_data.py all` (about 35 minutes). Optionally, confirm you're happy with the v2 → v3 switch (Question 3).
 
 ## Questions for Theo
+9. *(Milestone 13, 2026-11-13, open)* **The county factor was dropped from the production model.** You asked (Milestone 9) for a credibility-weighted county factor in the app. On three states, my pre-stated rule removed it: it made unseen years worse, badly in North Carolina, where a county's history is mostly one hurricane's footprint. The near-tie alternative is a **severity-only** county factor: best average LOYO by 0.06 points, and +2.3 points on Virginia's holdout, but −1.9 on NC's. The app still shows certainty labels and each county's own history. If you'd rather keep a county factor in the price, the switch is one setting: edit `chosen` in `reports/10_county_form_summary.csv` to the severity-only row, then run `multistate.py production` and `explain.py build`. Details in Milestone 13 decisions, "County factor form".
 8. *(Milestone 13, 2026-11-12; ✅ resolved 2026-11-13: Theo said resume and asked for a memory-efficient refit; fix in Milestone 13 decisions, "Memory")* **The 3-state refit was stopped for low memory.** The background job `multistate.py refit` (then `xgb`) was killed by Claude Code because the computer ran critically low on memory. It had got as far as the interaction keep-rule checks. I haven't restarted it on my own. Done and committed: NC/MD downloads, the 3-state table (all checks pass), and the transfer test. To continue, close other memory-heavy programs and tell me to resume, or run it yourself: `.venv\Scripts\python.exe src\multistate.py refit`, then `... xgb`, `... production`, then `src\explain.py build`. If memory stays tight, I can make the refit lighter (e.g. fewer leave-one-year-out fits held in memory at once).
 5. *(Week 8, decided)* **Hosting the app.** The plan puts the Streamlit app on a free host (Streamlit Community Cloud), which needs an account linked to your GitHub. **Decision: you'll create the Streamlit Community Cloud account yourself in week 8.** I won't sign up for anything.
 
@@ -340,6 +341,24 @@ The data is downloaded and explored. Everything except the data files is committ
   - It was worse in every state on both: LOYO VA 10.71 → 10.65, NC 6.24 → 5.99, MD 14.57 → 14.20; holdout VA 11.28 → 10.08, NC 0.04 → −0.16, MD 14.22 → 12.57.
   - **Not adopted.** The production spec stays the same in every state, plus a state factor. The state differences are reported and flagged only.
   - Supporting this needed `frequency_glm` interactions to allow three-way terms and members that aren't main features (`interaction_columns`). The Virginia model still gives $598.07.
+- **County factor form** (pre-stated 2026-11-13, after seeing that the pooled frequency + severity county factor hurt NC, but before testing the alternative):
+  - The pooled Bühlmann–Straub factor halves NC's LOYO score (12.5% → 6.2%) and wipes out its holdout (16.7% → 0.04%).
+  - **Test three forms with the same 16-year LOYO and 2021–25 holdout:**
+    1. frequency + severity county factor (as fitted);
+    2. **severity-only** (frequency Z set to 0, as Virginia alone gave in Milestone 9);
+    3. no county factor.
+  - **Rule:** production uses the form with the best average over the three states of the per-state mean LOYO improvement, provided its holdout improvement is not below "no county" in more than one state. If none qualifies, use no county factor.
+  - **Result** (`reports/10_county_form_summary.csv`):
+
+    | | LOYO mean %, VA / NC / MD | Average | Holdout %, VA / NC / MD | Holdout states below no-county |
+    |---|---|---|---|---|
+    | frequency + severity | 10.71 / 6.24 / 14.57 | 10.51 | 11.28 / 0.04 / 14.22 | 2 |
+    | severity-only | 12.37 / 11.19 / 13.43 | **12.33** | 11.80 / 14.78 / 16.46 | 2 |
+    | none | 10.97 / 12.51 / 13.34 | 12.27 | 9.52 / 16.70 / 16.57 | 0 |
+
+    Severity-only has the best average, but only by 0.06 points, and it falls below no-county on the holdout in NC (−1.9) and MD (−0.1). **By the rule, production has no county factor.**
+  - **What the app shows instead:** county estimates still differ by building mix and state. The **certainty label** still uses the severity credibility Z each county would get, now described as "how much local claim history there is to check the estimate against". It is stored, not applied.
+  - **This reverses Theo's Milestone 9 request** for a credibility-weighted county factor in the app (Questions for Theo, 9).
 - **Negative claim payments** (added after the build check failed; no model results existed yet): 3 claims (2 NC, 1 MD, none in VA) have a negative total paid, i.e. a refund or correction. Each total is floored at $0 in `actuarial.total_paid`, so the claim counts as not paid. Virginia's numbers are unchanged.
 - **Memory (2026-11-13, after the first refit was stopped by the system at about 10 GB; the laptop has 31.5 GB in total, as Windows reports it):**
   - **The cause:** statsmodels result objects and their model point at each other (a reference cycle), so Python frees them only when its cycle collector happens to run. In a loop of hundreds of fits the old design matrices piled up at about +1 GB per fit. Measured: 6 severity fits grew from 1.6 to 4.6 GB without forced collection, and stayed flat at 0.47 GB with it.

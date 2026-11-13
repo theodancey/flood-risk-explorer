@@ -161,6 +161,7 @@ def fit_combined(cells, claims, freq_features, sev_features, freq_bases=None, se
     fc = fg.aggregate(cells[cells["exposure"] > 0], [*freq_features, "state", "state_year"])
     freq = fg.fit_glm(fc, freq_features, freq_interactions, bases=freq_bases, year_col="state_year")
     freq = fg.absorb_group_levels(freq, fc, "state", base_state)
+    base_state = freq.spec.bases["state"]        # = base_state, unless that state isn't in the data
     rows = sv.severity_rows(claims)
     sev = sv.fit_gamma(rows, sev_features, sev_interactions, bases=sev_bases, year_col="state_year")
     y = sv.cap_amounts(rows[sv.TARGET], sev.cap)
@@ -257,13 +258,16 @@ def buhlmann_straub(x, w, group):
     return {"k": k, "epv": epv, "vhm": vhm, "mean": xbar}, pd.DataFrame({"w": wi, "xbar": xi, "Z": z})
 
 
-def credibility_factors(by, cy, method="limited_fluctuation", p=0.90, k=0.05, sev_cv=None):
+def credibility_factors(by, cy, method="limited_fluctuation", p=0.90, k=0.05, sev_cv=None,
+                        parts=("freq", "sev")):
     """County factors = (Z_f x freq A/E + (1 - Z_f)) x (Z_s x sev A/E + (1 - Z_s)).
 
     method "limited_fluctuation": Z from claim counts with full-credibility standards
         n_full (frequency) and n_full x CV^2 (severity).
     method "buhlmann_straub": Z from county x year A/E (weights: expected claims for frequency,
         claim count for severity).
+    parts: which components get a county factor; ("sev",) sets Z_freq = 0 (Milestone 13: in
+        North Carolina, county claim-frequency experience is mostly one storm's footprint).
     Returns (table per county, parameters dict). Factors are NOT yet re-centred (see recentre)."""
     t = by.copy()
     params = {"method": method}
@@ -283,6 +287,10 @@ def credibility_factors(by, cy, method="limited_fluctuation", p=0.90, k=0.05, se
         params.update({"freq": pf, "sev": ps})
     else:
         raise ValueError(method)
+    for part in ("freq", "sev"):
+        if part not in parts:
+            t[f"Z_{part}"] = 0.0
+    params["parts"] = list(parts)
     t["freq_factor"] = t["Z_freq"] * t["freq_ae"] + (1 - t["Z_freq"])
     t["sev_factor"] = t["Z_sev"] * t["sev_ae"] + (1 - t["Z_sev"])
     t["factor_raw"] = t["freq_factor"] * t["sev_factor"]

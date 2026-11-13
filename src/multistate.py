@@ -97,17 +97,35 @@ def load_data(verbose=True):
     return cells, claims
 
 
-def production_spec(path=production.VA_PATH):
+# The pooled frequency + severity county factor (Milestone 11's form). The validation, credibility
+# and consistency analyses describe THIS form explicitly; the production form is chosen by the
+# pre-stated rule in `refit county` (chosen_county_parts).
+MILESTONE11_COUNTY = ("freq", "sev")
+COUNTY_FORMS = {"frequency + severity county factor": ["freq", "sev"],
+                "severity-only county factor": ["sev"], "no county factor": []}
+
+
+def chosen_county_parts():
+    """The county-factor form picked by the pre-stated rule (`refit county`); until that has
+    run, the Milestone 11 form (frequency + severity)."""
+    f = REPORTS / "10_county_form_summary.csv"
+    if not f.exists():
+        return ["freq", "sev"]
+    s = pd.read_csv(f)
+    return COUNTY_FORMS[s.loc[s["chosen"], "model"].iloc[0]]
+
+
+def production_spec(path=production.VA_PATH, county_parts=None):
     """Features, interactions and base levels of the Virginia production model (Milestone 11),
-    so the refit uses exactly the same structure."""
+    so the refit uses exactly the same structure; plus the county-factor form (county_parts)."""
     m = production.load(path)
-    return {"freq_features": list(m.freq.spec.features), "sev_features": list(m.sev.spec.features),
+    return {"county_parts": chosen_county_parts() if county_parts is None else list(county_parts),"freq_features": list(m.freq.spec.features), "sev_features": list(m.sev.spec.features),
             "freq_interactions": [list(x) for x in m.freq.spec.interactions],
             "sev_interactions": [list(x) for x in m.sev.spec.interactions],
             "freq_bases": pp.bases_without_year(m.freq.spec), "sev_bases": pp.bases_without_year(m.sev.spec)}
 
 
-def fit3(cells, claims, spec, county=True):
+def fit3(cells, claims, spec, county=True, county_parts=None):
     """The production approach on whatever states are in `cells`: frequency x severity GLMs
     (state x year effects + state factor when there are several states), loads, per-state
     off-balance, and Buhlmann-Straub county factors re-centred within each state.
@@ -118,8 +136,9 @@ def fit3(cells, claims, spec, county=True):
     if not county:
         return m, None, None
     multi = cells["state"].nunique() > 1
+    parts = spec.get("county_parts", ("freq", "sev")) if county_parts is None else county_parts
     return pp.with_county_factors(m, cells, claims, "buhlmann_straub",
-                                  recentre_by="state" if multi else None)
+                                  recentre_by="state" if multi else None, parts=tuple(parts))
 
 
 def cat_years_by_state(cells):
@@ -291,14 +310,15 @@ def refit_validation(cells, claims, spec, verbose=True):
     t0 = time.time()
 
     def preds_for(train_c, train_k, test):
-        m3, _, _ = fit3(train_c, train_k, spec)
+        m3, _, _ = fit3(train_c, train_k, spec, county_parts=MILESTONE11_COUNTY)
         p = {"3-state GLM + county": m3.predict(test), "3-state GLM": m3.predict(test, county=False)}
         own = {}
         for st in STATES:
             tm = test["state"] == st
             if not tm.any() or not (train_c["state"] == st).any():
                 continue
-            ms, _, _ = fit3(train_c[train_c["state"] == st], train_k[train_k["state"] == st], spec)
+            ms, _, _ = fit3(train_c[train_c["state"] == st], train_k[train_k["state"] == st], spec,
+                            county_parts=MILESTONE11_COUNTY)
             own[st] = ms.predict(test[tm])
         p["own-state GLM + county"] = own
         p["VA model, unchanged"] = {st: mv.predict(test[test["state"] == st], county=False)
@@ -335,7 +355,7 @@ def refit_validation(cells, claims, spec, verbose=True):
     for st in STATES:
         tr_c, tr_k = cells[cells["state"] != st], claims[claims["state"] != st]
         te = cells[(cells["state"] == st) & (cells["exposure"] > 0)].reset_index(drop=True)
-        m2, _, _ = fit3(tr_c, tr_k, spec)
+        m2, _, _ = fit3(tr_c, tr_k, spec, county_parts=MILESTONE11_COUNTY)
         p = {"2 other states GLM + county": m2.predict(te)}
         rows = _score_states(te, p, tr_c, {"design": "leave-one-state-out"})
         scores += rows
@@ -561,7 +581,7 @@ def state_interaction_candidate(cells, claims, spec, keep, verbose=True):
         te = cells[te_m & (cells["exposure"] > 0)].reset_index(drop=True)
         preds = {}
         for name, s in (("production spec", spec), ("with state interactions", cand)):
-            m, _, _ = fit3(tr_c, tr_k, s)
+            m, _, _ = fit3(tr_c, tr_k, s, county_parts=MILESTONE11_COUNTY)
             preds[name] = m.predict(te)
             del m
         scores += _score_states(te, preds, tr_c, {"design": design, **({"test_year": 0} if yr == 0 else {})},
@@ -570,6 +590,44 @@ def state_interaction_candidate(cells, claims, spec, keep, verbose=True):
             print(f"  candidate {design} {yr or '2021-25'} done ({(time.time() - t0) / 60:.1f} min)", flush=True)
             mem("after this step")
     return pd.concat(scores, ignore_index=True), cand
+
+
+def county_form_comparison(cells, claims, spec, verbose=True):
+    """Pre-stated test (PROGRESS.md, "County factor form"): frequency + severity county factor,
+    severity-only, or none, on the 16-year LOYO and the 2021-2025 holdout."""
+    scores, t0 = [], time.time()
+    splits = [(yr, cells["year"] != yr, claims["year"] != yr, cells["year"] == yr, "LOYO")
+              for yr in val.ALL_YEARS]
+    splits.append((0, cells["year"] <= val.LAST_TRAIN_YEAR, claims["year"] <= val.LAST_TRAIN_YEAR,
+                   cells["year"] > val.LAST_TRAIN_YEAR, "holdout"))
+    for yr, tr_mc, tr_mk, te_m, design in splits:
+        tr_c, tr_k = cells[tr_mc], claims[tr_mk]
+        te = cells[te_m & (cells["exposure"] > 0)].reset_index(drop=True)
+        m, _, _ = fit3(tr_c, tr_k, spec, county_parts=("freq", "sev"))
+        ms, _, _ = fit3(tr_c, tr_k, spec, county_parts=("sev",))
+        preds = {"frequency + severity county factor": m.predict(te),
+                 "severity-only county factor": ms.predict(te),
+                 "no county factor": m.predict(te, county=False)}
+        del m, ms
+        scores += _score_states(te, preds, tr_c, {"design": design, **({"test_year": 0} if yr == 0 else {})},
+                                by_year=(design == "LOYO"))
+        if verbose:
+            print(f"  county form {design} {yr or '2021-25'} done ({(time.time() - t0) / 60:.1f} min)", flush=True)
+            mem("after this step")
+    return pd.concat(scores, ignore_index=True)
+
+
+def choose_county_form(scores):
+    """Apply the pre-stated rule; returns (chosen form, summary table)."""
+    lo = scores[scores["design"] == "LOYO"].groupby(["model", "state"])["improvement_rebased_pct"].mean().unstack()
+    ho = scores[scores["design"] == "holdout"].set_index(["model", "state"])["improvement_rebased_pct"].unstack()
+    summ = lo.add_prefix("LOYO ").join(ho.add_prefix("holdout "))
+    summ["LOYO average of states"] = lo.mean(axis=1)
+    summ["holdout states below no-county"] = (ho.lt(ho.loc["no county factor"], axis=1)).sum(axis=1)
+    ok = summ[summ["holdout states below no-county"] <= 1]
+    chosen = ok["LOYO average of states"].idxmax() if len(ok) else "no county factor"
+    summ["chosen"] = summ.index == chosen
+    return chosen, summ.reset_index()
 
 
 def shared_year_sensitivity(cells, claims, spec):
@@ -607,7 +665,7 @@ def credibility_summary(cells, claims, spec):
     fits = {"VA alone": ("VA",), "NC alone": ("NC",), "MD alone": ("MD",), "3 states pooled": STATES}
     for label, sts in fits.items():
         c, k = cells[cells["state"].isin(sts)], claims[claims["state"].isin(sts)]
-        m, tbl, par = fit3(c, k, spec)
+        m, tbl, par = fit3(c, k, spec, county_parts=MILESTONE11_COUNTY)
         tables[label] = tbl
         for part in ("freq", "sev"):
             p = par[part]
@@ -701,7 +759,7 @@ def _pp_pred(model, df):
 
 
 def xgb_validation(cells, claims, spec, verbose=True):
-    """LOYO (16 folds) and the holdout: the 3-state hybrid GLM + county vs XGBoost freq x sev and
+    """LOYO (16 folds) and the holdout: the 3-state hybrid GLM (production form) vs XGBoost freq x sev and
     XGBoost Tweedie, identical rows. Returns (scores, out-of-fold predictions)."""
     import xgb_models as X
     mem()
@@ -716,7 +774,7 @@ def xgb_validation(cells, claims, spec, verbose=True):
         te = cells[cells["year"].isin(te_y) & (cells["exposure"] > 0)].reset_index(drop=True)
         glm, _, _ = fit3(tr_c, tr_k, spec)
         xm = fit_xgb3(tr_c, tr_k, xcells[xcells["year"].isin(tr_y)], settings)
-        preds = {"3-state hybrid GLM + county": glm.predict(te),
+        preds = {"3-state hybrid GLM (production)": glm.predict(te),
                  "XGB freq x sev": _pp_pred(xm["pp/XGB fxs"], te),
                  "XGB Tweedie": _pp_pred(xm["pp/XGB Tweedie"], te)}
         scores += _score_states(te, preds, tr_c, {"design": design}, by_year=(design == "LOYO"))
@@ -797,6 +855,14 @@ def cmd_refit(stage="all"):
         _refit_consistency(cells, claims, spec)
     if stage in ("all", "candidate"):
         _refit_candidate(cells, claims, spec)
+    if stage in ("all", "county"):
+        print("County factor form (pre-stated rule) ...", flush=True)
+        sc = county_form_comparison(cells, claims, spec)
+        _save("county_form_scores", sc)
+        chosen, summ = choose_county_form(sc)
+        _save("county_form_summary", summ)
+        print(summ.round(2).to_string())
+        print("Chosen county factor form:", chosen)
     if stage in ("all", "validate"):
         _refit_validate(cells, claims, spec, cat)
     print(f"refit ({stage}) done in {(time.time() - t0) / 60:.1f} min")
@@ -804,7 +870,7 @@ def cmd_refit(stage="all"):
 
 def _refit_main(cells, claims, spec):
     print("Full fit on all years ...", flush=True)
-    m3, tbl, par = fit3(cells, claims, spec)
+    m3, tbl, par = fit3(cells, claims, spec, county_parts=MILESTONE11_COUNTY)
     rel = pp.combined_relativity_table(m3.freq, m3.sev)
     _save("refit_relativities", rel)
     tbl.reset_index().to_csv(PROCESSED / "m13_county_table.csv", index=False)
@@ -866,7 +932,17 @@ def cmd_production():
     import hashlib
     cells, claims = load_data()
     spec = production_spec()
+    parts = spec["county_parts"]
     m, tbl, par = fit3(cells, claims, spec)
+    applied = bool(parts)
+    if not applied:
+        # No county factor in the price (pre-stated rule, PROGRESS.md "County factor form"). The
+        # severity credibility each county WOULD get is still stored, as a measure of how much
+        # local claim history there is to check the estimate against (the app's certainty label).
+        _, ref, ref_par = fit3(cells, claims, spec, county_parts=("sev",))
+        tbl = ref.assign(factor_not_applied=ref["factor"], factor=1.0, freq_factor=1.0, sev_factor=1.0,
+                         factor_raw=1.0, Z_freq=0.0)
+        par = {"applied": False, "reference_severity_credibility": ref_par}
     names = cells.drop_duplicates("county").set_index("county")["county_name"].to_dict()
     names.update({k: v for k, v in {"51515": "Bedford city (former; part of Bedford County since 2013)"}.items()})
     tbl = tbl.copy()
@@ -874,7 +950,7 @@ def cmd_production():
     tbl.index = tbl.index.astype(str).rename("county")
     summ = pd.read_csv(REPORTS / "10_refit_summary.csv")
     sc = pd.read_csv(REPORTS / "10_refit_scores.csv")
-    main = "3-state GLM + county"
+    main = "3-state GLM + county" if parts == ["freq", "sev"] else "3-state GLM"
     loyo = summ[summ["model"] == main].set_index("state")
     ho = sc[(sc["design"] == "holdout") & (sc["model"] == main)].set_index("state")
     sha = hashlib.sha256(Path(B.OUT_FILE_3).read_bytes()).hexdigest()[:16]
@@ -884,13 +960,16 @@ def cmd_production():
     for v in sf.values():
         v["pure_premium"] = v["frequency"] * v["severity"] * v["off_balance_ratio"]
     card = {
-        "name": "Flood loss cost model: Hybrid GLM fxs + state factor + county (VA, NC, MD)",
+        "name": "Flood loss cost model: Hybrid GLM fxs + state factor" + (" + county" if applied else "")
+                + " (VA, NC, MD)",
         "version": "2.0", "milestone": 13, "created": time.strftime("%Y-%m-%d"),
         "states": list(STATES),
         "structure": "frequency GLM (Poisson, log link, exposure offset) x severity GLM (Gamma, log link), "
                      "both with state x year effects absorbed into a state factor, x large-loss load x ICC "
-                     "bridge x off-balance (per state) x Buhlmann-Straub county factor (pooled over the three "
-                     "states' counties, re-centred within each state)",
+                     "bridge x off-balance (per state)" + (
+                         " x Buhlmann-Straub county factor (pooled over the three states' counties, "
+                         "re-centred within each state; parts: " + "+".join(parts) + ")" if applied else
+                         "; NO county factor (it made unseen years worse in NC: reports/10_county_form_summary.csv)"),
         "frequency_features": spec["freq_features"], "frequency_interactions": spec["freq_interactions"],
         "severity_features": spec["sev_features"], "severity_interactions": spec["sev_interactions"],
         "state_factor_vs_virginia": sf,
@@ -903,7 +982,8 @@ def cmd_production():
             "holdout_gini_by_state": ho["gini"].to_dict(),
             "yardstick": "re-based Tweedie (p = 1.5) deviance improvement vs no-features model; each unseen "
                          "year once, scored within each state"},
-        "county_method": "buhlmann_straub", "county_parameters": par,
+        "county_method": "buhlmann_straub", "county_parts": parts, "county_factor_applied": applied,
+        "county_parameters": par,
         "why_not_xgboost": "Milestone 11's decision rule re-applied on three states in Milestone 13 "
                            "(reports/10_multistate.md).",
         "report": "reports/10_multistate.md",
