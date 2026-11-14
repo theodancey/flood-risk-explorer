@@ -94,14 +94,14 @@ py -3.13 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r app\requirements.txt
 .venv\Scripts\python.exe -m streamlit run app\app.py      # opens http://localhost:8501 (stop with Ctrl+C)
 .venv\Scripts\python.exe tests\test_lookup.py             # optional tests, no internet needed (seconds)
-.venv\Scripts\python.exe tests\test_explain.py            # (~2 min)
-.venv\Scripts\python.exe tests\test_app.py                # (~3 min)
+.venv\Scripts\python.exe tests\test_app.py                # (~3-4 min)
 ```
 
 **Rebuild everything from the raw FEMA data** (full install, ~400 MB download, 1–1.5 hours):
 ```powershell
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 .venv\Scripts\python.exe src\check_setup.py
+.venv\Scripts\python.exe tests\test_explain.py      # app tables match the production model (~2 min; needs the full install)
 .venv\Scripts\python.exe src\download_data.py all      # claims + VA/NC/MD policies
 .venv\Scripts\python.exe src\actuarial.py              # self-test + county-year table
 .venv\Scripts\python.exe src\build_dataset.py          # Virginia modelling table + data checks (~20 s)
