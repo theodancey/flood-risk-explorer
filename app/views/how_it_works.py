@@ -215,6 +215,8 @@ Built by **Theo Dancey**, a Statistics & Data Science student at Virginia Tech a
 a portfolio project in actuarial modelling: exposure, frequency and severity GLMs, credibility,
 validation on unseen years and states, and model explainability.
 
+Live app: [{C.LIVE_APP_URL.removeprefix('https://')}]({C.LIVE_APP_URL})
+
 Code, reports and the full write-up: [{C.GITHUB_URL.removeprefix('https://')}]({C.GITHUB_URL})
 """)
 

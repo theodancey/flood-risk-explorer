@@ -1,4 +1,7 @@
 # Flood Risk Explorer
+
+**Live app: [flood-risk-explorer.streamlit.app](https://flood-risk-explorer.streamlit.app)**: a county flood-risk map, address search and building-type calculator for Virginia, North Carolina and Maryland (area-level estimates only).
+
 I'm building a flood insurance risk model using FEMA's public data on 2.7 million National Flood Insurance Program claims, for Virginia, North Carolina and Maryland. I calculate the core actuarial measures (claim frequency, severity, and pure premium) and am developing actuarial GLMs and an XGBoost model to compare how well each predicts flood losses by area. So far I've found that Virginia's expected flood loss is about $149 per insured home per year, and that just three storm years caused 69% of all losses in 2009–2025, a pattern that makes flood insurance so hard to price. 
 
 **How often do flood insurance claims happen in an area, how big are they, and what's the expected annual loss per policy?** This project answers those questions with the classic actuarial toolkit, using FEMA's public National Flood Insurance Program (NFIP) data.
@@ -13,7 +16,7 @@ I'm building a flood insurance risk model using FEMA's public data on 2.7 millio
 > **Disclaimer:** All results are **area-level** estimates built from aggregated public data. They are not predictions, quotes, or risk ratings for any individual property.
 
 ## Try the app
-**Live app:** *(link to be added: the Streamlit Community Cloud address)*
+**Live app:** [https://flood-risk-explorer.streamlit.app](https://flood-risk-explorer.streamlit.app)
 
 **Screenshots:** *(placeholders: add `reports/figures/app_home.png`, `app_county.png` and `app_calculator.png`)*
 

@@ -34,6 +34,7 @@ import lookup  # noqa: E402  (app/lookup.py: the address lookup, uses requests)
 
 STATES = {"VA": "Virginia", "NC": "North Carolina", "MD": "Maryland"}
 GITHUB_URL = "https://github.com/theodancey/flood-risk-explorer"
+LIVE_APP_URL = "https://flood-risk-explorer.streamlit.app"
 LAST_UPDATED = "2026-11-13"        # date the app and its data were last updated
 
 # ---------------------------------------------------------------------------

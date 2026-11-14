@@ -1,5 +1,7 @@
 # Flood Risk Explorer: the Streamlit app
 
+**Live app:** [https://flood-risk-explorer.streamlit.app](https://flood-risk-explorer.streamlit.app)
+
 *Milestone 14 (2026-11-13), extended in Milestone 15 (2026-11-13): county map, address lookup, "what if?" calculator, plain-language pass. Milestone 16 (2026-11-13): fixes from testing the live app (arrows, map scrolling and borders, address hand-over). Deployed on Streamlit Community Cloud (every push to `main` redeploys it).*
 
 A three-page web app showing **area-level** expected flood insurance losses for every county and
