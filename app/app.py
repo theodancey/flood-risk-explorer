@@ -46,8 +46,10 @@ def _load_fresh_helpers():
             if name == "common":
                 importlib.import_module(name)     # first run: common also imports explain + lookup
             continue
+        # Reload if the file changed since it was loaded, or if it was loaded before this guard
+        # existed (no date recorded): that copy may be stale, so refresh it once.
         now = _mtime(module)
-        if now is not None and now != getattr(module, "_loaded_mtime_ns", now):
+        if now is not None and now != getattr(module, "_loaded_mtime_ns", None):
             module = importlib.reload(module)
         module._loaded_mtime_ns = _mtime(module)
     for name in _HELPERS:                         # stamp modules imported for the first time above

@@ -35,7 +35,7 @@ All 8 items are done, tested, committed and pushed (the push redeploys the live 
    - `tests\test_lookup.py` has a new `test_address_polish`.
    - `tests\test_explain.py` and `src\multistate.py test` pass too.
 9. **Stale-module fix (after deploys).** After a push, Streamlit Cloud re-ran the pages but kept the old `app/common.py` in memory, so pages could fail with `module 'common' has no attribute ...` until the app was rebooted.
-   - *The fix:* on every run, `app/app.py` checks whether `common.py`, `lookup.py` or `src/explain.py` changed on disk since it was loaded, and reloads it if so (`importlib.reload`). Unchanged files are not reloaded.
+   - *The fix:* on every run, `app/app.py` checks whether `common.py`, `lookup.py` or `src/explain.py` changed on disk since it was loaded, and reloads it if so (`importlib.reload`). Unchanged files are not reloaded. A module already in memory with no recorded date (loaded before this guard existed) is reloaded once, so a server that was already stale heals itself.
    - *New test:* `test_stale_module_reload` in `tests\test_app.py`.
    - *Fallback:* if it ever happens anyway, use **Manage app → ⋮ → Reboot app** (see `app/README.md`).
 
