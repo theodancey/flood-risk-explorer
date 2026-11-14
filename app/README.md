@@ -1,6 +1,6 @@
 # Flood Risk Explorer: the Streamlit app
 
-*Milestone 14 (2026-11-13), extended in Milestone 15 (2026-11-13): county map, address lookup, "what if?" calculator, plain-language pass. Deployed on Streamlit Community Cloud (every push to `main` redeploys it).*
+*Milestone 14 (2026-11-13), extended in Milestone 15 (2026-11-13): county map, address lookup, "what if?" calculator, plain-language pass. Milestone 16 (2026-11-13): fixes from testing the live app (arrows, map scrolling and borders, address hand-over). Deployed on Streamlit Community Cloud (every push to `main` redeploys it).*
 
 A three-page web app showing **area-level** expected flood insurance losses for every county and
 independent city in Virginia (133), North Carolina (100) and Maryland (24), built from public FEMA
@@ -34,7 +34,7 @@ Run the automated tests (no internet needed; about 3-6 minutes for the app, seco
 ## The pages
 | Page | URL | What it does |
 |---|---|---|
-| **County Explorer** (default) | `/` and `/county` | **First screen:** headline, how-to, the **county map** (shade by expected yearly loss or by ratio to the state; hover; click a county to open it), **Find my county** address search, the short disclaimer and a credit line. **Then:** state + searchable county list, the **hero box** (model estimate for a typical year vs the state average, next to the actual 2010-2025 average, with a sentence naming the storms when they differ by more than 1.5×), a one-line summary, and three tabs: **Overview** (chance of a claim, typical claim size, two plain certainty signals, the mix of insured buildings), **Claims history** (by year, big storms labelled), **Why it differs** (waterfall). |
+| **County Explorer** (default) | `/` and `/county` | **First screen:** headline, how-to, the **county map** (opens comparing each county with its own state, or shade by expected yearly loss; thick state borders and VA/NC/MD labels; the scroll wheel scrolls the page, not the map; hover; click a county for a small summary card with a "See details below" link), **Find my county** address search, the short disclaimer and a credit line. **Then:** state + searchable county list, the **hero box** (model estimate for a typical year vs the state average, next to the actual 2010-2025 average, with a sentence naming the storms when they differ by more than 1.5×), a one-line summary, and three tabs: **Overview** (chance of a claim, typical claim size, two plain certainty signals, the mix of insured buildings), **Claims history** (by year, big storms labelled), **Why it differs** (waterfall). |
 | **Property Profile Calculator** | `/calculator` | Optional **address lookup** that fills in state, county, flood zone and post-FIRM (and the age group from the year built). Building inputs with help text. Result: expected yearly loss vs the state average **and** vs a typical lower-risk (B/C/X) insured building, chance of a claim, typical claim size, local-data signals, a waterfall of what raises or lowers it, and **"What if?"** (raising the building). |
 | **How It Works** | `/how-it-works` | "In short", data sources, methods with every term defined (policy-year, pure premium, GLM, interactions, Shapley values), key findings (NC numbers labelled), how the certainty signals work (credibility Z, Bühlmann-Straub, A/E), limitations, future work, About. |
 
@@ -84,6 +84,7 @@ tests/test_lookup.py             lookup module with fake web answers; real conne
 | `app/data/rating_factors.json` | the production GLM as lookup tables |
 | `app/data/state_averages.json` | state averages and mix shares |
 | `app/data/counties_va_nc_md.geojson` | county outlines for the map (Census 2023 cartographic boundaries, simplified; 0.34 MB) |
+| `app/data/states_va_nc_md.geojson` | state outlines for the thicker state borders (same source and scale; 0.12 MB; Milestone 16) |
 | `app/data/firm_dates.csv` | each NFIP community's initial FIRM date (OpenFEMA Community Status Book; 76 KB) |
 
 The app **never** reads `data/raw/` or `data/processed/`; `tests/test_app.py` logs every file the app

@@ -1,6 +1,54 @@
 # Progress Log
 
-## Summary (latest: 2026-11-13, Milestone 15: app polish, address lookup, county map, "what if?")
+## Summary (latest: 2026-11-13, Milestone 16: fixes from testing the live app)
+All 8 items are done, tested, committed and pushed (the push redeploys the live app). No files from `data/` are in Git.
+
+1. **Comparing states.**
+   - The map now opens on **"Compared with the state average"**.
+   - A note under the map and on How It Works says North Carolina's level comes mostly from Matthew, Florence and Helene, so differences between states are less certain than differences within a state.
+   - Counties whose past losses are far below the estimate (e.g. **Lee County, NC: $1,218 estimate vs $551 actual**) now say the model applies one statewide storm level to every county, so inland estimates may be high. This shows in the headline box and in the certainty note.
+2. **North Carolina regional test: run, failed the pre-stated rule, not adopted.** The app's data is unchanged.
+   - *Regions:* Mountains / Piedmont / Coastal Plain from **NOAA NCEI's county-to-climate-division table** (an official county-level list; NCpedia refused automated requests).
+   - *Result:* NC leave-one-year-out improvement **12.5% → 8.9%** (better in only 3 of 16 years); NC 2021-25 holdout **16.7% → −18.2%**.
+   - *What it did show:* over 2010-2025 the single NC level was too high in the Piedmont (actual about 0.5× expected) and too low in the Mountains (about 2×, mostly Helene). But regional levels learned from past years predicted new years worse.
+   - Details: Milestone 16 decisions, `reports/11_nc_region_summary.csv`. The result is also on How It Works (finding 7).
+3. **Map.**
+   - The scroll wheel and double-click no longer zoom the map, and dragging doesn't pan it.
+   - Thick dark **state borders** and **VA / NC / MD labels**, so Maryland is distinct from Virginia.
+   - After a click, a **summary card** under the map shows the county, its estimate, how it compares, and a **"See details below ↓"** link.
+4. **Arrows fixed.**
+   - *The bug:* Streamlit decides the arrow from the delta *text*, and anything not starting with "-" counts as "up". So "15% below the Virginia average" showed a **red up arrow**.
+   - *The fix:* below average = **down arrow, green**; above = **up arrow, orange**; about the same = no arrow, grey. It's set explicitly on all 3 metrics that have a comparison (County Explorer headline, calculator headline, "Typical lower-risk building"). The other 5 metrics have no comparison.
+5. **Address → calculator.**
+   - "Use this address in the calculator" now carries the **address itself**, so adding a year built and pressing Look up works.
+   - Changing **only the year** and pressing Look up re-applies the age group and pre/post-FIRM. If the box is emptied, the last address found is reused, with no new web call (cached).
+6. **Address polish.**
+   - State codes stay in capitals ("Richmond, VA", not "Va").
+   - If an address isn't found, the app **retries once automatically** without the apartment/unit part and stray punctuation.
+   - The message suggests adding the **ZIP code** or trying a **nearby house number**.
+7. **Tooltips.**
+   - **"Combined effects":** the extra from features acting together (the model's interactions).
+   - **"Main home: Yes" raises the estimate:** checked, and it's real. Main homes have bigger claims ($39,349 vs $28,789 average for single-family homes, with about twice as much paid for belongings). It's in claim **size** only (×0.83 for "No"), and mostly a North Carolina effect (VA and MD about ×1.07-1.09, not significant).
+8. **Tests: all pass.**
+   - `tests\test_app.py` (about 3 minutes) has a new `test_deltas`, plus map config / borders / labels / card and address carry-over checks.
+   - I also checked that the delta test **fails** on the old code (it catches the red up arrow).
+   - `tests\test_lookup.py` has a new `test_address_polish`.
+   - `tests\test_explain.py` and `src\multistate.py test` pass too.
+
+**Please test by hand** (I can't scroll or click a browser here):
+1. **On your phone and laptop, scroll the page with the pointer or finger over the map.** The page should scroll; the map shouldn't zoom.
+2. **Click a county.** A card should appear under the map; its "See details below" link should jump to the county's details. If clicking does nothing on the live site, tell me (the county list still works).
+3. **Check the state borders and labels.** Do they look right, and is the MD label in a sensible spot? (Positions are set by hand in `STATE_LABELS` in `app/common.py`.)
+4. **Find an address on the first page → "Use this address in the calculator" → add a year → Look up.** The age group and "built after the first flood map" should fill in. Then change only the year and press Look up again.
+5. **Try an address with an apartment number,** e.g. "… Apt 2B …": it should still be found.
+
+**Judgment calls worth a look:**
+1. **"Above average" is orange, not red.** It matches the app's colours (orange = raises the estimate) and doesn't read as an error.
+2. **The "Typical lower-risk building" metric now gets an arrow too** ("Yours is 2.0 times this" points up, in orange). Before, it had none.
+3. **ZIP-only lookup isn't supported.** The free Census geocoder needs a street address, so the advice is to *add* the ZIP code.
+4. **The regional test used the same rule as the county factor, plus one extra guard** (NC's own score mustn't fall), written down and committed before running. It failed every part of the rule, so the guard didn't matter.
+
+## Summary (previous: 2026-11-13, Milestone 15: app polish, address lookup, county map, "what if?")
 All four stages are done, tested, committed and pushed (each push redeployed the live app). No data files from `data/` are in Git.
 
 - **Stage 1 (fixes and clarity):**
@@ -463,6 +511,30 @@ The data is downloaded and explored. Everything except the data files is committ
     2. its 2021-2025 holdout improvement is below the no-region model's in at most one state; **and**
     3. (guard, because the change is aimed at NC) North Carolina's own mean LOYO improvement does not fall.
   - Otherwise production stays unchanged. The result is reported either way (PROGRESS, How It Works).
+  - **Result** (`src/nc_region_test.py`, 2 minutes; `reports/11_nc_region_summary.csv`, `11_nc_region_scores.csv`, `11_nc_region_ae.csv`, `11_nc_region_relativities.csv`):
+
+    | | LOYO mean %, VA / NC / MD | Average | Holdout %, VA / NC / MD | Holdout states below no-region |
+    |---|---|---|---|---|
+    | NC regions | 11.02 / 8.93 / 13.43 | 11.13 | 9.46 / −18.19 / 16.56 | 3 |
+    | no region (production) | 10.97 / 12.51 / 13.34 | **12.27** | 9.52 / 16.70 / 16.57 | 0 |
+
+    - Rule 1 fails (11.13 < 12.27), rule 2 fails (3 states below), rule 3 fails (NC 12.51 → 8.93; better in only 3 of 16 NC years). **Not adopted; app data unchanged.**
+    - The no-region row reproduces Milestone 13's "no county factor" numbers exactly (12.51 / 16.70), a check that the test harness matches production.
+    - *All-years fit (for the record):* pure-premium relativity vs the Coastal Plain: Piedmont 0.57, Mountains 1.88.
+    - *Out-of-fold A/E by region with ONE statewide level:* Coastal Plain 0.99, Piedmont 0.50, Mountains 1.96. So the statewide level is too high inland on average over these 16 years, and too low in the Mountains because of Helene (2024). But this pattern didn't predict the next year: it moves with storm tracks. That's why the app's wording says inland estimates *may* be high, rather than changing the number.
+- **Delta arrows and colours.** Streamlit 1.67 sets the arrow from the delta text (only a leading "-" means down). Our deltas are words, so `common.delta_style` sets the colour and arrow explicitly. Down + green when below average (≤ 1/1.1×); up + orange when above (≥ 1.1×, the app's "raises it" colour; orange rather than red so it doesn't look like an error); no arrow, grey, otherwise. The same thresholds as the "about the same" wording.
+- **Map.**
+  - `scrollZoom` and `doubleClick` are off in the map's Plotly config, and `dragmode=False`, so the page scrolls normally over the map.
+  - State borders come from the Census 2023 cartographic **state** file at the same 1:5,000,000 scale as the counties, so the lines match. The county file was rebuilt byte-identical.
+  - Labels are at hand-picked points.
+  - Borders and labels don't take hover or clicks.
+  - The summary card appears only right after a map click (`ce_map_pick` equals the shown county), so it doesn't repeat the headline for list picks.
+- **Map default = "Compared with the state average".** Within-state comparisons don't depend on the uncertain state levels, so they're the safer first view.
+- **Address.**
+  - The calculator gets the typed address (session memory only, as before: never written to disk, logged or put in the URL).
+  - One automatic retry: the address without apartment/unit words (`Apt`, `Unit`, `Suite`, `#…`, …) and stray punctuation, only if that changes the text.
+  - ZIP-only lookups aren't possible with the free Census geocoder (it needs a street address), so the message suggests adding the ZIP code.
+- **"Main home: Yes" tooltip, checked against the data.** The production severity relativity for "No" is 0.83 (pooled); by state VA 1.07, NC 0.76, MD 1.09 (consistency label "unclear", Milestone 13). Single-family claims: main homes $39,349 average vs $28,789, belongings paid $4,142 vs $1,810. The tooltip says it's mostly a North Carolina effect.
 
 ### Milestone 15 decisions (2026-11-13, app polish, address lookup, map, "what if?")
 - **The `/county` fix:** Streamlit always serves the default page at `/` and ignores its own `url_path`. So the County Explorer script is registered twice: as the visible default page (`url_path="explorer"`, served at `/`) and as a **hidden** page at `/county` (`st.Page(..., visibility="hidden")`). Both routes have a test.
@@ -770,6 +842,18 @@ The data is downloaded and explored. Everything except the data files is committ
 - No new packages.
 
 ## Log
+### 2026-11-13: Milestone 16, fixes from testing the live app
+1. Pre-stated the North Carolina regional test in PROGRESS.md and committed it before running anything.
+2. Found an official county-level region list. NCpedia blocked automated requests, so I used NOAA NCEI's county-to-climate-division table. Wrote `src/nc_region_test.py` (2 minutes) and committed it with its reports. It failed the rule, so it was not adopted.
+3. App fixes:
+   - delta arrows (and a check that the new test fails on the old code);
+   - map: opening view, no scroll zoom, state borders and labels, click card;
+   - cross-state wording;
+   - address hand-over, year-only re-lookup, capitals, retry, not-found advice;
+   - tooltips.
+   Committed.
+4. Tests: all four suites pass, and the app starts headless (health check 200). Docs (this file, LEARNING_NOTES, app/README). Pushed.
+
 ### 2026-11-13: Milestone 14, the Streamlit app (local)
 1. **Lazy model import.** Made `src/explain.py` import the statsmodels-based production code only when needed; checked the app-side load imports no heavy libraries and still gives Virginia Beach $453.69. Self-test and `tests/test_explain.py` pass. Committed with your Question 9 answer.
 2. **Skeleton:** `app/app.py` (navigation, sidebar), `app/common.py` (relative paths, cached loaders, formatting, disclaimer, plotly waterfall), `.streamlit/config.toml`, `app/requirements.txt`. Committed.

@@ -885,3 +885,47 @@ A: The app degrades gracefully. Each call has a 6-second timeout and two retries
 
 **Q: Your app says raising a building lowers expected losses by about 29%. Would you tell a homeowner they'll save 29%?**
 A: No. That's the model's average difference between similar insured buildings that are and aren't raised: an association learned from data, not an engineering estimate for one building. Raised buildings differ in other ways too; I even found a Simpson's paradox, where the effect looked different within high-risk zones than overall. And it's an expected claim cost, not a premium. The app says this right next to the number.
+
+## Milestone 16: Fixes from testing the live app, and a regional test that failed (2026-11-13)
+
+### What I did
+I tested the deployed app like a real user and fixed what I found. The arrows next to "compared with the state average" pointed the wrong way, the map grabbed the scroll wheel, and an address found on the first page didn't carry over to the calculator. I made the map open on "compared with the state average", added thick state borders and labels, and added a small card after a county is clicked. I also explained more honestly that North Carolina's level comes from a few hurricanes. Then I tested a modelling idea, one level per North Carolina region instead of one per state, using a rule I wrote down before running it. It failed, so the model didn't change.
+
+### Why I did it that way
+
+**The arrow bug: read the library, then test the fix.**
+- *Intuition:* Streamlit's `st.metric` draws an up or down arrow next to a comparison. It decides which by looking at whether the text starts with a minus sign. Our comparisons are words ("15% below the Virginia average"), so every one counted as "up". Combined with the "inverse" colour setting (up = bad = red), good news was shown as a red up arrow.
+- *Fix:* one small function decides the arrow and colour from the number itself: below → down and green, above → up and orange, about the same → none.
+- *Testing the test:* I temporarily put the old behaviour back and checked that the new test fails. A test that can't fail proves nothing.
+
+**Why the map now starts with "compared with the state average".**
+- *Intuition:* comparing two counties in the same state is like comparing two houses on the same street. They share the same weather history, so differences mostly come from the buildings. Comparing North Carolina with Virginia is more like comparing two streets after different storms. North Carolina's level is set mostly by Matthew (2016), Florence (2018) and Helene (2024). Another 16 years of hurricanes could move it a lot.
+- *So:* the default view shows the more certain comparison, and the app says plainly that state-to-state differences are less certain.
+
+**One storm level per state, and what that means for inland counties.**
+- *Example:* Lee County, NC (inland) has a model estimate of about $1,218 a year, but its 2010-2025 average was $551.
+- *Why:* the model gives every NC county the same statewide "storm level", and that level is driven by coastal and mountain hurricanes. For counties that storms mostly missed, the estimate may be too high. The app now says so instead of implying the estimate is surely right.
+
+**The regional test: a pre-stated rule, and accepting a "no".**
+- *Idea:* give NC's Mountains, Piedmont and Coastal Plain their own levels. Regions came from an official county-level list: NOAA's climate divisions, which group NC's counties into Mountain, Piedmont and Coastal Plain divisions.
+- *Pre-stated rule:* the same rule as the county factor, written and committed *before* running. Adopt only if the average leave-one-year-out (LOYO) score over three states improves, the 2021-2025 holdout isn't worse in more than one state, and NC's own score doesn't fall. Writing the rule first stops me from moving the goalposts after seeing the numbers.
+- *Reminder, LOYO:* fit on 15 years, predict the 16th, repeat for every year, and average how much better than a "no information" model each prediction is.
+- *What looked promising:* over all 16 years, one statewide level was too high in the Piedmont (actual about half of expected) and too low in the Mountains (about 2×, mostly Helene).
+- *What happened on unseen years:* NC's LOYO score fell from 12.5% to 8.9% (better in only 3 of 16 years), and its holdout from +16.7% to −18.2% (worse than predicting the same rate everywhere).
+- *Why:* a region's history is mostly where past storms happened to go. Helene made the Mountains look risky, but a model that learned that would have over-charged the Mountains in other years. This is **overfitting to storm tracks**, the same lesson as the county factor in Milestone 13.
+
+**Small UX fixes that matter.**
+- The calculator now receives the address itself, so "add a year and look up again" works. Changing only the year re-applies the age group and the pre/post-FIRM answer (pre-FIRM = built before the area's first flood insurance rate map).
+- Unfound addresses get one automatic retry without "Apt 4B"-style parts, and advice to add the ZIP code or try a nearby house number.
+- "Main home: Yes" raises the estimate. I checked the data before explaining it: main homes' claims averaged about $39,000 vs $29,000 for second homes, with twice as much paid for belongings. The effect comes mostly from North Carolina.
+
+### Interview questions
+
+**Q: You found that your model was too high for inland North Carolina counties. Why didn't you fix it?**
+A: I tested the fix, one level per region, with a rule I wrote down before running it. Over the past 16 years, the Piedmont's actual losses were about half the statewide estimate, so a regional level looked obviously right. But when I predicted each year from the other 15, the regional model was worse in 13 of 16 years, and on the 2021-2025 holdout it was worse than a model with no information at all. Regional history mostly reflects where past hurricanes went, and the next one goes somewhere else. So I kept one level per state and changed the app's wording instead: it says inland estimates may be high.
+
+**Q: Why write the decision rule down before running the test?**
+A: Because once you see the numbers, it's tempting to pick whichever measure makes your idea look good. Committing the rule to Git first, with a timestamp, makes the test honest and auditable. It's the same idea as pre-registering a study. Here the rule was the one already used for the county factor, so the two geography decisions are judged the same way.
+
+**Q: Tell me about a bug you found by using your own app.**
+A: The metric arrows. "15% below the Virginia average" showed a red up arrow, which says the opposite of the words. I read Streamlit's source and found it decides the arrow by whether the text starts with a minus sign. Since my comparisons are words, everything counted as "up". I set the arrow and colour explicitly from the number, wrote a test across every county and several calculator profiles, and checked the test fails on the old code.
