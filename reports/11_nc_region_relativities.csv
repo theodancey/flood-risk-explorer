@@ -1,0 +1,4 @@
+feature,level,is_base,in_frequency,in_severity,frequency_rel,severity_rel,pure_premium_rel
+nc_region,Coastal Plain or outside NC,True,True,True,1.0,1.0,1.0
+nc_region,NC Piedmont,False,True,True,0.5617672409539225,1.0071849889962747,0.565803532398644
+nc_region,NC Mountains,False,True,True,1.254624025903176,1.4968306340352733,1.877959676168538

@@ -1,0 +1,3 @@
+model,LOYO MD,LOYO NC,LOYO VA,holdout MD,holdout NC,holdout VA,LOYO average of states,holdout states below no-region,NC years better than no-region,rule 1 (LOYO average higher),rule 2 (holdout below in <= 1 state),rule 3 (NC LOYO not lower),adopted
+NC regions,13.429453997428896,8.928873892846115,11.02234797426529,16.55686462145369,-18.19114904751551,9.458010450046217,11.126891954846768,3,3.0,False,False,False,False
+no region (production),13.33942709084477,12.50581213110523,10.965293803872337,16.567670031259084,16.699121368678515,9.517897210239568,12.270177675274113,0,,,,,True
