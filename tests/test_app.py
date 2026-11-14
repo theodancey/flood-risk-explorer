@@ -713,12 +713,30 @@ def test_what_if():
     print("  what if: elevation effect matches explain.py (3 profiles), caveat shown")
 
 
+def test_stale_module_reload():
+    """After a deploy, Streamlit Cloud can keep the OLD common.py in memory. app/app.py reloads it when
+    the file on disk is newer. Simulate that: make the in-memory copy look old and incomplete, rerun."""
+    import sys as _sys
+    at = new_app()
+    common = _sys.modules["common"]
+    url = common.GITHUB_URL
+    del common.GITHUB_URL              # the "old" copy lacks something the new pages use
+    common._loaded_mtime_ns = 0        # ...and was loaded from an older file
+    at.run()
+    no_error(at, "stale module")
+    check(getattr(_sys.modules["common"], "GITHUB_URL", None) == url, "stale common.py was not reloaded")
+    _sys.modules["common"]._marker = 1     # unchanged file: must NOT be reloaded on a normal click
+    at.run()
+    check(getattr(_sys.modules["common"], "_marker", None) == 1, "common.py reloaded although unchanged")
+    print("  stale common.py is reloaded after a change; unchanged file is not")
+
+
 if __name__ == "__main__":
     t0 = time.time()
     import sys as _sys
     only = [a for a in _sys.argv[1:]]
     tests = (test_county_explorer, test_profile_calculator, test_county_route, test_address_lookup,
-             test_map, test_deltas, test_what_if, test_how_it_works, test_reads, test_lightweight)
+             test_map, test_deltas, test_what_if, test_how_it_works, test_reads, test_lightweight, test_stale_module_reload)
     for test in [t for t in tests if not only or t.__name__ in only]:
         t = time.time()
         print(test.__name__)

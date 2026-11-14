@@ -929,3 +929,27 @@ A: Because once you see the numbers, it's tempting to pick whichever measure mak
 
 **Q: Tell me about a bug you found by using your own app.**
 A: The metric arrows. "15% below the Virginia average" showed a red up arrow, which says the opposite of the words. I read Streamlit's source and found it decides the arrow by whether the text starts with a minus sign. Since my comparisons are words, everything counted as "up". I set the arrow and colour explicitly from the number, wrote a test across every county and several calculator profiles, and checked the test fails on the old code.
+
+---
+
+## Milestone 16 follow-up: the "stale module" error after deploys (2026-11-13)
+
+### What I did
+After a push, the live app sometimes broke with `module 'common' has no attribute ...` until it was rebooted. The cause: Streamlit re-runs each page's script on every click, but a *module* you `import` (like `app/common.py`) is loaded only once per server and then kept in memory. So the new pages were running against the old shared code. I added a small check at the top of `app/app.py`: on each run it looks at the file dates of `common.py`, `lookup.py` and `src/explain.py`, and reloads any that changed. I also added a test that fakes an old copy and checks it gets reloaded, plus a note in `app/README.md` to use "Reboot app" if it ever happens again.
+
+### Why this way
+- **Scripts vs modules.** Python remembers every imported module in a dictionary called `sys.modules`. A second `import common` just hands back the copy already in memory and doesn't read the file again. `importlib.reload` makes Python read the file again and update that same module in place.
+- **Reload only when needed.** Reloading on every click would re-run `common.py`'s setup each time. Comparing file dates costs almost nothing.
+- **One place.** All three pages run *inside* `app.py` (the menu, `st.navigation`), so one check covers every page, and the pages' own `import common` gets the fresh copy.
+- **Order matters.** `common` imports `explain` and `lookup`, so those are reloaded first.
+- No statistics here; this is software reliability, which matters just as much in a deployed model.
+
+### Interview questions
+**Q: Your app broke after a deploy even though the code was correct. Why?**
+A: The server kept the old version of a shared module in memory. Streamlit re-runs page scripts but doesn't re-import modules, so new pages called functions the old module didn't have. I made the app reload a module when its file changes and added a test that simulates the stale state.
+
+**Q: Why not just reload the module on every request?**
+A: It works, but it re-runs the module's setup code on every click for no benefit. Checking the file's modified time is nearly free and reloads only after a real change. I also kept the manual fallback, rebooting the app, documented.
+
+**Q: How did you test something that only happens on the cloud server?**
+A: I reproduced the condition locally. In a test, I deleted an attribute from the in-memory module and marked it as loaded from an older file, then re-ran the app. The test checks that the attribute is back and that an unchanged module is *not* reloaded.

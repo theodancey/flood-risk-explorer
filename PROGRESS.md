@@ -34,6 +34,10 @@ All 8 items are done, tested, committed and pushed (the push redeploys the live 
    - I also checked that the delta test **fails** on the old code (it catches the red up arrow).
    - `tests\test_lookup.py` has a new `test_address_polish`.
    - `tests\test_explain.py` and `src\multistate.py test` pass too.
+9. **Stale-module fix (after deploys).** After a push, Streamlit Cloud re-ran the pages but kept the old `app/common.py` in memory, so pages could fail with `module 'common' has no attribute ...` until the app was rebooted.
+   - *The fix:* on every run, `app/app.py` checks whether `common.py`, `lookup.py` or `src/explain.py` changed on disk since it was loaded, and reloads it if so (`importlib.reload`). Unchanged files are not reloaded.
+   - *New test:* `test_stale_module_reload` in `tests\test_app.py`.
+   - *Fallback:* if it ever happens anyway, use **Manage app → ⋮ → Reboot app** (see `app/README.md`).
 
 **Please test by hand** (I can't scroll or click a browser here):
 1. **On your phone and laptop, scroll the page with the pointer or finger over the map.** The page should scroll; the map shouldn't zoom.
@@ -535,6 +539,12 @@ The data is downloaded and explored. Everything except the data files is committ
   - One automatic retry: the address without apartment/unit words (`Apt`, `Unit`, `Suite`, `#…`, …) and stray punctuation, only if that changes the text.
   - ZIP-only lookups aren't possible with the free Census geocoder (it needs a street address), so the message suggests adding the ZIP code.
 - **"Main home: Yes" tooltip, checked against the data.** The production severity relativity for "No" is 0.83 (pooled); by state VA 1.07, NC 0.76, MD 1.09 (consistency label "unclear", Milestone 13). Single-family claims: main homes $39,349 average vs $28,789, belongings paid $4,142 vs $1,810. The tooltip says it's mostly a North Carolina effect.
+- **Stale-module guard: reload only when the file changed, in one place (`app/app.py`).**
+  - *Options considered:* (a) `importlib.reload(common)` at the top of every page; (b) reload only when the file's modified time changed, done once in the entry script; (c) rely on Reboot app.
+  - *Chosen: (b).* All pages run inside `app/app.py` through `st.navigation`, so one check covers every page. Reloading only on a change keeps normal clicks fast and avoids re-running `common.py`'s setup each time.
+  - It reloads `explain` and `lookup` before `common`, because `common` imports them.
+  - Cached results (`st.cache_data`) are kept across a reload when a function's code is unchanged, because Streamlit keys the cache on the function's source.
+  - *Fallback:* Reboot app (in `app/README.md`).
 
 ### Milestone 15 decisions (2026-11-13, app polish, address lookup, map, "what if?")
 - **The `/county` fix:** Streamlit always serves the default page at `/` and ignores its own `url_path`. So the County Explorer script is registered twice: as the visible default page (`url_path="explorer"`, served at `/`) and as a **hidden** page at `/county` (`st.Page(..., visibility="hidden")`). Both routes have a test.
@@ -853,6 +863,7 @@ The data is downloaded and explored. Everything except the data files is committ
    - tooltips.
    Committed.
 4. Tests: all four suites pass, and the app starts headless (health check 200). Docs (this file, LEARNING_NOTES, app/README). Pushed.
+5. Stale-module fix: after deploys, the live app could show `module 'common' has no attribute ...`. Added a reload-if-changed guard in `app/app.py`, the test `test_stale_module_reload` (it simulates an old in-memory `common` and checks it gets reloaded), and a "Reboot app" note in `app/README.md`. Tests run; committed and pushed.
 
 ### 2026-11-13: Milestone 14, the Streamlit app (local)
 1. **Lazy model import.** Made `src/explain.py` import the statsmodels-based production code only when needed; checked the app-side load imports no heavy libraries and still gives Virginia Beach $453.69. Self-test and `tests/test_explain.py` pass. Committed with your Question 9 answer.

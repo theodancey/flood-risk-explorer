@@ -31,6 +31,13 @@ Run the automated tests (no internet needed; about 3-6 minutes for the app, seco
 .venv\Scripts\python.exe tests\test_lookup.py
 ```
 
+## If the live app shows a stale-module error after a deploy
+After a push, Streamlit Cloud can keep the old `app/common.py` in memory, which gives errors like
+`module 'common' has no attribute ...`. `app/app.py` now reloads `common.py` (and `lookup.py`,
+`src/explain.py`) when the file has changed, so this should not happen. If it ever does, open the app
+on share.streamlit.io, click **Manage app** (bottom right), then the **⋮** menu → **Reboot app**.
+A reboot restarts the server with fresh code; it changes no data and takes about a minute.
+
 ## The pages
 | Page | URL | What it does |
 |---|---|---|
