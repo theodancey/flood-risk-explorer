@@ -452,6 +452,18 @@ The data is downloaded and explored. Everything except the data files is committ
 - **Checks are assertions inside the script** (rather than a pytest suite), so they run on every build without a new package.
 - Project-plan week-2 file names updated to the real ones (`build_dataset.py`, `va_model_data.parquet`).
 
+### Milestone 16 decisions (2026-11-13, fixes from testing the live app)
+- **North Carolina regional level: pre-stated test** (written and committed BEFORE any result was computed).
+  - *Question:* does one level per NC region (Mountains / Piedmont / Coastal Plain), instead of one statewide level, predict unseen years better?
+  - *Regions (official source):* NOAA NCEI's county-to-climate-division table (https://www.ncei.noaa.gov/monitoring-content/data/us/climdiv/monthly/current/county-to-climdivs.txt, downloaded 2026-11-13 to data/raw/noaa_climdiv/, not in Git). NCEI assigns each county to one division by its centroid. NC's 8 divisions are 1 Southern Mountains, 2 Northern Mountains, 3 Northern Piedmont, 4 Central Piedmont, 5 Southern Piedmont, 6 Southern Coastal Plain, 7 Central Coastal Plain, 8 Northern Coastal Plain (names as listed by the NC State Climate Office). So: Mountains = divisions 1-2 (25 counties), Piedmont = 3-5 (34), Coastal Plain = 6-8 (41).
+    - NCpedia's county-by-region pages were tried first; the site refuses automated requests, so they weren't used.
+  - *Model:* the production spec plus a feature `nc_region` in both the frequency and the severity GLM. The base level is "Coastal Plain or outside NC"; the other levels are "NC Piedmont" and "NC Mountains". Only NC buildings get those two levels, so VA and MD keep one statewide level each. No county factor in either model (as in production).
+  - *Rule:* the same rule as the county factor form (Milestone 13, `multistate.choose_county_form`), with "no region" in place of "no county factor". Adopt the regional model only if:
+    1. its average over the three states of the per-state mean 16-year LOYO improvement is higher than without regions; **and**
+    2. its 2021-2025 holdout improvement is below the no-region model's in at most one state; **and**
+    3. (guard, because the change is aimed at NC) North Carolina's own mean LOYO improvement does not fall.
+  - Otherwise production stays unchanged. The result is reported either way (PROGRESS, How It Works).
+
 ### Milestone 15 decisions (2026-11-13, app polish, address lookup, map, "what if?")
 - **The `/county` fix:** Streamlit always serves the default page at `/` and ignores its own `url_path`. So the County Explorer script is registered twice: as the visible default page (`url_path="explorer"`, served at `/`) and as a **hidden** page at `/county` (`st.Page(..., visibility="hidden")`). Both routes have a test.
 - **Widget values live in `st.session_state`** for the County Explorer's state and county and for all calculator inputs, and they're re-assigned before the widgets are drawn on every run. This lets the address lookup, a map click and the County Explorer → calculator hand-over fill the inputs. It also keeps the choice when the same script runs as two pages. Before, the state came back empty at `/county`.
