@@ -55,8 +55,17 @@ for k, v in DEFAULTS.items():      # re-assigned every run (see the County Explo
 
 
 def run_lookup():
-    """Runs when 'Look up' is pressed, BEFORE the page is drawn, so it may set the inputs below."""
-    found = C.find_address(st.session_state.get("pc_addr", ""), st.session_state.get("pc_year"))
+    """Runs when 'Look up' is pressed, BEFORE the page is drawn, so it may set the inputs below.
+    Pressing it again after changing only the year built re-applies the age group and pre/post-FIRM
+    (the address answer is cached, so this asks no web service again). If the address box was emptied,
+    the last address found is used."""
+    ss = st.session_state
+    address = (ss.get("pc_addr") or "").strip()
+    last = ss.get("pc_found")
+    if not address and last and last["where"]["status"] == "ok":
+        address = last.get("address", "")
+        ss["pc_addr"] = address
+    found = C.find_address(address, ss.get("pc_year"))
     st.session_state["pc_found"] = found
     st.session_state.update(C.prefill_from(found))
 
@@ -127,7 +136,8 @@ with c2:
     primary = st.radio("Someone's main home?", list(YES_NO), format_func=YES_NO.get, horizontal=True,
                        key="pc_primary",
                        disabled=nonres,
-                       help="A main home, not a second home, rental or vacation home. Only for homes.")
+                       help="A main home, not a second home, rental or vacation home. Only for homes. "
+                            + C.MAIN_HOME_HELP)
     if nonres:
         primary = "False"
         st.caption("Set to **No**: a business building isn't anyone's main home.")
@@ -180,8 +190,7 @@ with st.container(border=True, key="hero"):
     m1, m2 = st.columns([1.25, 1])
     m1.metric("Expected yearly loss", C.money(pp),
               delta=f"{C.ratio_words(r, sname)} ({C.money(res['state_average_pure_premium'])})",
-              delta_color="inverse" if abs(r - 1) >= 0.1 else "off",
-              delta_arrow="auto" if abs(r - 1) >= 0.1 else "off",
+              **C.delta_style(r),
               help="The average flood claim cost per year for insured buildings like this, in a typical year "
                    "of storms, in 2025 dollars. It is not a price or a quote: real prices add costs, storm "
                    "cushions and NFIP rules.")
@@ -189,7 +198,7 @@ with st.container(border=True, key="hero"):
     m2.metric("Typical lower-risk insured building", C.money(low),
               delta=(f"Yours is {rl:.1f} times this" if rl >= 1.1 else
                      f"Yours is {100 * (1 - rl):.0f}% lower" if rl <= 1 / 1.1 else "About the same as yours"),
-              delta_color="off", delta_arrow="off",
+              **C.delta_style(rl),
               help=f"The average insured building in a lower-risk flood zone (B, C or X) in {sname}.")
     st.caption(f"About {C.av_share(state):.0f}% of insured buildings in {sname} are in high-risk flood zones, "
                f"so the {sname} average ({C.money(res['state_average_pure_premium'])}) is already high. "
@@ -203,13 +212,13 @@ m4.metric("Typical claim size", C.money(res["severity"]),
 if county != ANY:
     crow = C.county_summary().set_index("county").loc[county]
     st.markdown(f"**Local data for {names[county]}**")
-    C.show_certainty(crow["Z_sev"], crow["paid_claims_2010_2025"], crow["history_vs_model"], names[county])
+    C.show_certainty(crow["Z_sev"], crow["paid_claims_2010_2025"], crow["history_vs_model"], names[county], state)
 
 st.markdown(f"#### What raises or lowers it, starting from the {sname} average")
 C.show_chart(C.waterfall_figure(res["waterfall"]), key="pc_wf")
 st.caption(f"The first bar is the average for all insured buildings in {sname} "
            f"({C.money(res['state_average_pure_premium'])}). Each bar after it is one feature you chose. "
-           "Orange raises the estimate, blue lowers it.")
+           "Orange raises the estimate, blue lowers it.", help=C.MAIN_HOME_HELP)
 with st.expander("Learn more: how the bars are worked out"):
     st.markdown(
         "Features overlap (for example, older buildings are more often in high-risk zones), so there's no "

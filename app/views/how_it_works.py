@@ -33,6 +33,8 @@ st.markdown(f"""
 - **What it isn't:** a prediction, rating or quote for any one property. North Carolina's level
   ({C.money(pp['NC'])} a year) is much higher than Virginia's ({C.money(pp['VA'])}) or Maryland's
   ({C.money(pp['MD'])}), mostly because of four big hurricanes.
+- **Comparing states is less certain than comparing counties.** {C.CROSS_STATE_NOTE} That's why the map
+  starts by comparing each county with its own state.
 """)
 
 st.header("Data sources")
@@ -139,6 +141,14 @@ st.markdown(f"""
    score for these distributions; the baseline predicts the same rate for every building).
 6. **County claims history didn't predict the future.** Adjusting each county by its own history made
    unseen years worse, badly in NC (holdout improvement 16.7% → 0.04%), so the model doesn't use it.
+7. **A regional level inside North Carolina didn't help either.** We tested one level each for NC's
+   Mountains, Piedmont and Coastal Plain (regions from NOAA's climate divisions) with the same rule,
+   written down before the test. Over all 16 years the single statewide level was too high in the
+   Piedmont (past losses were about half of it) and too low in the Mountains (about 2×, mostly Hurricane
+   Helene in 2024). But regional levels learned from past years predicted *new* years worse: NC's
+   leave-one-year-out improvement fell from 12.5% to 8.9% (better in only 3 of 16 years), and its
+   2021-2025 holdout from 16.7% to -18.2%. Which region floods depends on where the next storm goes, so
+   the model keeps one level per state.
 """)
 
 st.header("How the certainty signals work")
@@ -164,7 +174,8 @@ county's history (see finding 6); the signals only say how far to trust it.
 """)
 
 st.header("Limitations")
-st.markdown("""
+_lee = C.county_summary().set_index("county").loc["37105"]       # Lee County, NC: an inland example
+st.markdown(f"""
 - **Area-level only.** The data is aggregated and anonymized. Every number is the average for a group of
   insured buildings in an average year, never a prediction, rating or quote for a specific property.
 - **Catastrophe-driven losses.** Sixteen years is a small sample of hurricanes; another 16 years could
@@ -175,6 +186,12 @@ st.markdown("""
   county codes are wrong.
 - **Who buys NFIP insurance isn't random.** Results describe insured buildings, which are concentrated
   in high-risk zones.
+- **One storm level per state.** The model applies one statewide storm level to every county in a state.
+  North Carolina's is set mostly by Matthew (2016), Florence (2018) and Helene (2024), so differences
+  between states are less certain than differences within a state. For counties those storms mostly
+  missed, such as many inland ones, the estimate may be too high: for example Lee County, NC is estimated
+  at about {C.money(_lee['expected_pure_premium'])} a year, while its 2010-2025 average was
+  {C.money(_lee['actual_loss_cost_2010_2025'])}.
 - **No county factor.** A county's estimate comes from its mix of insured buildings and its state's
   level, not its own claims history: in testing, county adjustments made predictions for unseen years
   worse, because a county's history is often one storm's footprint and the next storm goes elsewhere.

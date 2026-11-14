@@ -57,8 +57,41 @@ def _get_json(url, params, timeout=TIMEOUT, retries=RETRIES):
 # ---------------------------------------------------------------------------
 # 1. Geocoding: address -> coordinates, state, county
 # ---------------------------------------------------------------------------
+NOT_FOUND = ("We couldn't find that address. Try adding the ZIP code, or a nearby house number on the same "
+             "street (the Census list doesn't have every house number). You can also pick the county from the "
+             "list, or choose the inputs yourself.")
+# Apartment / unit parts the Census Geocoder often can't match: "Apt 4B", "Unit 2", "Suite 300", "#12"
+_UNIT = re.compile(r"(?:,\s*|\s+)(?:apt|apartment|unit|suite|ste|bldg|building|fl|floor|rm|room|lot|trlr)\.?\s*#?\s*[\w-]+"
+                   r"|\s*#\s*[\w-]+", re.IGNORECASE)
+
+
+def simpler_address(address):
+    """One automatic retry variant (Milestone 16): the address without any apartment/unit part and
+    without stray punctuation. Returns None if that changes nothing (so there's nothing new to try)."""
+    s = _UNIT.sub("", address)
+    s = re.sub(r"[^\w\s,-]", " ", s)                  # periods, quotes, etc.
+    s = re.sub(r"\s*,\s*", ", ", " ".join(s.split())).strip(" ,")
+    s = re.sub(r"(, )+", ", ", s)
+    return s if s and s != address else None
+
+
+
+def pretty_address(matched):
+    """The Census matched address in readable case, keeping the state code in capitals:
+    '1000 BANK ST, RICHMOND, VA, 23219' -> '1000 Bank St, Richmond, VA, 23219' (Milestone 16)."""
+    parts = [p.strip() for p in str(matched or "").split(",")]
+    out = []
+    for part in parts:
+        if len(part) == 2 and part.isalpha():
+            out.append(part.upper())                      # a state code: VA, NC, MD, ...
+        else:
+            out.append(part.title())
+    return ", ".join(out)
+
+
 def geocode(address):
-    """Find a US street address with the Census Geocoder.
+    """Find a US street address with the Census Geocoder. If nothing matches, it tries once more
+    with a simpler version of the address (no apartment/unit part, no stray punctuation).
 
     Returns {"status": "ok", "lat", "lon", "state" ("VA"/"NC"/"MD"), "county_fips", "county_name",
     "place" (incorporated town/city or None), "matched" (the address as the Census matched it)},
@@ -66,6 +99,18 @@ def geocode(address):
     address = " ".join(str(address or "").split())[:200]
     if len(address) < 5:
         return {"status": "empty", "message": "Please type a street address, city and state."}
+    res = _geocode_once(address)
+    if res["status"] == "no_match":
+        simpler = simpler_address(address)
+        if simpler and len(simpler) >= 5:
+            again = _geocode_once(simpler)
+            if again["status"] != "no_match":
+                return again
+    return res
+
+
+def _geocode_once(address):
+    """One question to the Census Geocoder (see geocode)."""
     data = _get_json(GEOCODER_URL, {"address": address, "benchmark": "Public_AR_Current",
                                     "vintage": "Current_Current", "format": "json",
                                     "layers": "States,Counties,Incorporated Places"})
@@ -77,8 +122,7 @@ def geocode(address):
     except (KeyError, TypeError):
         return {"status": "error", "message": "The Census address service sent an answer we couldn't read."}
     if not matches:
-        return {"status": "no_match", "message": "We couldn't find that address. Check the spelling, add "
-                                                 "the city, state and ZIP code, or choose the inputs yourself."}
+        return {"status": "no_match", "message": NOT_FOUND}
     m = matches[0]
     try:
         geo = m["geographies"]

@@ -339,7 +339,8 @@ def test_how_it_works():
     check("Theo Dancey" in text, "how it works: About blurb missing")
     for h in ("In short", "How the certainty signals work"):
         check(h in heads, f"how it works: section '{h}' missing")
-    for term in ("Shapley", "Bühlmann-Straub", "credibility Z", "policy-year", "Pure premium", "6.2×", "6.6×"):
+    for term in ("Shapley", "Bühlmann-Straub", "credibility Z", "policy-year", "Pure premium", "6.2×", "6.6×",
+                 "Coastal Plain", "8.9%", "less certain", "One storm level per state", "Lee County"):
         check(term in text, f"how it works: '{term}' not explained")
     check("2009-2025" not in text or "included" in text, "how it works: 2009-2025 not explained")
     print("  how it works: all sections present")
@@ -396,7 +397,8 @@ class FakeResponse:
 
 
 def fake_web(state_fips="37", county="37055", county_name="Dare County", place=None, x=-75.62, y=35.91,
-             zone="AE", cid="375348", geocoder_down=False, zone_down=False, state_name="North Carolina"):
+             zone="AE", cid="375348", geocoder_down=False, zone_down=False, state_name="North Carolina",
+             matched="100 TEST ST, SOMEWHERE, NC, 27948"):
     """A stand-in for requests.get that answers like the Census Geocoder and FEMA's flood map."""
     def get(url, params=None, timeout=None):
         if "geocoder" in url:
@@ -405,7 +407,7 @@ def fake_web(state_fips="37", county="37055", county_name="Dare County", place=N
             geos = {"States": [{"STATE": state_fips, "NAME": state_name}],
                     "Counties": [{"GEOID": county, "NAME": county_name}],
                     "Incorporated Places": [{"BASENAME": place}] if place else []}
-            return FakeResponse({"result": {"addressMatches": [{"matchedAddress": "100 TEST ST, SOMEWHERE",
+            return FakeResponse({"result": {"addressMatches": [{"matchedAddress": matched,
                                                                 "coordinates": {"x": x, "y": y},
                                                                 "geographies": geos}]}})
         if "MapServer/28" in url:
@@ -499,7 +501,7 @@ def test_address_lookup():
         # 5. County Explorer: "Find my county", then "Use this address in the calculator"
         requests.get = fake_web(state_fips="51", county="51810", county_name="Virginia Beach city",
                                 place="Virginia Beach", x=-75.98, y=36.85, zone="VE", cid="515531",
-                                state_name="Virginia")
+                                state_name="Virginia", matched="4 BEACH RD, SOMEWHERE, VA, 23451")
         at = new_app()
         check("not saved" in page_text(at), "county page: privacy sentence missing")
         at.text_input(key="ce_addr").set_value("4 Beach Rd, Virginia Beach, VA")
@@ -507,11 +509,37 @@ def test_address_lookup():
         no_error(at, "find my county")
         check(at.session_state["ce_county"] == "51810", f"find my county: {at.session_state['ce_county']}")
         check(at.subheader[0].value == "Virginia Beach city, VA", f"find my county header: {at.subheader[0].value}")
+        check(any("4 Beach Rd, Somewhere, VA, 23451" in s.value for s in at.success),
+              f"found-it message: {[s.value for s in at.success]}")
         click(at, "Use this address in the calculator")
         no_error(at, "explorer -> calculator")
         check(any(t.value == "Property Profile Calculator" for t in at.title), "did not open the calculator")
         check(at.session_state["pc_county"] == "51810" and at.session_state["pc_zone"] == "A/V high risk",
               "calculator not pre-filled from the County Explorer")
+        # Milestone 16: the address itself comes along, so adding a year built and pressing Look up works
+        check(at.session_state["pc_addr"] == "4 Beach Rd, Virginia Beach, VA",
+              f"address not carried to the calculator: {at.session_state['pc_addr']!r}")
+        check(at.text_input(key="pc_addr").value == "4 Beach Rd, Virginia Beach, VA", "calculator address box empty")
+        at.number_input(key="pc_year").set_value(1985)
+        click(at, "Look up")
+        no_error(at, "carried address + year")
+        check(at.session_state["pc_built"] == "1980-1999" and at.session_state["pc_firm"] == "True",
+              f"year 1985: {at.session_state['pc_built']}, post-FIRM {at.session_state['pc_firm']}")
+        # change ONLY the year: age group and pre/post-FIRM are re-applied
+        at.number_input(key="pc_year").set_value(1962)
+        click(at, "Look up")
+        no_error(at, "year-only change")
+        check(at.session_state["pc_built"] == "1960-1979" and at.session_state["pc_firm"] == "False",
+              f"year 1962: {at.session_state['pc_built']}, post-FIRM {at.session_state['pc_firm']}")
+        # an emptied address box falls back to the last address found
+        at.text_input(key="pc_addr").set_value("")
+        at.number_input(key="pc_year").set_value(2005)
+        click(at, "Look up")
+        no_error(at, "empty box, year changed")
+        check(at.session_state["pc_built"] == "2000 or later", f"year 2005: {at.session_state['pc_built']}")
+        # state codes stay in capitals ("VA", not "Va")
+        text = page_text(at)
+        check("Somewhere, VA, 23451" in text and ", Va," not in text, "state code not in capitals")
         print("  address lookup: fill-in, sources, override, outside VA/NC/MD, services down, find my county")
     finally:
         requests.get = REAL_GET
@@ -542,12 +570,30 @@ def test_map():
     check((APP_DATA / "counties_va_nc_md.geojson").stat().st_size < 2e6, "boundary file is over 2 MB")
     check("colorbar" in trace and trace["colorbar"].get("ticktext"), "map legend (colour bar) missing")
     check("Expected yearly loss" in trace["hovertemplate"], "map hover text missing")
-    check(len(maps[0][1]["data"]) == 2, "selected county not outlined")
-    # switch to "compared with the state average"
-    at.segmented_control(key="ce_map_mode").set_value("ratio").run()
-    no_error(at, "map ratio mode")
-    trace = [s for _, s in chart_specs(at) if any(t.get("type") == "choropleth" for t in s.get("data", []))][0]["data"][0]
+    # Milestone 16: opens on "compared with the state average"
+    check(at.segmented_control(key="ce_map_mode").value == "ratio", "map should open in 'compared with state' mode")
     check("same" in trace["colorbar"]["ticktext"], f"ratio legend: {trace['colorbar'].get('ticktext')}")
+    data = maps[0][1]["data"]
+    check(len(data) == 4, f"expected county layer, state borders, state labels, selected outline: {len(data)} traces")
+    borders = [d for d in data if d.get("name") == "state borders"]
+    check(len(borders) == 1 and sorted(borders[0]["locations"]) == ["MD", "NC", "VA"]
+          and borders[0]["marker"]["line"]["width"] >= 2, "thick state borders missing")
+    labels = [d for d in data if d.get("type") == "scattergeo"]
+    check(len(labels) == 1 and sorted(labels[0]["text"]) == ["MD", "NC", "VA"], "state labels missing")
+    check(all(d.get("hoverinfo") == "skip" for d in borders + labels), "borders/labels must not take hover or clicks")
+    check(maps[0][1]["layout"].get("dragmode") is False, "map must not pan when dragged")
+    # the map's config: the scroll wheel scrolls the page, not the map
+    cfg = [json.loads(ch.proto.config) for ch in at.get("plotly_chart") if str(ch.proto.id) == maps[0][0]][0]
+    check(cfg.get("scrollZoom") is False and cfg.get("doubleClick") is False, f"map config: {cfg}")
+    check(common_config_ok(), "MAP_CONFIG / MAP_DEFAULT in common.py changed")
+    caps = " ".join(c.value for c in at.caption)
+    check("Florence" in caps and "less certain" in caps, "cross-state note under the map missing")
+    # switch to "expected yearly loss"
+    at.segmented_control(key="ce_map_mode").set_value("loss").run()
+    no_error(at, "map loss mode")
+    trace = [s for _, s in chart_specs(at) if any(t.get("type") == "choropleth" for t in s.get("data", []))][0]["data"][0]
+    check(any(str(x).startswith("$") for x in trace["colorbar"]["ticktext"]),
+          f"loss legend: {trace['colorbar'].get('ticktext')}")
     # a map click: Streamlit stores the selection under the chart's key; the callback picks the county
     sys.path.insert(0, str(ROOT / "app"))
     import common
@@ -561,7 +607,77 @@ def test_map():
     no_error(at, "county picked on the map")
     check(at.subheader[0].value == "Dare County, NC", f"map pick: header {at.subheader[0].value}")
     check(at.segmented_control(key="ce_state").value == "NC", "map pick: state not switched")
-    print(f"  map: {len(expected)} counties, legend, hover, ratio mode, click -> county")
+    # a real map click also sets ce_map_pick: then a small card with a link down to the details appears
+    at.session_state["ce_map_pick"] = "37105"
+    at.session_state["ce_select"] = "37105"
+    at.run()
+    no_error(at, "map card")
+    text = " ".join(m.value for m in at.markdown)
+    check("Lee County, NC" in text and "(#county-details)" in text and "See details below" in text,
+          "summary card under the map missing")
+    check(at.subheader[0].proto.anchor == "county-details", "details heading has no #county-details anchor")
+    at.selectbox(key="ce_county").set_value("37085").run()           # another county from the list: no card
+    check("See details below" not in " ".join(m.value for m in at.markdown), "card should go when the county changes")
+    print(f"  map: {len(expected)} counties, legend, hover, both modes, borders, labels, no scroll zoom, "
+          "click -> county, summary card")
+
+
+def common_config_ok():
+    sys.path.insert(0, str(ROOT / "app"))
+    import common
+    return common.MAP_CONFIG.get("scrollZoom") is False and common.MAP_DEFAULT == "ratio"
+
+
+# ---------------------------------------------------------------------------
+# Milestone 16: delta arrows and colours (below average = down + green, above = up + orange)
+# ---------------------------------------------------------------------------
+def delta_of(m):
+    from streamlit.proto.Metric_pb2 import Metric
+    return Metric.MetricDirection.Name(m.proto.direction), Metric.MetricColor.Name(m.proto.color)
+
+
+def test_deltas():
+    sys.path.insert(0, str(ROOT / "app"))
+    import common
+    for r, want in [(0.5, ("green", "down")), (0.85, ("green", "down")), (1.0, ("gray", "off")),
+                    (1.05, ("gray", "off")), (0.95, ("gray", "off")), (1.23, ("orange", "up")), (6.0, ("orange", "up"))]:
+        got = common.delta_style(r)
+        check((got["delta_color"], got["delta_arrow"]) == want, f"delta_style({r}) = {got}, expected {want}")
+    want = {"down": ("DOWN", "GREEN"), "up": ("UP", "ORANGE"), "same": ("NONE", "GRAY")}
+    # County Explorer: below (Virginia Beach 0.85), above (Lee County NC 1.23), same (Worcester MD 1.00)
+    at = new_app()
+    for fips, kind in [("51810", "down"), ("37105", "up"), ("24047", "same")]:
+        at.session_state["ce_select"] = fips
+        at.run()
+        no_error(at, f"delta {fips}")
+        got = delta_of(at.metric[0])
+        check(got == want[kind], f"county {fips}: delta {got}, expected {want[kind]} ({at.metric[0].delta})")
+        if kind == "down":
+            check("below" in at.metric[0].delta, f"county {fips}: delta text {at.metric[0].delta}")
+        for m in at.metric[1:]:                                   # no other metric has an arrow
+            check(not m.delta, f"county {fips}: unexpected delta on '{m.label}'")
+    # every county's arrow agrees with its ratio
+    for fips, r in zip(CS["county"], CS["ratio_to_state"]):
+        s = common.delta_style(r)
+        check((s["delta_arrow"] == "down") == (r <= 1 / 1.1) and (s["delta_arrow"] == "up") == (r >= 1.1),
+              f"county {fips}: ratio {r} gives {s}")
+    # Calculator: the default building is about the state average; a 1960s high-risk building is above it;
+    # a raised, newer lower-risk building is below it
+    for settings, kind in [({}, "same"), ({"pc_built": "1960-1979", "pc_floors": "1"}, "up"),
+                           ({"pc_zone": "B/C/X moderate-low risk", "pc_built": "2000 or later", "pc_elev": "True"}, "down")]:
+        at = new_app()
+        at.switch_page("views/profile_calculator.py").run()
+        for k, v in settings.items():
+            set_widget(at, k, v)
+        at.run()
+        no_error(at, f"calculator delta {settings}")
+        got = delta_of(at.metric[0])
+        check(got == want[kind], f"calculator {settings}: delta {got}, expected {want[kind]} ({at.metric[0].delta})")
+        # "Typical lower-risk building": "Yours is N times this" points up; "Yours is N% lower" points down
+        d2, got2 = at.metric[1].delta, delta_of(at.metric[1])
+        exp2 = want["up"] if "times" in d2 else want["down"] if "lower" in d2 else want["same"]
+        check(got2 == exp2, f"calculator {settings}: lower-risk delta {got2} for '{d2}'")
+    print("  deltas: helper, 3 counties, all 257 ratios, 3 calculator profiles x 2 metrics")
 
 
 def test_what_if():
@@ -602,7 +718,7 @@ if __name__ == "__main__":
     import sys as _sys
     only = [a for a in _sys.argv[1:]]
     tests = (test_county_explorer, test_profile_calculator, test_county_route, test_address_lookup,
-             test_map, test_what_if, test_how_it_works, test_reads, test_lightweight)
+             test_map, test_deltas, test_what_if, test_how_it_works, test_reads, test_lightweight)
     for test in [t for t in tests if not only or t.__name__ in only]:
         t = time.time()
         print(test.__name__)

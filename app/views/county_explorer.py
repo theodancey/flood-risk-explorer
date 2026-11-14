@@ -39,6 +39,7 @@ def on_map_click():
     fips = C.selected_county(ss.get("ce_map"))
     if fips and fips in set(C.county_summary()["county"]):
         ss["ce_state"], ss["ce_county"] = C.explain.state_of(fips), fips
+        ss["ce_map_pick"] = fips                          # show the small summary card under the map
 
 
 def find_county():
@@ -53,7 +54,8 @@ def to_calculator():
     """Full lookup (flood zone, first flood map) for the calculator, then open it."""
     found = C.find_address(ss.get("ce_addr", ""))
     ss["pc_found"] = found
-    ss["pc_prefill"] = C.prefill_from(found)
+    # Carry the address itself too, so adding a year built and pressing "Look up" works (Milestone 16)
+    ss["pc_prefill"] = {**C.prefill_from(found), "pc_addr": found["address"]}
     ss["ce_go_calc"] = True
 
 
@@ -64,13 +66,23 @@ st.title("Flood insurance losses, county by county")
 st.markdown("See the average yearly flood damage for insured buildings in **Virginia, North Carolina and "
             "Maryland**. Click a county on the map, type an address, or pick from the lists below.")
 mode = st.segmented_control("Color the map by", list(C.MAP_MODES), format_func=C.MAP_MODES.get,
-                            default="loss", required=True, key="ce_map_mode", label_visibility="collapsed")
-C.show_chart(C.county_map(mode, ss["ce_county"]), key="ce_map", on_select=on_map_click,
+                            default=C.MAP_DEFAULT, required=True, key="ce_map_mode",
+                            label_visibility="collapsed")
+C.show_chart(C.county_map(mode, ss["ce_county"]), key="ce_map", config=C.MAP_CONFIG, on_select=on_map_click,
              selection_mode="points")
 st.caption(("Darker = higher expected yearly loss per insured building (typical year, 2025 dollars)."
             if mode == "loss" else
-            "Orange = above the county's state average, blue = below, grey = about the same.")
-           + " Hover for details; click to see a county.")
+            "Each county is compared with its own state's average: orange = above, blue = below, grey = "
+            "about the same.") + " Hover for details; click to see a county.")
+st.caption(C.CROSS_STATE_NOTE)
+
+# After a map click: a small card naming the county, with a link down to its details
+if ss.get("ce_map_pick") and ss.get("ce_map_pick") == ss.get("ce_county"):
+    _cs = C.county_summary().set_index("county").loc[ss["ce_map_pick"]]
+    with st.container(border=True, key="map_card"):
+        st.markdown(f"**{_cs['name']}, {_cs['state']}**: model estimate **{C.money(_cs['expected_pure_premium'])}** "
+                    f"a year, {C.ratio_words(_cs['ratio_to_state'], C.STATES[_cs['state']])}. "
+                    "[See details below ↓](#county-details)")
 
 with st.form("ce_find_form", border=False):
     f1, f2 = st.columns([4, 1], vertical_alignment="bottom")
@@ -81,7 +93,7 @@ st.caption(C.ADDRESS_PRIVACY)
 if "ce_found" in ss:
     w = ss["ce_found"]["where"]
     if w["status"] == "ok":
-        st.success(f"Found it: {w['matched'].title()}. Showing its county below.", icon=":material/location_on:")
+        st.success(f"Found it: {C.lookup.pretty_address(w['matched'])}. Showing its county below.", icon=":material/location_on:")
         st.button("Use this address in the calculator", on_click=to_calculator, icon=":material/calculate:")
     else:
         st.warning(w["message"], icon=":material/location_off:")
@@ -119,15 +131,14 @@ h = h[h["county"] == fips].sort_values("year")
 # ---------------------------------------------------------------------------
 # Headline: the model's estimate (hero) next to what actually happened
 # ---------------------------------------------------------------------------
-st.subheader(f"{name}, {state}")
+st.subheader(f"{name}, {state}", anchor="county-details")
 model, actual = res["pure_premium"], float(row["actual_loss_cost_2010_2025"])
 r = res["ratio_to_state"]
 with st.container(border=True, key="hero"):
     c1, c2 = st.columns([1.25, 1])
     c1.metric("Model estimate (typical year)", C.money(model),
               delta=f"{C.ratio_words(r, sname)} ({C.money(res['state_average_pure_premium'])})",
-              delta_color=("inverse" if abs(r - 1) >= 0.1 else "off"),
-              delta_arrow=("auto" if abs(r - 1) >= 0.1 else "off"),
+              **C.delta_style(r),
               help="Expected flood claim cost per insured building per year, in 2025 dollars, for a typical "
                    "year of storms and this county's mix of insured buildings.")
     c2.metric("Actual 2010-2025 average", C.money(actual),
@@ -144,8 +155,8 @@ with st.container(border=True, key="hero"):
         elif gap > 1.5:
             st.markdown(f"Past losses here were about **{gap:.1f} times** the estimate. The model estimates a typical year.")
         else:
-            st.markdown("Past losses here were well **below** the estimate. Big storms mostly missed this area "
-                        "in 2010-2025, but that may not last. The model estimates a typical year.")
+            st.markdown("Past losses here were well **below** the estimate. " + C.statewide_level_note(state)
+                        + " Big storms could still hit here in future years.")
 st.markdown(C.short_summary(res))
 
 # ---------------------------------------------------------------------------
@@ -161,7 +172,7 @@ with tab_over:
               help="Expected size of one paid claim (building + belongings), 2025 dollars.")
 
     st.markdown("#### How much local data backs this up?")
-    C.show_certainty(row["Z_sev"], row["paid_claims_2010_2025"], row["history_vs_model"], name)
+    C.show_certainty(row["Z_sev"], row["paid_claims_2010_2025"], row["history_vs_model"], name, state)
     st.caption(f"{res['policy_years']:,.0f} years of insured buildings here in 2010-2025 (one building insured "
                "for one year counts as one).")
     with st.expander("Learn more about this check"):
@@ -232,7 +243,7 @@ with tab_why:
     st.markdown(f"#### Why it differs from the {sname} average")
     C.show_chart(C.waterfall_figure(res["waterfall"]), key="why")
     st.caption(f"Each bar shows how one feature of the buildings insured here moves the estimate away from the "
-               f"{sname} average. Orange bars raise it, blue bars lower it.")
+               f"{sname} average. Orange bars raise it, blue bars lower it.", help=C.COMBINED_HELP)
     with st.expander("Learn more about this chart"):
         st.markdown(
             "Each bar compares this county's **mix** of insured buildings with the state's, one feature at a "

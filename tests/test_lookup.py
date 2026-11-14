@@ -237,9 +237,41 @@ def test_no_logging():
     print("  privacy: no printing, logging, files or URL parameters")
 
 
+# ---------------------------------------------------------------------------
+# Milestone 16: readable addresses, the automatic retry, the "not found" advice
+# ---------------------------------------------------------------------------
+def test_address_polish():
+    for raw, want in [("1000 BANK ST, RICHMOND, VA, 23219", "1000 Bank St, Richmond, VA, 23219"),
+                      ("100 N MAIN ST, MOUNT AIRY, NC, 27030", "100 N Main St, Mount Airy, NC, 27030"),
+                      ("1 MARKET PL, BALTIMORE, MD, 21202", "1 Market Pl, Baltimore, MD, 21202")]:
+        check(lookup.pretty_address(raw) == want, f"pretty_address({raw!r}) = {lookup.pretty_address(raw)!r}")
+    for raw, want in [("1000 Bank St Apt 4B, Richmond, VA 23219", "1000 Bank St, Richmond, VA 23219"),
+                      ("12 Main St., #5, Duck, NC", "12 Main St, Duck, NC"),
+                      ("100 Oak Ave, Suite 300, Baltimore, MD 21201", "100 Oak Ave, Baltimore, MD 21201"),
+                      ("1000 Bank St, Richmond, VA 23219", None)]:
+        check(lookup.simpler_address(raw) == want, f"simpler_address({raw!r}) = {lookup.simpler_address(raw)!r}")
+    # no match, then the simpler address matches: one automatic retry, without the unit
+    none = FakeResponse({"result": {"addressMatches": []}})
+    f = use(Fake({"geocoder": [none, FakeResponse(geocode_answer())]}))
+    g = lookup.geocode("1000 Bank St Apt 4B, Richmond, VA 23219")
+    check(g["status"] == "ok" and len(f.calls) == 2, f"retry variant: {g['status']} after {len(f.calls)} calls")
+    check(f.calls[1][1]["address"] == "1000 Bank St, Richmond, VA 23219", f"retry sent {f.calls[1][1]['address']!r}")
+    # nothing simpler to try: only one call, and the advice mentions the ZIP code and a nearby number
+    f = use(Fake({"geocoder": [none]}))
+    g = lookup.geocode("9999 Nowhere Rd, Atlantis, VA 23219")
+    check(g["status"] == "no_match" and len(f.calls) == 1, f"no retry expected: {len(f.calls)} calls")
+    check("ZIP code" in g["message"] and "nearby house number" in g["message"], f"advice: {g['message']}")
+    # both tries fail: still the advice
+    f = use(Fake({"geocoder": [none]}))
+    g = lookup.geocode("5 Gone Ln Unit 2, Atlantis, VA")
+    check(g["status"] == "no_match" and len(f.calls) == 2, f"two tries expected: {len(f.calls)} calls")
+    print("  address polish: state codes in capitals, unit-free retry, not-found advice")
+
+
 if __name__ == "__main__":
     real_get = requests.get
-    for t in (test_geocode, test_zones, test_community, test_firm_rule, test_bands, test_no_logging):
+    for t in (test_geocode, test_zones, test_community, test_firm_rule, test_bands, test_no_logging,
+              test_address_polish):
         print(t.__name__)
         t()
     requests.get = real_get

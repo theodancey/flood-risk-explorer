@@ -56,6 +56,21 @@ MAJOR_EVENTS = {
            2018: "Ellicott City flash flood", 2021: "Oct. nor'easter"},
 }
 
+# Milestone 16: how certain are differences BETWEEN states? (shown under the map and on How It Works)
+CROSS_STATE_NOTE = ("North Carolina's level comes mostly from a few major hurricanes (Matthew 2016, Florence 2018, "
+                    "Helene 2024), so differences between states are less certain than differences between "
+                    "counties in the same state.")
+STATE_STORMS = {"NC": "Matthew, Florence and Helene", "VA": "Irene, Sandy and Matthew",
+                "MD": "Irene, Sandy and the Ellicott City flash floods"}
+
+
+def statewide_level_note(state):
+    """Why a county's estimate can sit far ABOVE its own history: one storm level per state."""
+    return (f"The model applies one statewide storm level to every county in {STATES[state]}, set mostly by "
+            f"big storms such as {STATE_STORMS[state]}. For counties those storms mostly missed, such as many "
+            "inland ones, the estimate may be too high.")
+
+
 # The FULL disclaimer (footer of every page) and the SHORT one (top of every page). Both keep the
 # same meaning: area-level averages from public data, never a prediction or quote for one property.
 DISCLAIMER_MD = (
@@ -189,7 +204,11 @@ def find_address(address, year_built=None, full=True):
       zone, community, firm: the flood zone, community and pre/post-FIRM results (when full=True);
       band: the year built's age group (or None).
     Every part has a 'status', so the page can show what was found and fall back where it wasn't."""
-    out = {"where": geocode(address), "band": lookup.year_to_band(year_built), "year": year_built}
+    address = " ".join(str(address or "").split())
+    # "address" is kept only in this session's memory, so the calculator can redo the lookup when just the
+    # year built changes (Milestone 16). It's never written to disk, logged, or put in the URL.
+    out = {"where": geocode(address), "band": lookup.year_to_band(year_built), "year": year_built,
+           "address": address}
     w = out["where"]
     if w["status"] != "ok" or not full:
         return out
@@ -235,7 +254,7 @@ def show_lookup(found):
         st.warning(w["message"], icon=":material/location_off:")
         return
     names = dict(zip(county_summary()["county"], county_summary()["name"]))
-    lines = [f"- **Place:** {w['matched'].title()}, in {names.get(w['county_fips'], w['county_name'])}, "
+    lines = [f"- **Place:** {lookup.pretty_address(w['matched'])}, in {names.get(w['county_fips'], w['county_name'])}, "
              f"{w['state']}. *Source: U.S. Census Geocoder.*"]
     z = found.get("zone")
     if z is not None:
@@ -308,6 +327,22 @@ def ratio_words(r, state_name):
     return f"about the same as the {state_name} average"
 
 
+def delta_style(r):
+    """Arrow and colour for a metric's comparison line (Milestone 16 fix).
+
+    Streamlit decides the arrow from the delta TEXT: anything not starting with "-" counts as "up".
+    Our deltas are words ("15% below the Virginia average"), so we set both explicitly:
+      below the comparison (r <= 1/1.1): down arrow, green (lower expected loss is good news);
+      above it (r >= 1.1):               up arrow, orange (the app's "raises it" colour);
+      about the same:                    no arrow, grey.
+    Returns keyword arguments for st.metric."""
+    if r >= 1.1:
+        return {"delta_color": "orange", "delta_arrow": "up"}
+    if r <= 1 / 1.1:
+        return {"delta_color": "green", "delta_arrow": "down"}
+    return {"delta_color": "gray", "delta_arrow": "off"}
+
+
 def change_words(m):
     """A multiplier in plain words: 1.44 -> 'raises it by 44%', 0.81 -> 'lowers it by 19%'."""
     if m >= 1:
@@ -363,6 +398,23 @@ def pretty_step(player, step):
     if step.startswith("Mix: ") or player == "overlap":                # a county step
         return PLAIN_MIX.get(player, step.removeprefix("Mix: ").capitalize())
     return step.replace(": True", ": Yes").replace(": False", ": No")
+
+
+# One-line explanations for two waterfall bars people asked about (Milestone 16): shown on hover and
+# in the help icons next to the chart captions.
+COMBINED_HELP = ("Combined effects: the extra that comes from features acting together (the model's "
+                 "interactions, e.g. old buildings in high-risk zones), not from any one feature alone.")
+MAIN_HOME_HELP = ("Why can 'main home: yes' raise the estimate? Main homes have bigger claims: they're full of "
+                  "furniture and belongings and are fully repaired. In the data, a main home's average claim was "
+                  "about $39,000 vs $29,000 for a second home or rental, with twice as much paid for belongings. "
+                  "The effect comes mostly from North Carolina; in Virginia and Maryland it's small.")
+STEP_HELP = {"overlap": COMBINED_HELP, "primary_residence": MAIN_HOME_HELP}
+
+
+def _wrap(text, width=60):
+    """Break a long hover line into short lines (Plotly hover boxes don't wrap by themselves)."""
+    import textwrap
+    return "<br>".join(textwrap.wrap(text, width))
 
 
 SMALL_EFFECT = 0.02     # steps that change the result by less than 2% are grouped together
@@ -423,7 +475,7 @@ def agreement_words(hv):
     return f"Past claims were about {100 * hv:.0f}% of the estimate"
 
 
-def show_certainty(z, claims, history_vs_model, where):
+def show_certainty(z, claims, history_vs_model, where, state=None):
     """Two badges and 1-2 plain sentences. The technical rule is on the How It Works page."""
     amount, agreement, shaky = certainty_signals(z, claims, history_vs_model)
     label, colour, icon = AMOUNT_TEXT[amount]
@@ -440,6 +492,8 @@ def show_certainty(z, claims, history_vs_model, where):
                "More claims make that check more reliable.")
     if agreement is not None:
         why += " Past claims here differ a lot from the estimate, often because one storm hit or missed the area."
+        if agreement < 1 and state:
+            why += " " + statewide_level_note(state)
         if shaky:
             why += " Treat the number as a rough guide."
     st.caption(why)
@@ -505,6 +559,9 @@ def footer():
 
 
 PLOTLY_CONFIG = {"displayModeBar": False, "responsive": True}
+# The county map (Milestone 16): the scroll wheel scrolls the PAGE, not the map (scrollZoom off), a
+# double-click doesn't zoom, and dragging doesn't pan (dragmode=False in county_map's layout).
+MAP_CONFIG = {**PLOTLY_CONFIG, "scrollZoom": False, "doubleClick": False}
 
 
 def _base_layout(fig, height):
@@ -534,6 +591,8 @@ def waterfall_figure(wf, title=None):
     hover = [f"{start['label']}: {money(start['after'])} a year"]
     for s in steps.itertuples():
         extra = f"<br>Includes: {s.merged}" if isinstance(s.merged, str) else ""
+        if s.player in STEP_HELP:
+            extra += "<br><i>" + _wrap(STEP_HELP[s.player]) + "</i>"
         hover.append(f"{s.label}<br>{change_words(s.multiplier).capitalize()} "
                      f"({'+' if s.after >= s.before else '−'}{money(abs(s.after - s.before))})"
                      f"<br>Multiplier ×{s.multiplier:.2f}{extra}")
@@ -554,8 +613,8 @@ def waterfall_figure(wf, title=None):
     return fig
 
 
-def show_chart(fig, key=None, **kwargs):
-    return st.plotly_chart(fig, config=PLOTLY_CONFIG, key=key, **kwargs)
+def show_chart(fig, key=None, config=None, **kwargs):
+    return st.plotly_chart(fig, config=config or PLOTLY_CONFIG, key=key, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -565,7 +624,17 @@ def show_chart(fig, key=None, **kwargs):
 LOSS_SCALE = [[0.0, "#fde7dc"], [0.25, "#f8b899"], [0.5, "#f08a5d"], [0.75, "#d4582a"], [1.0, "#8f3410"]]
 # Compared with the state: blue = below, grey = about the same, orange = above (as in the waterfalls).
 RATIO_SCALE = [[0.0, "#184f95"], [0.25, "#6da7ec"], [0.5, "#f0efec"], [0.75, "#f08a5d"], [1.0, "#a63d14"]]
-MAP_MODES = {"loss": "Expected yearly loss", "ratio": "Compared with the state average"}
+MAP_MODES = {"ratio": "Compared with the state average", "loss": "Expected yearly loss"}
+MAP_DEFAULT = "ratio"     # Milestone 16: compare within each state first (cross-state levels are less certain)
+# Where the state labels sit on the map (longitude, latitude), chosen by eye to sit inside each state
+STATE_LABELS = {"VA": (-78.6, 37.55), "NC": (-79.4, 35.55), "MD": (-76.75, 39.45)}
+BORDER = "#1f1f1f"
+
+
+@st.cache_data(show_spinner=False)
+def state_geojson():
+    """Simplified outlines of VA, NC and MD (Census cartographic boundaries), for thicker state borders."""
+    return json.loads((DATA / "states_va_nc_md.geojson").read_text(encoding="utf-8"))
 
 
 @st.cache_data(show_spinner=False)
@@ -575,7 +644,7 @@ def county_geojson():
 
 
 @st.cache_data(show_spinner=False, max_entries=64)
-def county_map(mode="loss", selected=None):
+def county_map(mode=MAP_DEFAULT, selected=None):
     """Plotly choropleth of every county, shaded by the model's expected yearly loss (log scale, since
     North Carolina's counties run up to 10x Virginia's) or by the ratio to the county's state average."""
     import numpy as np
@@ -607,6 +676,17 @@ def county_map(mode="loss", selected=None):
         colorbar=dict(orientation="h", x=0.5, xanchor="center", y=-0.02, yanchor="top", thickness=10, len=0.85,
                       outlinewidth=0, tickfont=dict(size=12), **cb),
     ))
+    # State borders (thick, dark) and state labels, so e.g. Maryland stands apart from Virginia.
+    # Neither takes hover or clicks: selected_county() only reads the county layer (curve 0).
+    states = [f["id"] for f in state_geojson()["features"]]
+    fig.add_trace(go.Choropleth(
+        geojson=state_geojson(), locations=states, z=[0] * len(states), showscale=False, hoverinfo="skip",
+        colorscale=[[0, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0)"]], marker=dict(line=dict(color=BORDER, width=2)),
+        name="state borders"))
+    fig.add_trace(go.Scattergeo(
+        lon=[STATE_LABELS[s][0] for s in states], lat=[STATE_LABELS[s][1] for s in states], text=states,
+        mode="text", textfont=dict(size=15, color=BORDER, family="Arial Black, Arial, sans-serif"),
+        hoverinfo="skip", showlegend=False, name="state labels"))
     if selected in set(cs["county"]):              # outline the chosen county
         one = {"type": "FeatureCollection",                # just that county's outline (keeps the page small)
                "features": [f for f in county_geojson()["features"] if f["id"] == selected]}

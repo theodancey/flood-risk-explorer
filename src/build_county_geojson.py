@@ -1,9 +1,10 @@
 r"""
 Build app/data/counties_va_nc_md.geojson: simplified county boundaries for the app's map (Milestone 15).
 
-Source: U.S. Census Bureau, 2023 Cartographic Boundary File, counties, 1:5,000,000 scale
-(cb_2023_us_county_5m), free and public:
-    https://www2.census.gov/geo/tiger/GENZ2023/shp/cb_2023_us_county_5m.zip
+Source: U.S. Census Bureau, 2023 Cartographic Boundary Files, 1:5,000,000 scale, free and public:
+    https://www2.census.gov/geo/tiger/GENZ2023/shp/cb_2023_us_county_5m.zip  (counties)
+    https://www2.census.gov/geo/tiger/GENZ2023/shp/cb_2023_us_state_5m.zip   (states; Milestone 16,
+        written to app/data/states_va_nc_md.geojson for the thicker state borders)
 The download goes to data/raw/census_boundaries/ (not in Git). Cartographic boundary files are
 already simplified for small-scale maps; this script keeps only Virginia (51), North Carolina (37)
 and Maryland (24), rounds coordinates to 3 decimal places (about 100 m, invisible at map scale),
@@ -23,8 +24,9 @@ from pathlib import Path
 import shapefile  # pyshp
 
 ROOT = Path(__file__).resolve().parents[1]
-ZIP = ROOT / "data" / "raw" / "census_boundaries" / "cb_2023_us_county_5m.zip"
+RAW = ROOT / "data" / "raw" / "census_boundaries"
 OUT = ROOT / "app" / "data" / "counties_va_nc_md.geojson"
+OUT_STATES = ROOT / "app" / "data" / "states_va_nc_md.geojson"     # Milestone 16
 STATES = {"51", "37", "24"}
 DECIMALS = 3
 MIN_RING_POINTS = 4          # a closed ring needs at least 4 points (first = last)
@@ -65,9 +67,9 @@ def polygons(shape):
     return polys
 
 
-def main():
-    z = zipfile.ZipFile(ZIP)
-    base = "cb_2023_us_county_5m"
+def read_features(base, id_field, name_field):
+    """Features of VA, NC and MD from one Census cartographic boundary zip in data/raw/census_boundaries."""
+    z = zipfile.ZipFile(RAW / f"{base}.zip")
     r = shapefile.Reader(shp=io.BytesIO(z.read(f"{base}.shp")), dbf=io.BytesIO(z.read(f"{base}.dbf")),
                          shx=io.BytesIO(z.read(f"{base}.shx")))
     feats = []
@@ -81,16 +83,29 @@ def main():
         geom = ({"type": "Polygon", "coordinates": [[list(p) for p in ring] for ring in polys[0]]}
                 if len(polys) == 1 else
                 {"type": "MultiPolygon", "coordinates": [[[list(p) for p in ring] for ring in poly] for poly in polys]})
-        feats.append({"type": "Feature", "id": rec["GEOID"], "properties": {"name": rec["NAMELSAD"]},
+        feats.append({"type": "Feature", "id": rec[id_field], "properties": {"name": rec[name_field]},
                       "geometry": geom})
     feats.sort(key=lambda f: f["id"])
-    gj = {"type": "FeatureCollection",
-          "source": "U.S. Census Bureau, 2023 Cartographic Boundary File, counties 1:5,000,000 (cb_2023_us_county_5m), "
-                    "simplified (coordinates rounded to 3 decimals)",
-          "features": feats}
-    OUT.write_text(json.dumps(gj, separators=(",", ":")), encoding="utf-8")
+    return feats
+
+
+def write(feats, out, source):
+    gj = {"type": "FeatureCollection", "source": source, "features": feats}
+    out.write_text(json.dumps(gj, separators=(",", ":")), encoding="utf-8")
+
+
+def main():
+    feats = read_features("cb_2023_us_county_5m", "GEOID", "NAMELSAD")
+    write(feats, OUT, "U.S. Census Bureau, 2023 Cartographic Boundary File, counties 1:5,000,000 "
+                      "(cb_2023_us_county_5m), simplified (coordinates rounded to 3 decimals)")
     by_state = {s: sum(f["id"].startswith(s) for f in feats) for s in sorted(STATES)}
     print(f"wrote {OUT.relative_to(ROOT)}: {len(feats)} counties {by_state}, {OUT.stat().st_size / 1e6:.2f} MB")
+    # Milestone 16: state outlines, drawn as thicker borders on top of the counties (same source and
+    # scale as the counties, so the lines match)
+    feats = read_features("cb_2023_us_state_5m", "STUSPS", "NAME")
+    write(feats, OUT_STATES, "U.S. Census Bureau, 2023 Cartographic Boundary File, states 1:5,000,000 "
+                             "(cb_2023_us_state_5m), simplified (coordinates rounded to 3 decimals)")
+    print(f"wrote {OUT_STATES.relative_to(ROOT)}: {[f['id'] for f in feats]}, {OUT_STATES.stat().st_size / 1e6:.2f} MB")
 
 
 if __name__ == "__main__":
