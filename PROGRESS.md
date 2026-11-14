@@ -1,6 +1,30 @@
 # Progress Log
 
-## Summary (latest: 2026-11-13, Milestone 16: fixes from testing the live app)
+## Summary (latest: 2026-11-13, Milestone 17: final polish for recruiters) ✅ PROJECT COMPLETE
+**The project is complete.** The modelling (Milestones 1–13), the live app (14–16) and the recruiter-facing documentation (17) are done, tested, committed and pushed. No files from `data/` are in Git.
+
+**What changed in Milestone 17:**
+1. **README rewritten for a 30-second read:** title, one-line description, live link, the **4 screenshots** with captions (2×2 grid), "What I built", "Key results" (every number checked against the reports or raw data), "Tech used", a new pitch replacing the outdated one ($149 / "am developing"), and an **"About this project"** note (built with Claude Code as a coding assistant; you made the modelling decisions).
+2. **Long findings moved** to [`docs/findings.md`](docs/findings.md), linked from the README. I added one note there explaining nominal $149 vs 2025-dollar $197, so the two numbers don't look contradictory.
+3. **Case study:** [`reports/11_project_writeup.md`](reports/11_project_writeup.md), about 2 pages in your voice (problem, data, approach, decisions, results, limitations, next steps). Please read it once and change anything that doesn't sound like you.
+4. **Repo hygiene:**
+   - **MIT `LICENSE`** added ("Copyright (c) 2026 Theo Dancey").
+   - **Fresh-clone test:** I cloned the repo into a clean folder with a brand-new virtual environment holding only `app\requirements.txt`. The app started (HTTP 200), and `tests\test_app.py` (203 s) and `tests\test_lookup.py` passed. **One fix:** `tests\test_explain.py` needs statsmodels (it checks the app's tables against the full production model), so the README now lists it under the full install, where it passes. The full `requirements.txt` pins still resolve. The temporary clone was deleted.
+   - **Secrets / large files:** no keys, tokens or passwords in tracked files or Git history; nothing under `data/` is tracked; `.env` and `.streamlit/secrets.toml` are ignored. The largest file ever committed is a 2.1 MB notebook. The only tracked `.parquet` is `app/data/portfolio.parquet` (648 KB of aggregates the app needs, committed on purpose since Milestone 12).
+5. **No files in `app/` changed**, so the live app doesn't need a reboot.
+
+**Please check by hand:**
+1. Open the repo on GitHub and look at the README: do the screenshots show in a 2×2 grid and read well?
+2. Read `reports/11_project_writeup.md` and the "About this project" wording; edit anything you'd phrase differently.
+
+**Future work** (also in the README and the write-up):
+1. **Storm-independent geography features** (ground elevation, distance to coast, share of exposure in FEMA high-risk zones) instead of county claims history.
+2. **A catastrophe load** built from storm models, rather than whichever storms hit in 2010–2025.
+3. **Finer detail:** ZIP-code or census-tract level.
+4. **More states,** especially Gulf Coast states with a different flood mix.
+5. **Small app ideas:** a downloadable county report, and a mobile layout check on more phones.
+
+## Summary (previous: 2026-11-13, Milestone 16: fixes from testing the live app)
 All 8 items are done, tested, committed and pushed (the push redeploys the live app). No files from `data/` are in Git.
 
 1. **Comparing states.**
@@ -504,6 +528,15 @@ The data is downloaded and explored. Everything except the data files is committ
 - **Checks are assertions inside the script** (rather than a pytest suite), so they run on every build without a new package.
 - Project-plan week-2 file names updated to the real ones (`build_dataset.py`, `va_model_data.parquet`).
 
+### Milestone 17 decisions (2026-11-13, final polish for recruiters)
+- **A separate `docs/findings.md` instead of a collapsible README section.** GitHub's collapsible `<details>` blocks often show markdown badly, and a separate page keeps the README short and gives the findings their own link.
+- **"2.7M claims and 4.6M policy terms, modelled for 3 states and 257 counties."** The 2.7M claims are nationwide (2,725,989 rows), while the 4.6M policy terms are VA/NC/MD only (4,640,760 rows, counted from the raw files). I worded it so nobody reads it as 2.7M claims in three states, and gave the modelled totals (4.1M policy-years, 51,894 paid claims) next to it.
+- **"69%" is stated as Virginia's 2009–2025 losses**, which is exactly what report 02 measured (nominal dollars, worst years 2009, 2016, 2011).
+- **"11–13%"** is the production 3-state GLM's 16-year leave-one-year-out improvement in each state (VA 11.0, NC 12.5, MD 13.3; report 10 §4). **"About 4 points"** is XGBoost's pooled +3.8 (CI 1.6–5.5; report 10 §7).
+- **The fresh-clone quickstart installs only `app\requirements.txt`** (6 packages, a few minutes) instead of all 18 packages. A recruiter who wants to run the app shouldn't need XGBoost or Jupyter. The full rebuild stays in its own section.
+- **The fresh-clone check ran inside `data/`** (git-ignored), so nothing was written outside the project folder; the clone was deleted afterwards.
+- **Copyright line uses your name** ("Theo Dancey"), the standard MIT form, with no email address.
+
 ### Milestone 16 decisions (2026-11-13, fixes from testing the live app)
 - **North Carolina regional level: pre-stated test** (written and committed BEFORE any result was computed).
   - *Question:* does one level per NC region (Mountains / Piedmont / Coastal Plain), instead of one statewide level, predict unseen years better?
@@ -852,6 +885,13 @@ The data is downloaded and explored. Everything except the data files is committ
 - No new packages.
 
 ## Log
+### 2026-11-13: Milestone 17, final polish for recruiters
+1. Re-read CLAUDE.md, PROGRESS.md, README.md and reports 01–10; checked every headline number against the reports, and the claim/policy row counts against the raw files.
+2. Moved the milestone-by-milestone findings to `docs/findings.md` (links fixed for the new folder); rewrote the top of the README with the screenshots; wrote `reports/11_project_writeup.md`; added `LICENSE`. A script checked that every relative link in the three files resolves (0 missing). Committed.
+3. Fresh-clone check in `data/fresh_clone_check` with a clean venv (app requirements only): app HTTP 200, `test_app.py` and `test_lookup.py` pass; `test_explain.py` needs the full install, so I moved it in the README and ran it there (passes). Full requirements resolve (`pip install --dry-run`). Clone deleted. Committed.
+4. Scanned tracked files and the whole Git history for secrets and large files: clean.
+5. Updated PROGRESS.md and LEARNING_NOTES.md (Milestone 17 + "How to explain this project in 2 minutes"). Committed and pushed. No `app/` changes, so no reboot needed.
+
 ### 2026-11-13: Milestone 16, fixes from testing the live app
 1. Pre-stated the North Carolina regional test in PROGRESS.md and committed it before running anything.
 2. Found an official county-level region list. NCpedia blocked automated requests, so I used NOAA NCEI's county-to-climate-division table. Wrote `src/nc_region_test.py` (2 minutes) and committed it with its reports. It failed the rule, so it was not adopted.

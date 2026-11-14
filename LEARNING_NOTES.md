@@ -953,3 +953,47 @@ A: It works, but it re-runs the module's setup code on every click for no benefi
 
 **Q: How did you test something that only happens on the cloud server?**
 A: I reproduced the condition locally. In a test, I deleted an attribute from the in-memory module and marked it as loaded from an older file, then re-ran the app. The test checks that the attribute is back and that an unchanged module is *not* reloaded.
+
+---
+
+## Milestone 17: Final polish for recruiters (2026-11-13)
+
+### What I did
+I rewrote the top of the README so someone skimming for 30 seconds sees what the project is, a link to the live app, four screenshots, what I built, the key results with numbers, and the tools used. The long milestone-by-milestone findings moved to `docs/findings.md`. I wrote a 2-page case study (`reports/11_project_writeup.md`) in plain English, added an MIT license and a note on how I used Claude Code. Finally, I cloned the repository into a clean folder with a brand-new Python environment and checked that the README's "How to run" steps work there, and scanned the repository and its history for secrets and large files.
+
+### Why this way
+- **Lead with results, keep the detail one click away.** Recruiters skim; interviewers dig. The README gives the headline, and `docs/findings.md` and the reports hold the evidence.
+- **Every number traced to its source.** For example, "2.7 million claims" is nationwide, while "4.6 million policy terms" covers only the three states, so the README says what was *modelled* (4.1 million policy-years, 51,894 paid claims in 257 counties) right next to it. An interviewer who checks a number should find exactly that number in a report.
+- **Nominal vs real dollars.** Early reports said Virginia's loss cost was $149 per policy-year; later ones say $197. Both are right: $149 is in the dollars of the year each claim was paid (*nominal*), and $197 converts every claim to 2025 dollars with the Consumer Price Index (*real*, inflation-adjusted). Example: a $10,000 claim paid in 2011 is worth about $14,000 in 2025 dollars. The findings page now explains this so the numbers don't look contradictory.
+- **Reproducibility test.** "It works on my computer" isn't enough; a fresh clone is what a stranger gets. The test found one real gap: one test file needs the full set of packages, so the README now says so.
+- **A license** tells others what they're allowed to do with the code. MIT is short and permissive: anyone can reuse it if they keep the copyright notice.
+
+### Interview questions
+**Q: How do you know someone else can run your project?**
+A: I cloned it into an empty folder, made a new virtual environment with only the app's six packages, started the app and ran the test suites. That caught one gap in my instructions, which I fixed. The app itself reads only small precomputed files, so it runs without downloading FEMA's data.
+
+**Q: Your README says $197 but an older report says $149. Which is right?**
+A: Both. $149 is in nominal dollars, the dollars of the year each claim was paid. $197 restates every claim in 2025 dollars using the CPI, which is what you'd price with today. All models use 2025 dollars.
+
+**Q: How did you use AI tools in this project?**
+A: I used Claude Code as a coding assistant: it wrote much of the code and documentation under my direction. I made the modelling decisions, such as validating on unseen years, writing decision rules before seeing results, dropping the county factor, and keeping the GLM over XGBoost, and I can explain each of them.
+
+---
+
+## How to explain this project in 2 minutes
+
+Use this as a script; say it in your own words. Each paragraph is about 20–25 seconds.
+
+1. **The problem.** "Flood is one of the hardest risks to insure, because most years are quiet and then one hurricane produces most of the losses. I wanted to estimate, the way an actuary would, how often flood claims happen in an area, how big they are, and the expected yearly loss per insured building, using only public data."
+
+2. **The data.** "I used FEMA's public National Flood Insurance Program data: 2.7 million claim records and 4.6 million policy records. I modelled Virginia, North Carolina and Maryland, 257 counties, over 2010 to 2025, with losses converted to 2025 dollars. The data is anonymised, so everything is at the area level, never an individual home."
+
+3. **The method.** "I used the classic actuarial setup: a Poisson GLM for how often claims happen, with exposure as an offset, and a Gamma GLM for how big they are. Multiplying them gives the pure premium. I tested every model on years it hadn't seen, because the real question is whether it predicts next year, and I compared the GLM with XGBoost on identical folds."
+
+4. **The key decisions.** "Two things I'm proud of. First, I wrote my decision rules down *before* seeing results, so I couldn't just pick the best-looking model. Second, I used storm-aware tests: claims cluster in hurricanes, so ordinary p-values made almost every factor look significant. With honest tests, geography mostly dropped out, because a county's history is mostly the footprint of whichever storms happened to hit it."
+
+5. **The results.** "The production GLM beats a no-information baseline by 11 to 13 percent on unseen years. XGBoost was about 4 points more accurate on average, but it was worse in catastrophe years and left some customer groups mispriced, so under my pre-stated rule I kept a hybrid GLM that borrows XGBoost's interactions. Three storm years caused 69 percent of Virginia's losses, and North Carolina's loss cost is about five times Virginia's and Maryland's."
+
+6. **The product and the limits.** "I built a Streamlit web app with a county map, address lookup and a calculator that explains each estimate with a waterfall chart. The main limits are that 16 years contain only a few big storms, and there's no geography inside a state beyond the building mix. Next I'd add storm-independent features like ground elevation and distance to the coast."
+
+**If you only get 20 seconds:** "I built an actuarial flood-loss model from public FEMA data for three states and 257 counties: Poisson and Gamma GLMs, validated on unseen years and compared against XGBoost. I kept the GLM because it held up better in hurricane years, and I put it in a live web app that explains each county's expected loss."
